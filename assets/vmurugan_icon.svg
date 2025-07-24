@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="192" height="192" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="96" cy="96" r="86" fill="#DC143C" stroke="#000000" stroke-width="4"/>
+  
+  <!-- Inner highlight -->
+  <circle cx="96" cy="96" r="82" fill="url(#gradient)" opacity="0.3"/>
+  
+  <!-- Gold accent -->
+  <circle cx="150" cy="42" r="12" fill="#FFD700" stroke="#000000" stroke-width="1"/>
+  
+  <!-- Text Shadow -->
+  <text x="96" y="110" font-family="Arial, sans-serif" font-size="64" font-weight="bold" 
+        text-anchor="middle" fill="#000000" opacity="0.3">Vm</text>
+  
+  <!-- Main Text -->
+  <text x="96" y="108" font-family="Arial, sans-serif" font-size="64" font-weight="bold" 
+        text-anchor="middle" fill="#FFFFFF">Vm</text>
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+</svg>
