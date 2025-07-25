@@ -50,18 +50,67 @@ class CustomerService {
     return prefs.getBool(_customerRegisteredKey) ?? false;
   }
 
+  // Save login session
+  static Future<void> saveLoginSession(String phone) async {
+    print('💾 Saving login session for phone: $phone');
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Get customer info from server
+      print('🔍 Fetching customer data from Firebase...');
+      final result = await ApiService.getCustomerByPhone(phone);
+
+      print('📊 Customer fetch result: $result');
+
+      if (result['success'] && result['customer'] != null) {
+        final customer = result['customer'];
+
+        print('👤 Customer data found:');
+        print('   Customer ID: ${customer['customer_id']}');
+        print('   Name: ${customer['name']}');
+        print('   Email: ${customer['email']}');
+        print('   Phone: ${customer['phone']}');
+
+        // Save customer info locally
+        await prefs.setString(_customerPhoneKey, customer['phone'] ?? '');
+        await prefs.setString(_customerNameKey, customer['name'] ?? '');
+        await prefs.setString(_customerEmailKey, customer['email'] ?? '');
+        await prefs.setString('customer_id', customer['customer_id'] ?? '');
+        await prefs.setBool(_customerRegisteredKey, true);
+
+        print('✅ Login session saved for customer: ${customer['customer_id']}');
+        print('💾 Local storage updated with correct customer data');
+      } else {
+        print('❌ Failed to fetch customer data: ${result['message']}');
+      }
+    } catch (e) {
+      print('❌ Error saving login session: $e');
+    }
+  }
+
   // Get stored customer info
   static Future<Map<String, String?>> getCustomerInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    return {
+
+    final customerInfo = {
       'phone': prefs.getString(_customerPhoneKey),
       'name': prefs.getString(_customerNameKey),
       'email': prefs.getString(_customerEmailKey),
+      'customer_id': prefs.getString('customer_id'),
     };
+
+    print('📱 Retrieved customer info from local storage:');
+    print('   Phone: ${customerInfo['phone']}');
+    print('   Name: ${customerInfo['name']}');
+    print('   Email: ${customerInfo['email']}');
+    print('   Customer ID: ${customerInfo['customer_id']}');
+
+    return customerInfo;
   }
 
   // Save customer info locally and to server
-  static Future<bool> registerCustomer({
+  static Future<Map<String, dynamic>> registerCustomer({
     required String phone,
     required String name,
     required String email,
@@ -91,16 +140,33 @@ class CustomerService {
       print('📞 CustomerService: ApiService result - ${result['success']} - ${result['message']}');
 
       if (result['success']) {
-        print('Customer registered successfully');
-        return true;
+        // Save customer ID locally if provided
+        if (result['customer_id'] != null) {
+          await prefs.setString('customer_id', result['customer_id']);
+        }
+
+        print('Customer registered successfully with ID: ${result['customer_id']}');
+        return {
+          'success': true,
+          'customer_id': result['customer_id'],
+          'message': 'Registration successful',
+        };
       } else {
         print('Failed to register customer on server: ${result['message']}');
-        // Still return true as local storage succeeded
-        return true;
+        // Still return success as local storage succeeded
+        return {
+          'success': true,
+          'customer_id': null,
+          'message': 'Registration completed locally',
+        };
       }
     } catch (e) {
       print('Error registering customer: $e');
-      return false;
+      return {
+        'success': false,
+        'customer_id': null,
+        'message': 'Registration failed: $e',
+      };
     }
   }
 

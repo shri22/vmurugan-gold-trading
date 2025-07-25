@@ -13,7 +13,10 @@ import '../../payment/models/payment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
 import '../../portfolio/models/portfolio_model.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
+import '../../notifications/services/notification_service.dart';
+import '../../notifications/models/notification_model.dart';
 
 class BuyGoldScreen extends StatefulWidget {
   const BuyGoldScreen({super.key});
@@ -224,17 +227,17 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: _priceService.isApiAvailable
+                      color: _priceService.isMjdtaAvailable
                           ? AppColors.success.withValues(alpha: 0.1)
-                          : AppColors.warning.withValues(alpha: 0.1),
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      _priceService.isApiAvailable ? 'LIVE' : 'DEMO',
+                      _priceService.isMjdtaAvailable ? 'MJDTA LIVE' : 'UNAVAILABLE',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: _priceService.isApiAvailable
+                        color: _priceService.isMjdtaAvailable
                             ? AppColors.success
-                            : AppColors.warning,
+                            : Colors.red,
                         fontWeight: FontWeight.bold,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -454,17 +457,57 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
   Widget _buildBuyButton() {
     final isValidAmount = _selectedAmount >= 100 && _selectedAmount <= 1000000;
+    final canPurchase = _priceService.canPurchase;
 
-    return GradientButton(
-      text: 'Proceed to Payment',
-      onPressed: isValidAmount ? _handleBuyGold : null,
-      gradient: AppColors.goldGreenGradient,
-      icon: Icons.payment,
-      isFullWidth: true,
+    return Column(
+      children: [
+        if (!canPurchase) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border.all(color: Colors.orange.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange.shade600, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Purchases unavailable - MJDTA service not connected',
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        GradientButton(
+          text: canPurchase ? 'Proceed to Payment' : 'Service Unavailable',
+          onPressed: (isValidAmount && canPurchase) ? _handleBuyGold : null,
+          gradient: canPurchase ? AppColors.goldGreenGradient : LinearGradient(
+            colors: [Colors.grey.shade400, Colors.grey.shade500],
+          ),
+          icon: canPurchase ? Icons.payment : Icons.warning,
+          isFullWidth: true,
+        ),
+      ],
     );
   }
 
   Future<void> _handleBuyGold() async {
+    // First check if MJDTA is available
+    if (!_priceService.canPurchase) {
+      _showMjdtaUnavailableDialog();
+      return;
+    }
+
     if (_selectedAmount < 100) {
       _showErrorDialog('Minimum investment amount is ₹100');
       return;
@@ -631,10 +674,31 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
       // Handle payment response
       if (response.status == PaymentStatus.success) {
-        // Save transaction to database
-        await _saveTransaction(response, method.displayName, goldGrams);
-        _showRealSuccessDialog(method.displayName, goldGrams, response);
+        print('🎉 Payment successful! Creating scheme...');
+
+        // Get customer info for scheme creation
+        final customerInfo = await CustomerService.getCustomerInfo();
+        final customerId = customerInfo['customer_id'];
+
+        String? schemeId;
+        if (customerId != null && customerId.isNotEmpty) {
+          // Auto-create scheme for this purchase
+          schemeId = await _getOrCreateAutoScheme(customerId, Map<String, String>.from(customerInfo));
+          print('✅ Scheme created for payment: $schemeId');
+        } else {
+          print('⚠️ No customer ID found, skipping scheme creation');
+        }
+
+        // Save transaction to database (with scheme ID if available)
+        await _saveTransaction(response, method.displayName, goldGrams, schemeId: schemeId);
+        _showRealSuccessDialog(method.displayName, goldGrams, response, schemeId: schemeId);
       } else {
+        // Create payment failed notification
+        await NotificationTemplates.paymentFailed(
+          transactionId: response.transactionId,
+          amount: _selectedAmount,
+          reason: response.errorMessage ?? 'Unknown error',
+        );
         _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Unknown error'}');
       }
 
@@ -644,7 +708,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     }
   }
 
-  Future<void> _saveTransaction(PaymentResponse response, String paymentMethod, double goldGrams) async {
+  Future<void> _saveTransaction(PaymentResponse response, String paymentMethod, double goldGrams, {String? schemeId}) async {
     try {
       // Save to local database
       await _portfolioService.saveTransaction(
@@ -679,6 +743,21 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         'gold_price_per_gram': _currentPrice?.pricePerGram ?? 0,
       });
 
+      // Create payment success notification
+      await NotificationTemplates.paymentSuccess(
+        transactionId: response.transactionId,
+        amount: _selectedAmount,
+        goldGrams: goldGrams,
+        paymentMethod: paymentMethod,
+      );
+
+      // Create gold purchase notification
+      await NotificationTemplates.goldPurchased(
+        goldGrams: goldGrams,
+        pricePerGram: _currentPrice?.pricePerGram ?? 0,
+        totalAmount: _selectedAmount,
+      );
+
       print('Transaction saved successfully to both local and server');
     } catch (e) {
       print('Error saving transaction: $e');
@@ -708,7 +787,55 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     );
   }
 
-  void _showRealSuccessDialog(String paymentMethod, double goldGrams, PaymentResponse response) {
+  void _showMjdtaUnavailableDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange, size: 32),
+            SizedBox(width: 12),
+            Text('Service Unavailable'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Gold purchases are currently unavailable because we cannot connect to MJDTA (Madras Jewellery and Diamond Traders Association) for live gold prices.',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Please try again later when the MJDTA service is available.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'We only allow purchases with real-time MJDTA prices to ensure fair and accurate pricing.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _priceService.retryMjdtaConnection();
+            },
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRealSuccessDialog(String paymentMethod, double goldGrams, PaymentResponse response, {String? schemeId}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -748,6 +875,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                   Text('Transaction ID: ${response.transactionId}'),
                   if (response.gatewayTransactionId != null)
                     Text('UPI Ref: ${response.gatewayTransactionId}'),
+                  if (schemeId != null)
+                    Text('🆔 Scheme ID: $schemeId', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                 ],
               ),
             ),
@@ -832,6 +961,10 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   }
 
   Future<void> _completePurchase(double goldGrams) async {
+    print('🚀 _completePurchase called!');
+    print('   Gold Grams: $goldGrams');
+    print('   Selected Amount: $_selectedAmount');
+
     try {
       // Close the dialog first
       Navigator.pop(context);
@@ -851,20 +984,73 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         ),
       );
 
-      // Add to portfolio (temporarily disabled)
-      // await _portfolioService.buyGold(
-      //   goldGrams: goldGrams,
-      //   pricePerGram: _currentPrice?.pricePerGram ?? 0,
-      //   notes: 'Purchase via app',
-      // );
+      print('📝 Step 1: Getting customer info...');
+      // Get customer info
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerId = customerInfo['customer_id'];
 
-      // Simulate successful purchase
-      await Future.delayed(const Duration(seconds: 1));
+      print('   Customer Info: $customerInfo');
+      print('   Customer ID: $customerId');
+
+      if (customerId == null || customerId.isEmpty) {
+        print('❌ No customer ID found!');
+        Navigator.pop(context); // Close loading
+        _showErrorDialog('Please login with a registered account to buy gold.');
+        return;
+      }
+
+      print('📝 Step 2: Creating auto scheme...');
+      // Auto-create or get existing scheme
+      String? schemeId = await _getOrCreateAutoScheme(customerId, Map<String, String>.from(customerInfo));
+
+      print('📝 Step 3: Checking scheme creation result...');
+      print('   Scheme ID: $schemeId');
+
+      if (schemeId == null) {
+        print('❌ Scheme creation failed!');
+        Navigator.pop(context); // Close loading
+        _showErrorDialog('Failed to create scheme. Please try again.');
+        return;
+      }
+
+      print('✅ Scheme created successfully: $schemeId');
+      print('📝 Step 4: Generating transaction ID...');
+      // Generate transaction ID
+      final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+      print('   Transaction ID: $transactionId');
+
+      // Create transaction data with scheme ID
+      final transactionData = {
+        'transaction_id': transactionId,
+        'customer_id': customerId,
+        'scheme_id': schemeId,
+        'amount': _selectedAmount,
+        'gold_grams': goldGrams,
+        'gold_price': _currentPrice?.pricePerGram ?? 0,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'completed',
+        'payment_method': 'Demo',
+      };
+
+      // Save transaction with customer data
+      await CustomerService.saveTransactionWithCustomerData(
+        transactionId: transactionId,
+        type: 'BUY',
+        amount: _selectedAmount,
+        goldGrams: goldGrams,
+        goldPricePerGram: _currentPrice?.pricePerGram ?? 0,
+        paymentMethod: 'Demo',
+        status: 'completed',
+        gatewayTransactionId: transactionId,
+      );
+
+      // Update scheme with payment
+      await _updateSchemePayment(schemeId, _selectedAmount, goldGrams);
 
       // Close loading dialog
       Navigator.pop(context);
 
-      // Show success dialog
+      // Show success dialog with scheme info
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -881,6 +1067,25 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
               Text(
                 'You have successfully purchased ${goldGrams.toStringAsFixed(4)} grams of gold for ₹${_selectedAmount.toStringAsFixed(2)}',
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      '🆔 Scheme Details',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Scheme ID: $schemeId'),
+                    Text('Transaction ID: $transactionId'),
+                  ],
+                ),
               ),
             ],
           ),
@@ -963,4 +1168,69 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     }
   }
+
+  // Auto-create scheme for first-time buyers or get existing scheme
+  Future<String?> _getOrCreateAutoScheme(String customerId, Map<String, String> customerInfo) async {
+    print('🎯 _getOrCreateAutoScheme called with:');
+    print('   Customer ID: $customerId');
+    print('   Customer Info: $customerInfo');
+    print('   Selected Amount: $_selectedAmount');
+
+    try {
+      // For now, always create a new scheme for each purchase
+      // In production, you might want to check for existing active schemes
+
+      print('📝 Step 1: Generating scheme ID...');
+      // Generate scheme ID
+      final schemeId = await ApiService.generateSchemeId(customerId);
+      print('✅ Generated scheme ID: $schemeId');
+
+      print('📝 Step 2: Creating scheme in Firebase...');
+      // Create auto scheme with purchase amount as monthly target
+      final result = await ApiService.saveScheme(
+        schemeId: schemeId,
+        customerId: customerId,
+        customerPhone: customerInfo['phone'] ?? '',
+        customerName: customerInfo['name'] ?? '',
+        monthlyAmount: _selectedAmount, // Use current purchase as monthly amount
+        durationMonths: 11, // Default 11 months
+        schemeType: 'AUTO_GOLD_SAVINGS',
+        status: 'ACTIVE',
+      );
+
+      print('📝 Step 3: Checking save result...');
+      print('   Success: ${result['success']}');
+      print('   Message: ${result['message']}');
+
+      if (result['success']) {
+        print('✅ Auto-created scheme: $schemeId');
+        print('🎯 SCHEME SHOULD NOW BE IN FIREBASE!');
+        print('   Collection: schemes');
+        print('   Document ID: $schemeId');
+        return schemeId;
+      } else {
+        print('❌ Failed to create auto scheme: ${result['message']}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error creating auto scheme: $e');
+      print('❌ Stack trace: ${StackTrace.current}');
+      return null;
+    }
+  }
+
+  // Update scheme with payment
+  Future<void> _updateSchemePayment(String schemeId, double amount, double goldGrams) async {
+    try {
+      // In production, this would update the scheme's payment progress
+      // For now, we'll just log the payment
+      print('💰 Payment recorded for scheme $schemeId: ₹$amount for ${goldGrams}g gold');
+
+      // You can implement scheme payment tracking here
+      // Example: Update paid_amount, paid_months, gold_accumulated in Firebase
+    } catch (e) {
+      print('❌ Error updating scheme payment: $e');
+    }
+  }
+
 }

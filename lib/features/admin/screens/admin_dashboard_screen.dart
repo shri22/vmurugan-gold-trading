@@ -19,6 +19,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedIndex = 0;
   Map<String, dynamic>? _dashboardData;
   bool _isLoading = false;
+  final TextEditingController _adminTokenController = TextEditingController();
 
   @override
   void initState() {
@@ -43,6 +44,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       print('Error loading dashboard data: $e');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  void _authenticateAdmin() {
+    // Simple token check for demo purposes
+    if (_adminTokenController.text == 'VMURUGAN_ADMIN_2025') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Admin authenticated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid admin token'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -638,57 +658,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const Spacer(),
-              Icon(Icons.trending_up, color: AppColors.success, size: 20),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildQuickActionCard(String title, String subtitle, IconData icon, VoidCallback onTap) {
     return GestureDetector(

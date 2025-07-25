@@ -124,9 +124,9 @@ class _SchemesScreenState extends State<SchemesScreen> {
 
   Widget _buildSchemeCard(GoldSchemeModel scheme) {
     final performance = _schemeService.calculateSchemePerformance(scheme.id);
-    final currentValue = performance['currentValue'] ?? 0.0;
-    final totalGain = performance['totalGain'] ?? 0.0;
-    final gainPercentage = performance['gainPercentage'] ?? 0.0;
+    final currentValue = performance?['currentValue'] ?? 0.0;
+    final totalGain = performance?['totalGain'] ?? 0.0;
+    final gainPercentage = performance?['gainPercentage'] ?? 0.0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),

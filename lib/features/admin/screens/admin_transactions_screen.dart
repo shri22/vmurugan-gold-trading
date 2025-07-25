@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_border_radius.dart';
+import '../../../core/services/api_service.dart';
 
 class AdminTransactionsScreen extends StatefulWidget {
   const AdminTransactionsScreen({super.key});
@@ -22,54 +25,83 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
     _loadTransactions();
   }
 
-  void _loadTransactions() {
-    // Mock transaction data - in real app, load from Firebase
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await ApiService.getTransactions(
+        limit: 100,
+        status: _selectedFilter == 'All' ? null : _selectedFilter.toUpperCase(),
+      );
+
+      if (result['success']) {
+        setState(() {
+          _transactions = List<Map<String, dynamic>>.from(result['transactions']);
+          _filteredTransactions = _transactions;
+        });
+        _filterTransactions('');
+      } else {
+        _showErrorSnackBar('Failed to load transactions: ${result['message']}');
+        // Fallback to mock data for demo
+        _loadMockData();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error loading transactions: $e');
+      // Fallback to mock data for demo
+      _loadMockData();
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _loadMockData() {
+    // Mock transaction data for demo purposes
     _transactions = [
       {
-        'id': 'TXN001',
-        'customerName': 'Rajesh Kumar',
-        'customerPhone': '+91 9876543210',
-        'type': 'BUY',
+        'transaction_id': 'TXN001',
+        'customer_name': 'Rajesh Kumar',
+        'customer_phone': '+91 9876543210',
         'amount': 5000.0,
-        'goldGrams': 0.68,
-        'goldPrice': 7350.0,
-        'paymentMethod': 'UPI',
-        'status': 'COMPLETED',
-        'timestamp': '2025-01-23 14:30:00',
-        'gatewayTxnId': 'UPI123456789',
+        'gold_grams': 0.54,
+        'gold_price_per_gram': 9259.0,
+        'status': 'SUCCESS',
+        'payment_method': 'UPI',
+        'gateway_transaction_id': 'pay_abc123',
+        'timestamp': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+        'device_info': 'Android 12',
+        'location': 'Chennai, India',
       },
       {
-        'id': 'TXN002',
-        'customerName': 'Priya Sharma',
-        'customerPhone': '+91 9876543211',
-        'type': 'BUY',
-        'amount': 3000.0,
-        'goldGrams': 0.41,
-        'goldPrice': 7350.0,
-        'paymentMethod': 'Card',
-        'status': 'PENDING',
-        'timestamp': '2025-01-23 15:45:00',
-        'gatewayTxnId': 'CARD987654321',
+        'transaction_id': 'TXN002',
+        'customer_name': 'Priya Sharma',
+        'customer_phone': '+91 8765432109',
+        'amount': 10000.0,
+        'gold_grams': 1.08,
+        'gold_price_per_gram': 9259.0,
+        'status': 'SUCCESS',
+        'payment_method': 'Card',
+        'gateway_transaction_id': 'pay_def456',
+        'timestamp': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+        'device_info': 'iOS 16',
+        'location': 'Mumbai, India',
       },
       {
-        'id': 'TXN003',
-        'customerName': 'Amit Patel',
-        'customerPhone': '+91 9876543212',
-        'type': 'SELL',
-        'amount': 2000.0,
-        'goldGrams': 0.27,
-        'goldPrice': 7300.0,
-        'paymentMethod': 'Bank Transfer',
-        'status': 'COMPLETED',
-        'timestamp': '2025-01-23 16:20:00',
-        'gatewayTxnId': 'BANK456789123',
+        'transaction_id': 'TXN003',
+        'customer_name': 'Amit Patel',
+        'customer_phone': '+91 7654321098',
+        'amount': 2500.0,
+        'gold_grams': 0.27,
+        'gold_price_per_gram': 9259.0,
+        'status': 'FAILED',
+        'payment_method': 'UPI',
+        'gateway_transaction_id': 'pay_ghi789',
+        'timestamp': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String(),
+        'device_info': 'Android 11',
+        'location': 'Delhi, India',
       },
     ];
-    
-    _filteredTransactions = List.from(_transactions);
-    setState(() {
-      _isLoading = false;
-    });
+
+    _filteredTransactions = _transactions;
   }
 
   void _filterTransactions(String query) {
@@ -414,29 +446,87 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Transaction Details - ${transaction['id']}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text('Customer: ${transaction['customerName']}'),
-            Text('Phone: ${transaction['customerPhone']}'),
-            Text('Type: ${transaction['type']}'),
-            Text('Amount: ₹${transaction['amount']}'),
-            Text('Gold: ${transaction['goldGrams']}g'),
-            Text('Gold Price: ₹${transaction['goldPrice']}/g'),
-            Text('Payment: ${transaction['paymentMethod']}'),
-            Text('Status: ${transaction['status']}'),
-            Text('Gateway ID: ${transaction['gatewayTxnId']}'),
-            Text('Date: ${transaction['timestamp']}'),
+            const Icon(Icons.receipt, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text('Transaction Details'),
           ],
         ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Transaction ID', transaction['transaction_id'] ?? transaction['id'] ?? ''),
+              _buildDetailRow('Customer', '${transaction['customer_name'] ?? transaction['customerName'] ?? ''} (${transaction['customer_phone'] ?? transaction['customerPhone'] ?? ''})'),
+              _buildDetailRow('Amount', '₹${(transaction['amount'] as double).toStringAsFixed(2)}'),
+              _buildDetailRow('Gold Quantity', '${(transaction['gold_grams'] ?? transaction['goldGrams'] ?? 0.0).toStringAsFixed(3)} grams'),
+              _buildDetailRow('Price per Gram', '₹${(transaction['gold_price_per_gram'] ?? transaction['goldPrice'] ?? 0.0).toStringAsFixed(2)}'),
+              _buildDetailRow('Payment Method', transaction['payment_method'] ?? transaction['paymentMethod'] ?? ''),
+              _buildDetailRow('Status', transaction['status'] ?? ''),
+              _buildDetailRow('Gateway Transaction ID', transaction['gateway_transaction_id'] ?? transaction['gatewayTxnId'] ?? ''),
+              _buildDetailRow('Timestamp', transaction['timestamp'] ?? ''),
+              if (transaction['device_info'] != null && transaction['device_info'].toString().isNotEmpty)
+                _buildDetailRow('Device Info', transaction['device_info']),
+              if (transaction['location'] != null && transaction['location'].toString().isNotEmpty)
+                _buildDetailRow('Location', transaction['location']),
+            ],
+          ),
+        ),
         actions: [
+          TextButton(
+            onPressed: () => _copyTransactionId(transaction['transaction_id'] ?? transaction['id'] ?? ''),
+            child: const Text('Copy ID'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _copyTransactionId(String transactionId) {
+    Clipboard.setData(ClipboardData(text: transactionId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Transaction ID copied to clipboard'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
       ),
     );
   }

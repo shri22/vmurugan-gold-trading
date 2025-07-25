@@ -253,6 +253,20 @@
             border-radius: 4px;
             cursor: pointer;
         }
+
+        .btn-small {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-small:hover {
+            background: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -313,6 +327,7 @@
                 <h1 id="pageTitle">Dashboard Overview</h1>
                 <div>
                     <button onclick="refreshData()" style="margin-right: 10px; padding: 8px 16px; border: none; background: #FFD700; border-radius: 4px; cursor: pointer;">🔄 Refresh</button>
+                    <button onclick="debugFirebase()" style="margin-right: 10px; padding: 8px 16px; border: none; background: #FF5722; color: white; border-radius: 4px; cursor: pointer;">🔍 Debug Firebase</button>
                     <button onclick="logout()" class="logout-btn">Logout</button>
                 </div>
             </div>
@@ -321,19 +336,19 @@
             <div id="overviewSection">
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">1,234</div>
+                        <div class="stat-value" id="dashboardCustomers">0</div>
                         <div class="stat-label">Total Customers</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">5,678</div>
+                        <div class="stat-value" id="dashboardTransactions">0</div>
                         <div class="stat-label">Total Transactions</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">₹12,34,567</div>
+                        <div class="stat-value" id="dashboardRevenue">₹0</div>
                         <div class="stat-label">Total Revenue</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">45.67 kg</div>
+                        <div class="stat-value" id="dashboardGoldSold">0g</div>
                         <div class="stat-label">Gold Sold</div>
                     </div>
                 </div>
@@ -375,9 +390,11 @@
                     <table class="table">
                         <thead>
                             <tr>
+                                <th>Customer ID</th>
                                 <th>Name</th>
                                 <th>Phone</th>
                                 <th>Email</th>
+                                <th>Schemes</th>
                                 <th>Invested</th>
                                 <th>Gold Holdings</th>
                                 <th>KYC Status</th>
@@ -385,7 +402,7 @@
                         </thead>
                         <tbody id="customersTableBody">
                             <tr>
-                                <td colspan="6" style="text-align: center; padding: 20px;">
+                                <td colspan="8" style="text-align: center; padding: 20px;">
                                     <div style="color: #666;">
                                         📊 Loading customer data from Firebase...<br>
                                         <small>Real customer registrations will appear here</small>
@@ -400,37 +417,65 @@
             <!-- Transactions Section -->
             <div id="transactionsSection" style="display: none;">
                 <div class="content-card">
-                    <h3>Transaction History</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Transaction History</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="text" id="transactionSearch" placeholder="Search transactions..." style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 200px;">
+                            <select id="statusFilter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">All Status</option>
+                                <option value="SUCCESS">Success</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="FAILED">Failed</option>
+                            </select>
+                            <button onclick="refreshTransactions()" style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transaction Stats -->
+                    <div class="stats-grid" style="margin-bottom: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalTransactions">0</div>
+                            <div class="stat-label">Total Transactions</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalRevenue">₹0</div>
+                            <div class="stat-label">Total Revenue</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalGoldSold">0g</div>
+                            <div class="stat-label">Gold Sold</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="successRate">0%</div>
+                            <div class="stat-label">Success Rate</div>
+                        </div>
+                    </div>
+
                     <table class="table">
                         <thead>
                             <tr>
                                 <th>Transaction ID</th>
-                                <th>Customer</th>
+                                <th>Customer ID</th>
+                                <th>Scheme ID</th>
                                 <th>Type</th>
                                 <th>Amount</th>
                                 <th>Gold</th>
+                                <th>Payment Method</th>
                                 <th>Status</th>
                                 <th>Date</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="transactionsTableBody">
                             <tr>
-                                <td>TXN001</td>
-                                <td>Rajesh Kumar</td>
-                                <td>BUY</td>
-                                <td>₹5,000</td>
-                                <td>0.68g</td>
-                                <td><span class="status-badge status-verified">Completed</span></td>
-                                <td>2025-01-23</td>
-                            </tr>
-                            <tr>
-                                <td>TXN002</td>
-                                <td>Priya Sharma</td>
-                                <td>BUY</td>
-                                <td>₹3,000</td>
-                                <td>0.41g</td>
-                                <td><span class="status-badge status-pending">Pending</span></td>
-                                <td>2025-01-23</td>
+                                <td colspan="10" style="text-align: center; padding: 20px;">
+                                    <div style="color: #666;">
+                                        💳 Loading transaction data from Firebase...<br>
+                                        <small>Real transactions will appear here</small>
+                                    </div>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -499,18 +544,18 @@
             document.querySelectorAll('[id$="Section"]').forEach(el => {
                 el.style.display = 'none';
             });
-            
+
             // Remove active class from nav items
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('active');
             });
-            
+
             // Show selected section
             document.getElementById(section + 'Section').style.display = 'block';
-            
+
             // Add active class to clicked nav item
             event.target.classList.add('active');
-            
+
             // Update page title
             const titles = {
                 'overview': 'Dashboard Overview',
@@ -520,6 +565,13 @@
                 'settings': 'System Settings'
             };
             document.getElementById('pageTitle').textContent = titles[section];
+
+            // Load data for specific sections
+            if (section === 'transactions') {
+                loadTransactionsFromFirebase();
+            } else if (section === 'customers') {
+                loadCustomersFromFirebase();
+            }
         }
 
         // Utility functions
@@ -693,7 +745,7 @@
             if (realCustomers.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: #666;">
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #666;">
                             <div style="font-size: 18px; margin-bottom: 10px;">📱 No Real Customer Registrations Yet</div>
                             <div style="font-size: 14px;">
                                 Real customer data will appear here when users register through the mobile app.<br>
@@ -708,16 +760,18 @@
 
             tbody.innerHTML = realCustomers.map(customer => {
                 // Handle different Firebase data structures
-                let name, phone, email, registrationDate;
+                let customerId, name, phone, email, registrationDate;
 
                 if (customer.fields) {
                     // Firestore format
+                    customerId = customer.fields.customer_id?.stringValue || 'N/A';
                     name = customer.fields.name?.stringValue || customer.fields.fullName?.stringValue || 'N/A';
                     phone = customer.fields.phone?.stringValue || customer.fields.phoneNumber?.stringValue || 'N/A';
                     email = customer.fields.email?.stringValue || 'N/A';
                     registrationDate = customer.fields.registration_date?.stringValue || customer.fields.createdAt?.stringValue || 'Recent';
                 } else {
                     // Realtime Database format
+                    customerId = customer.customer_id || 'N/A';
                     name = customer.name || customer.fullName || 'N/A';
                     phone = customer.phone || customer.phoneNumber || 'N/A';
                     email = customer.email || 'N/A';
@@ -726,12 +780,14 @@
 
                 return `
                     <tr>
+                        <td><strong style="color: #2E7D32;">${customerId}</strong></td>
                         <td><strong>${name}</strong></td>
                         <td>${phone}</td>
                         <td>${email}</td>
-                        <td>₹0 <small>(No purchases yet)</small></td>
+                        <td><button onclick="loadCustomerSchemes('${customerId}')" class="btn-small">View Schemes</button></td>
+                        <td>₹0 <small>(Loading...)</small></td>
                         <td>0g</td>
-                        <td><span class="status-badge status-pending">New Registration</span></td>
+                        <td><span class="status-badge status-pending">Active</span></td>
                     </tr>
                 `;
             }).join('');
@@ -771,10 +827,10 @@
         }
 
         function updateCustomerStats(customerCount) {
-            // Update the dashboard stats
-            const statCards = document.querySelectorAll('.stat-value');
-            if (statCards.length > 0) {
-                statCards[0].textContent = customerCount.toString(); // Total customers
+            // Update the main dashboard customer count
+            const dashboardCustomersEl = document.getElementById('dashboardCustomers');
+            if (dashboardCustomersEl) {
+                dashboardCustomersEl.textContent = customerCount.toString();
             }
         }
 
@@ -815,12 +871,392 @@
             }
         }
 
-        // Load customers when page loads
+        // Load real transaction data from Firebase
+        async function loadTransactionsFromFirebase() {
+            try {
+                const apiKey = 'AIzaSyCaS4pdX3a_JFdL0PolTHYnpebg5ppbgs0';
+
+                // Try Firebase Firestore endpoint for transactions
+                const endpoint = `https://firestore.googleapis.com/v1/projects/vmurugan-gold-trading/databases/(default)/documents/transactions?key=${apiKey}`;
+
+                console.log('🔄 Loading transactions from Firebase...');
+                console.log('🌐 Endpoint:', endpoint);
+
+                const response = await fetch(endpoint);
+                console.log('📥 Response status:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('📊 Firebase transactions response:', data);
+
+                    if (data && data.documents && data.documents.length > 0) {
+                        console.log(`✅ Found ${data.documents.length} transactions`);
+                        displayTransactions(data.documents);
+                        return;
+                    } else {
+                        console.log('📭 No transactions found in Firebase');
+                        console.log('💡 This means either:');
+                        console.log('   1. No gold purchases have been made yet');
+                        console.log('   2. Transactions are not being saved to Firebase');
+                        console.log('   3. Transactions are in a different collection');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    console.log('❌ Firebase response error:', response.status, errorText);
+                }
+
+                // If no real transactions, show demo data with instructions
+                displayNoTransactionsMessage();
+
+            } catch (error) {
+                console.log('❌ Firebase transaction loading error:', error);
+                displayNoTransactionsMessage();
+            }
+        }
+
+        function displayTransactions(transactions) {
+            const tbody = document.getElementById('transactionsTableBody');
+
+            if (!transactions || transactions.length === 0) {
+                displayNoTransactionsMessage();
+                return;
+            }
+
+            // Filter and process transactions
+            const processedTransactions = transactions.map(transaction => {
+                const fields = transaction.fields;
+                return {
+                    transaction_id: fields.transaction_id?.stringValue || 'N/A',
+                    customer_name: fields.customer_name?.stringValue || 'N/A',
+                    customer_phone: fields.customer_phone?.stringValue || 'N/A',
+                    type: fields.type?.stringValue || 'BUY',
+                    amount: parseFloat(fields.amount?.doubleValue || 0),
+                    gold_grams: parseFloat(fields.gold_grams?.doubleValue || 0),
+                    gold_price_per_gram: parseFloat(fields.gold_price_per_gram?.doubleValue || 0),
+                    payment_method: fields.payment_method?.stringValue || 'N/A',
+                    status: fields.status?.stringValue || 'PENDING',
+                    gateway_transaction_id: fields.gateway_transaction_id?.stringValue || 'N/A',
+                    timestamp: fields.timestamp?.stringValue || new Date().toISOString(),
+                    device_info: fields.device_info?.stringValue || 'N/A',
+                    location: fields.location?.stringValue || 'N/A'
+                };
+            });
+
+            // Sort by timestamp (newest first)
+            processedTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // Apply search and status filters
+            const searchTerm = document.getElementById('transactionSearch')?.value.toLowerCase() || '';
+            const statusFilter = document.getElementById('statusFilter')?.value || '';
+
+            const filteredTransactions = processedTransactions.filter(transaction => {
+                const matchesSearch = !searchTerm ||
+                    transaction.transaction_id.toLowerCase().includes(searchTerm) ||
+                    transaction.customer_name.toLowerCase().includes(searchTerm) ||
+                    transaction.customer_phone.includes(searchTerm);
+
+                const matchesStatus = !statusFilter || transaction.status === statusFilter;
+
+                return matchesSearch && matchesStatus;
+            });
+
+            if (filteredTransactions.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" style="text-align: center; padding: 40px; color: #666;">
+                            <div style="font-size: 18px; margin-bottom: 10px;">🔍 No Transactions Found</div>
+                            <div style="font-size: 14px;">
+                                ${searchTerm || statusFilter ? 'Try adjusting your search or filter criteria.' : 'Real transactions will appear here when customers make purchases.'}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                updateTransactionStats([], processedTransactions);
+                return;
+            }
+
+            tbody.innerHTML = filteredTransactions.map(transaction => {
+                const statusClass = getStatusClass(transaction.status);
+                const formattedDate = formatTransactionDate(transaction.timestamp);
+
+                return `
+                    <tr>
+                        <td><strong>${transaction.transaction_id}</strong></td>
+                        <td>
+                            <div><strong style="color: #2E7D32;">${transaction.customer_id || 'N/A'}</strong></div>
+                            <div style="font-size: 12px; color: #666;">${transaction.customer_name} (${transaction.customer_phone})</div>
+                        </td>
+                        <td>
+                            <div><strong style="color: #FF9800;">${transaction.scheme_id || 'No Scheme'}</strong></div>
+                        </td>
+                        <td><span style="background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${transaction.type}</span></td>
+                        <td><strong>₹${transaction.amount.toLocaleString()}</strong></td>
+                        <td>${transaction.gold_grams.toFixed(3)}g</td>
+                        <td>${transaction.payment_method}</td>
+                        <td><span class="status-badge ${statusClass}">${transaction.status}</span></td>
+                        <td>${formattedDate}</td>
+                        <td>
+                            <button onclick="viewTransactionDetails('${transaction.transaction_id}')" style="padding: 4px 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Update transaction statistics
+            updateTransactionStats(filteredTransactions, processedTransactions);
+        }
+
+        function displayNoTransactionsMessage() {
+            const tbody = document.getElementById('transactionsTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 30px;">
+                        <div style="color: #666; line-height: 1.6;">
+                            <h3 style="color: #FF9800; margin-bottom: 15px;">💳 Looking for Transaction Data...</h3>
+
+                            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0;">
+                                <strong>📱 To see transactions here:</strong><br>
+                                1. Open VMUrugan mobile app<br>
+                                2. Complete a gold purchase<br>
+                                3. Refresh this admin portal<br>
+                            </div>
+
+                            <div style="background: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #FF9800;">
+                                <strong>✅ Firebase Status:</strong> Connected<br>
+                                <strong>📊 Data Source:</strong> Real-time from mobile app<br>
+                                <strong>🔄 Auto-refresh:</strong> Every 30 seconds
+                            </div>
+
+                            <button onclick="loadTransactionsFromFirebase()" style="margin-top: 15px; padding: 10px 20px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🔄 Refresh Transaction Data
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            // Reset stats
+            updateTransactionStats([], []);
+        }
+
+        function updateTransactionStats(filteredTransactions, allTransactions) {
+            const totalTransactions = allTransactions.length;
+            const successfulTransactions = allTransactions.filter(t => t.status === 'SUCCESS');
+            const totalRevenue = successfulTransactions.reduce((sum, t) => sum + t.amount, 0);
+            const totalGoldSold = successfulTransactions.reduce((sum, t) => sum + t.gold_grams, 0);
+            const successRate = totalTransactions > 0 ? (successfulTransactions.length / totalTransactions * 100) : 0;
+
+            // Update transaction page stats
+            const totalTransactionsEl = document.getElementById('totalTransactions');
+            const totalRevenueEl = document.getElementById('totalRevenue');
+            const totalGoldSoldEl = document.getElementById('totalGoldSold');
+            const successRateEl = document.getElementById('successRate');
+
+            if (totalTransactionsEl) totalTransactionsEl.textContent = totalTransactions.toString();
+            if (totalRevenueEl) totalRevenueEl.textContent = `₹${totalRevenue.toLocaleString()}`;
+            if (totalGoldSoldEl) totalGoldSoldEl.textContent = `${totalGoldSold.toFixed(3)}g`;
+            if (successRateEl) successRateEl.textContent = `${successRate.toFixed(1)}%`;
+
+            // Update main dashboard stats
+            const dashboardTransactionsEl = document.getElementById('dashboardTransactions');
+            const dashboardRevenueEl = document.getElementById('dashboardRevenue');
+            const dashboardGoldSoldEl = document.getElementById('dashboardGoldSold');
+
+            if (dashboardTransactionsEl) dashboardTransactionsEl.textContent = totalTransactions.toString();
+            if (dashboardRevenueEl) dashboardRevenueEl.textContent = `₹${totalRevenue.toLocaleString()}`;
+            if (dashboardGoldSoldEl) dashboardGoldSoldEl.textContent = `${totalGoldSold.toFixed(3)}g`;
+
+            // Store data globally for other functions
+            window.transactionStats = {
+                totalTransactions,
+                totalRevenue,
+                totalGoldSold,
+                successRate
+            };
+        }
+
+        function getStatusClass(status) {
+            switch (status) {
+                case 'SUCCESS': return 'status-verified';
+                case 'PENDING': return 'status-pending';
+                case 'FAILED': return 'status-rejected';
+                default: return 'status-pending';
+            }
+        }
+
+        function formatTransactionDate(timestamp) {
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleDateString('en-IN') + ' ' + date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) {
+                return timestamp;
+            }
+        }
+
+        function viewTransactionDetails(transactionId) {
+            alert(`Transaction Details for ${transactionId}\n\nDetailed view coming soon...`);
+        }
+
+        function refreshTransactions() {
+            console.log('🔄 Refreshing transaction data...');
+            loadTransactionsFromFirebase();
+        }
+
+        // Add search and filter event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Search functionality
+            const searchInput = document.getElementById('transactionSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    if (window.lastTransactionData) {
+                        displayTransactions(window.lastTransactionData);
+                    }
+                });
+            }
+
+            // Status filter functionality
+            const statusFilter = document.getElementById('statusFilter');
+            if (statusFilter) {
+                statusFilter.addEventListener('change', function() {
+                    if (window.lastTransactionData) {
+                        displayTransactions(window.lastTransactionData);
+                    }
+                });
+            }
+        });
+
+        // Load customer schemes
+        async function loadCustomerSchemes(customerId) {
+            try {
+                console.log(`🔍 Loading schemes for customer: ${customerId}`);
+
+                // Try multiple Firebase endpoints for schemes
+                const endpoints = [
+                    `https://firestore.googleapis.com/v1/projects/vmurugan-gold-trading/databases/(default)/documents/schemes?key=AIzaSyCaS4pdX3a_JFdL0PolTHYnpebg5ppbgs0`,
+                ];
+
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(endpoint);
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('Schemes response:', data);
+
+                            if (data && data.documents) {
+                                // Filter schemes for this customer
+                                const customerSchemes = data.documents.filter(scheme => {
+                                    const schemeCustomerId = scheme.fields?.customer_id?.stringValue;
+                                    return schemeCustomerId === customerId;
+                                });
+
+                                if (customerSchemes.length > 0) {
+                                    displayCustomerSchemes(customerId, customerSchemes);
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Schemes endpoint failed:', endpoint, e);
+                    }
+                }
+
+                alert(`No schemes found for customer ${customerId}`);
+
+            } catch (error) {
+                console.error('Error loading customer schemes:', error);
+                alert('Error loading schemes. Check console for details.');
+            }
+        }
+
+        // Display customer schemes in a modal or alert
+        function displayCustomerSchemes(customerId, schemes) {
+            const schemeList = schemes.map(scheme => {
+                const fields = scheme.fields;
+                const schemeId = fields.scheme_id?.stringValue || 'N/A';
+                const monthlyAmount = fields.monthly_amount?.doubleValue || 0;
+                const status = fields.status?.stringValue || 'N/A';
+                const schemeType = fields.scheme_type?.stringValue || 'N/A';
+                const createdDate = fields.created_date?.stringValue || 'N/A';
+
+                return `
+                    🆔 Scheme ID: ${schemeId}
+                    💰 Monthly Amount: ₹${monthlyAmount}
+                    📅 Type: ${schemeType}
+                    ✅ Status: ${status}
+                    📆 Created: ${new Date(createdDate).toLocaleDateString()}
+                `;
+            }).join('\n\n');
+
+            alert(`Schemes for Customer ${customerId}:\n\n${schemeList}`);
+        }
+
+        // Debug Firebase collections
+        async function debugFirebase() {
+            console.log('🔍 DEBUGGING FIREBASE COLLECTIONS...');
+
+            const apiKey = 'AIzaSyCaS4pdX3a_JFdL0PolTHYnpebg5ppbgs0';
+            const baseUrl = 'https://firestore.googleapis.com/v1/projects/vmurugan-gold-trading/databases/(default)/documents';
+
+            const collections = ['customers', 'transactions', 'schemes', 'counters'];
+
+            for (const collection of collections) {
+                try {
+                    console.log(`\n📂 Checking collection: ${collection}`);
+                    const endpoint = `${baseUrl}/${collection}?key=${apiKey}`;
+
+                    const response = await fetch(endpoint);
+                    console.log(`   Status: ${response.status}`);
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.documents && data.documents.length > 0) {
+                            console.log(`   ✅ Found ${data.documents.length} documents`);
+                            console.log(`   📄 Sample document:`, data.documents[0]);
+                        } else {
+                            console.log(`   📭 No documents found`);
+                        }
+                    } else {
+                        const errorText = await response.text();
+                        console.log(`   ❌ Error: ${errorText}`);
+                    }
+                } catch (error) {
+                    console.log(`   ❌ Exception: ${error}`);
+                }
+            }
+
+            console.log('\n🎯 SUMMARY:');
+            console.log('Check the console above for detailed results');
+            console.log('If transactions collection is empty, transactions are not being saved');
+            alert('Debug complete! Check browser console (F12) for detailed results.');
+        }
+
+        // Load customers and transactions when page loads
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Admin portal loaded, connecting to Firebase...');
-            setTimeout(loadCustomersFromFirebase, 1000);
+            setTimeout(() => {
+                loadCustomersFromFirebase();
+                loadTransactionsFromFirebase();
+            }, 1000);
             startAutoRefresh();
         });
+
+        // Enhanced auto-refresh to include transactions
+        function startAutoRefresh() {
+            // Refresh every 30 seconds
+            refreshInterval = setInterval(() => {
+                loadCustomersFromFirebase();
+                loadTransactionsFromFirebase();
+            }, 30000);
+        }
+
+        // Enhanced refresh function
+        function refreshData() {
+            console.log('🔄 Manual refresh triggered');
+            loadCustomersFromFirebase();
+            loadTransactionsFromFirebase();
+        }
 
         // Stop auto-refresh when user leaves page
         window.addEventListener('beforeunload', stopAutoRefresh);

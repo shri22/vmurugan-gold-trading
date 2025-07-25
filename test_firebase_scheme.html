@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Scheme Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; }
+        .button:hover { background: #45a049; }
+        .output { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; white-space: pre-wrap; font-family: monospace; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Firebase Scheme Creation Test</h1>
+        
+        <div>
+            <button class="button" onclick="testFirebaseConnection()">1. Test Firebase Connection</button>
+            <button class="button" onclick="checkCustomers()">2. Check Customers</button>
+            <button class="button" onclick="testSchemeCreation()">3. Create Test Scheme</button>
+            <button class="button" onclick="checkSchemes()">4. Check Schemes</button>
+            <button class="button" onclick="testFirebaseRules()">5. Test Firebase Rules</button>
+            <button class="button" onclick="clearOutput()">Clear Output</button>
+        </div>
+        
+        <div id="output" class="output">Click "Test Scheme Creation" to start...</div>
+    </div>
+
+    <script>
+        const API_KEY = 'AIzaSyCaS4pdX3a_JFdL0PolTHYnpebg5ppbgs0';
+        const PROJECT_ID = 'vmurugan-gold-trading';
+        const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : '';
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+
+        async function testFirebaseConnection() {
+            clearOutput();
+            log('🔥 Testing Firebase Connection...');
+
+            try {
+                // Test basic Firebase connectivity
+                const url = `${BASE_URL}?key=${API_KEY}`;
+                log(`🌐 Testing URL: ${url}`);
+
+                const response = await fetch(url);
+                log(`📥 Response Status: ${response.status}`);
+
+                if (response.ok) {
+                    log('✅ FIREBASE CONNECTION SUCCESSFUL!', 'success');
+                    log('🎯 Firebase is accessible and API key is valid', 'success');
+                } else {
+                    log(`❌ FIREBASE CONNECTION FAILED`, 'error');
+                    log(`Status: ${response.status}`, 'error');
+                    const errorText = await response.text();
+                    log(`Error: ${errorText}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ CONNECTION EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkCustomers() {
+            clearOutput();
+            log('👥 Checking existing customers in Firebase...');
+
+            try {
+                const url = `${BASE_URL}/customers?key=${API_KEY}`;
+                log(`🌐 URL: ${url}`);
+
+                const response = await fetch(url);
+                log(`📥 Response Status: ${response.status}`);
+
+                if (response.ok) {
+                    const result = await response.json();
+
+                    if (result.documents && result.documents.length > 0) {
+                        log(`✅ Found ${result.documents.length} customers:`, 'success');
+
+                        result.documents.forEach((doc, index) => {
+                            const fields = doc.fields;
+                            const customerId = fields.customer_id?.stringValue || 'Unknown';
+                            const phone = fields.phone?.stringValue || 'Unknown';
+                            const name = fields.name?.stringValue || 'Unknown';
+
+                            log(``, 'success');
+                            log(`Customer ${index + 1}:`, 'success');
+                            log(`  ID: ${customerId}`, 'success');
+                            log(`  Phone: ${phone}`, 'success');
+                            log(`  Name: ${name}`, 'success');
+                        });
+
+                        log(``, 'success');
+                        log(`🎯 Use one of these customer IDs for scheme creation`, 'success');
+                    } else {
+                        log('📭 No customers found in Firebase', 'info');
+                        log('💡 Register a customer in the app first', 'info');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ FAILED TO CHECK CUSTOMERS`, 'error');
+                    log(`Error: ${response.status} - ${errorText}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSchemeCreation() {
+            clearOutput();
+            log('🚀 Starting Firebase Scheme Creation Test...');
+            
+            try {
+                // Test data
+                const customerId = 'VM000003';
+                const schemeId = `${customerId}-S${Date.now().toString().slice(-3)}`;
+                
+                log(`🆔 Testing with Customer ID: ${customerId}`);
+                log(`🎯 Generated Scheme ID: ${schemeId}`);
+                
+                // Create scheme data
+                const schemeData = {
+                    fields: {
+                        scheme_id: { stringValue: schemeId },
+                        customer_id: { stringValue: customerId },
+                        customer_phone: { stringValue: '9715569314' },
+                        customer_name: { stringValue: 'Test User' },
+                        monthly_amount: { doubleValue: 1500.0 },
+                        duration_months: { integerValue: 11 },
+                        scheme_type: { stringValue: 'WEB_TEST_SCHEME' },
+                        status: { stringValue: 'ACTIVE' },
+                        start_date: { stringValue: new Date().toISOString() },
+                        end_date: { stringValue: new Date(Date.now() + 11 * 30 * 24 * 60 * 60 * 1000).toISOString() },
+                        total_target_amount: { doubleValue: 16500.0 },
+                        paid_amount: { doubleValue: 0.0 },
+                        paid_months: { integerValue: 0 },
+                        remaining_months: { integerValue: 11 },
+                        gold_accumulated: { doubleValue: 0.0 },
+                        business_id: { stringValue: 'vmurugan_gold_trading' },
+                        data_type: { stringValue: 'web_test_scheme' },
+                        created_date: { stringValue: new Date().toISOString() }
+                    }
+                };
+                
+                log('📤 Sending scheme data to Firebase...');
+                
+                const url = `${BASE_URL}/schemes?documentId=${schemeId}&key=${API_KEY}`;
+                log(`🌐 URL: ${url}`);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(schemeData)
+                });
+                
+                log(`📥 Response Status: ${response.status}`);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    log('✅ SCHEME CREATED SUCCESSFULLY!', 'success');
+                    log(`🆔 Scheme ID: ${schemeId}`, 'success');
+                    log(`📍 Collection: schemes`, 'success');
+                    log(`🔗 Document ID: ${schemeId}`, 'success');
+                    log(`📄 Response: ${JSON.stringify(result, null, 2)}`, 'success');
+                    log('', 'success');
+                    log('🎯 CHECK FIREBASE CONSOLE NOW:', 'success');
+                    log('1. Go to https://console.firebase.google.com/', 'success');
+                    log('2. Select vmurugan-gold-trading project', 'success');
+                    log('3. Go to Firestore Database', 'success');
+                    log('4. Look for "schemes" collection', 'success');
+                    log(`5. Find document: ${schemeId}`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ FAILED TO CREATE SCHEME`, 'error');
+                    log(`Status: ${response.status}`, 'error');
+                    log(`Error Response: ${errorText}`, 'error');
+
+                    // Try to parse error details
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        log(`Error Details: ${JSON.stringify(errorJson, null, 2)}`, 'error');
+                    } catch (e) {
+                        log(`Raw Error: ${errorText}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkSchemes() {
+            clearOutput();
+            log('🔍 Checking existing schemes in Firebase...');
+            
+            try {
+                const url = `${BASE_URL}/schemes?key=${API_KEY}`;
+                log(`🌐 URL: ${url}`);
+                
+                const response = await fetch(url);
+                log(`📥 Response Status: ${response.status}`);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    if (result.documents && result.documents.length > 0) {
+                        log(`✅ Found ${result.documents.length} schemes:`, 'success');
+                        
+                        result.documents.forEach((doc, index) => {
+                            const fields = doc.fields;
+                            const schemeId = fields.scheme_id?.stringValue || 'Unknown';
+                            const customerId = fields.customer_id?.stringValue || 'Unknown';
+                            const monthlyAmount = fields.monthly_amount?.doubleValue || 0;
+                            const status = fields.status?.stringValue || 'Unknown';
+                            
+                            log(``, 'success');
+                            log(`Scheme ${index + 1}:`, 'success');
+                            log(`  ID: ${schemeId}`, 'success');
+                            log(`  Customer: ${customerId}`, 'success');
+                            log(`  Monthly: ₹${monthlyAmount}`, 'success');
+                            log(`  Status: ${status}`, 'success');
+                        });
+                    } else {
+                        log('📭 No schemes found in Firebase', 'info');
+                        log('💡 Try creating a scheme first using "Test Scheme Creation"', 'info');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ FAILED TO CHECK SCHEMES`, 'error');
+                    log(`Error: ${response.status} - ${errorText}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFirebaseRules() {
+            clearOutput();
+            log('🔒 Testing Firebase Rules and Permissions...');
+
+            try {
+                // Test 1: Try to write to a test collection
+                log('📝 Test 1: Testing write permissions...');
+
+                const testData = {
+                    fields: {
+                        test_field: { stringValue: 'test_value' },
+                        timestamp: { stringValue: new Date().toISOString() }
+                    }
+                };
+
+                const testUrl = `${BASE_URL}/test_collection?documentId=test_doc&key=${API_KEY}`;
+                const testResponse = await fetch(testUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+
+                log(`Write Test Status: ${testResponse.status}`);
+
+                if (testResponse.ok) {
+                    log('✅ Write permissions: OK', 'success');
+                } else {
+                    const errorText = await testResponse.text();
+                    log('❌ Write permissions: FAILED', 'error');
+                    log(`Write Error: ${errorText}`, 'error');
+                }
+
+                // Test 2: Try to read from existing collection
+                log('📖 Test 2: Testing read permissions...');
+
+                const readUrl = `${BASE_URL}/customers?key=${API_KEY}`;
+                const readResponse = await fetch(readUrl);
+
+                log(`Read Test Status: ${readResponse.status}`);
+
+                if (readResponse.ok) {
+                    log('✅ Read permissions: OK', 'success');
+                } else {
+                    const errorText = await readResponse.text();
+                    log('❌ Read permissions: FAILED', 'error');
+                    log(`Read Error: ${errorText}`, 'error');
+                }
+
+                // Test 3: Check API key validity
+                log('🔑 Test 3: Testing API key...');
+
+                const apiTestUrl = `${BASE_URL}?key=${API_KEY}`;
+                const apiResponse = await fetch(apiTestUrl);
+
+                log(`API Key Test Status: ${apiResponse.status}`);
+
+                if (apiResponse.status === 200 || apiResponse.status === 404) {
+                    log('✅ API Key: Valid', 'success');
+                } else if (apiResponse.status === 403) {
+                    log('❌ API Key: Invalid or restricted', 'error');
+                } else {
+                    log(`⚠️ API Key: Unexpected status ${apiResponse.status}`, 'error');
+                }
+
+                log('', 'info');
+                log('🎯 DIAGNOSIS:', 'info');
+                log('If write test fails: Check Firestore Rules', 'info');
+                log('If read test fails: Check API permissions', 'info');
+                log('If API test fails: Check API key configuration', 'info');
+
+            } catch (error) {
+                log(`❌ EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

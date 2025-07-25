@@ -42,7 +42,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     setState(() => _isLoading = true);
 
     try {
-      final success = await CustomerService.registerCustomer(
+      final result = await CustomerService.registerCustomer(
         phone: _phoneController.text.trim(),
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
@@ -50,7 +50,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         panCard: _panController.text.trim().toUpperCase(),
       );
 
-      if (success) {
+      if (result['success']) {
         // Log registration event
         await CustomerService.logEvent('customer_registered', {
           'phone': _phoneController.text.trim(),
@@ -58,19 +58,14 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Registration successful! Welcome to Digi Gold'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.pop(context, true); // Return success
+          // Show success dialog with customer ID
+          _showRegistrationSuccessDialog(result['customer_id']);
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Registration failed. Please try again.'),
+            SnackBar(
+              content: Text(result['message'] ?? 'Registration failed. Please try again.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -90,6 +85,181 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showRegistrationSuccessDialog(String? customerId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.check_circle,
+                color: Colors.green[700],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Registration Successful!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Welcome to V Murugan Jewellery Digital Gold!',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (customerId != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFFD700).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.badge,
+                          color: Colors.amber[700],
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Your Customer ID',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            customerId,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => _copyCustomerId(customerId),
+                            icon: Icon(
+                              Icons.copy,
+                              color: Colors.grey[600],
+                              size: 20,
+                            ),
+                            tooltip: 'Copy Customer ID',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Please save this Customer ID for future reference. You can use it for customer support and scheme management.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: const Text(
+                '✨ You can now start investing in digital gold with live market prices!\n'
+                '💎 Multiple investment schemes available\n'
+                '📱 Track your portfolio in real-time',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context, true); // Return to previous screen
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Start Investing',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _copyCustomerId(String customerId) {
+    Clipboard.setData(ClipboardData(text: customerId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Customer ID $customerId copied to clipboard'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override

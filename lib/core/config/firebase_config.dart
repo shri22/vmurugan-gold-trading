@@ -65,9 +65,12 @@ class FirebaseConfig {
   
   // Collection names
   static const String customersCollection = 'customers';
+  static const String schemesCollection = 'schemes';
   static const String transactionsCollection = 'transactions';
   static const String analyticsCollection = 'analytics';
   static const String priceHistoryCollection = 'price_history';
+  static const String notificationsCollection = 'notifications';
+  static const String countersCollection = 'counters';
   
   // Test data for development
   static const Map<String, dynamic> testCustomer = {

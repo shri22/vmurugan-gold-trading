@@ -4,6 +4,8 @@ import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
+import '../../../core/services/customer_service.dart';
+import '../../../core/services/api_service.dart';
 import '../../../main.dart';
 import 'customer_registration_screen.dart';
 
@@ -230,30 +232,112 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
-      // Simulate MPIN validation
-      await Future.delayed(const Duration(seconds: 1));
+      try {
+        // Check if customer exists with this phone number
+        final customerExists = await _validateCustomer(_phoneController.text.trim());
 
-      setState(() {
-        _isLoading = false;
-      });
+        if (customerExists) {
+          // For now, accept any 4-digit MPIN for registered customers
+          // In production, you would validate the actual MPIN
+          if (_mpinController.text.length == 4) {
+            // Save login session
+            await CustomerService.saveLoginSession(_phoneController.text.trim());
 
-      // For demo, accept any 4-digit MPIN
-      if (_mpinController.text.length == 4) {
-        _navigateToHome();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid MPIN. Please try again.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Login successful! Welcome back.'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+
+            _navigateToHome();
+          } else {
+            _showErrorMessage('Invalid MPIN. Please enter 4 digits.');
+          }
+        } else {
+          _showErrorMessage('Phone number not registered. Please register first.');
+        }
+      } catch (e) {
+        _showErrorMessage('Login failed. Please try again.');
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
+  Future<bool> _validateCustomer(String phone) async {
+    try {
+      // Check if customer exists in Firebase
+      final result = await ApiService.getCustomerByPhone(phone);
+      return result['success'] && result['customer'] != null;
+    } catch (e) {
+      print('Error validating customer: $e');
+      return false;
+    }
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
   void _handleDemoLogin() {
-    // Navigate directly to home screen for demo purposes
-    _navigateToHome();
+    // Show info about demo login
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info, color: Colors.blue[700]),
+            const SizedBox(width: 8),
+            const Text('Demo Login'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Demo login will use a temporary session.',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 12),
+            Text('To test with registered customers:'),
+            SizedBox(height: 8),
+            Text('1. Register a customer first'),
+            Text('2. Use the registered phone number'),
+            Text('3. Enter any 4-digit MPIN'),
+            SizedBox(height: 12),
+            Text(
+              'Note: Customer ID and scheme creation will work properly only with registered customers.',
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _navigateToHome();
+            },
+            child: const Text('Continue Demo'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleBiometricLogin() async {

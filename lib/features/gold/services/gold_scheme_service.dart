@@ -1,6 +1,8 @@
 import 'dart:async';
 import '../models/gold_scheme_model.dart';
 import 'gold_price_service.dart';
+import '../../notifications/services/notification_service.dart';
+import '../../notifications/models/notification_model.dart';
 
 class GoldSchemeService {
   static final GoldSchemeService _instance = GoldSchemeService._internal();
@@ -68,6 +70,12 @@ class GoldSchemeService {
 
     final scheme = _userSchemes[schemeIndex];
     final currentPrice = await _priceService.getCurrentPrice();
+
+    // Check if MJDTA price is available
+    if (currentPrice == null) {
+      throw Exception('MJDTA price service unavailable - cannot process scheme payment');
+    }
+
     final goldQuantity = currentPrice.calculateGoldQuantity(amount);
     
     final payment = SchemePayment(
@@ -99,6 +107,15 @@ class GoldSchemeService {
     );
 
     _userSchemes[schemeIndex] = updatedScheme;
+
+    // Create scheme payment notification
+    await NotificationTemplates.schemePayment(
+      schemeName: scheme.schemeName,
+      amount: amount,
+      monthNumber: scheme.completedMonths + 1,
+      totalMonths: scheme.totalMonths,
+    );
+
     return payment;
   }
 
@@ -112,11 +129,15 @@ class GoldSchemeService {
   }
 
   // Calculate scheme performance
-  Map<String, dynamic> calculateSchemePerformance(String schemeId) {
+  Map<String, dynamic>? calculateSchemePerformance(String schemeId) {
     final scheme = getSchemeById(schemeId);
-    if (scheme == null) return {};
+    if (scheme == null) return null;
 
-    final currentPrice = _priceService.currentPrice?.pricePerGram ?? 6250.50;
+    final currentPrice = _priceService.currentPrice?.pricePerGram;
+    if (currentPrice == null) {
+      // Return null if MJDTA price is not available
+      return null;
+    }
     final currentValue = scheme.totalGoldAccumulated * currentPrice;
     final totalGain = currentValue - scheme.totalInvested;
     final gainPercentage = scheme.totalInvested > 0 

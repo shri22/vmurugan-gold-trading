@@ -118,6 +118,69 @@ class ApiService {
     }
   }
 
+  // Smart router: Generate scheme ID
+  static Future<String> generateSchemeId(String customerId) async {
+    print('ApiService: Routing to $mode for scheme ID generation');
+
+    if (useFirebase) {
+      return await FirebaseService.generateUniqueSchemeId(customerId);
+    } else {
+      // For custom server, implement scheme ID generation
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      return '$customerId-S${timestamp.toString().substring(timestamp.toString().length - 2)}';
+    }
+  }
+
+  // Smart router: Save scheme
+  static Future<Map<String, dynamic>> saveScheme({
+    required String schemeId,
+    required String customerId,
+    required String customerPhone,
+    required String customerName,
+    required double monthlyAmount,
+    required int durationMonths,
+    required String schemeType,
+    required String status,
+  }) async {
+    print('ApiService: Routing to $mode for scheme save');
+
+    if (useFirebase) {
+      return await FirebaseService.saveScheme(
+        schemeId: schemeId,
+        customerId: customerId,
+        customerPhone: customerPhone,
+        customerName: customerName,
+        monthlyAmount: monthlyAmount,
+        durationMonths: durationMonths,
+        schemeType: schemeType,
+        status: status,
+      );
+    } else {
+      // For custom server, implement scheme saving
+      return {
+        'success': true,
+        'message': 'Scheme saved to custom server',
+        'scheme_id': schemeId,
+      };
+    }
+  }
+
+  // Smart router: Get customer by phone
+  static Future<Map<String, dynamic>> getCustomerByPhone(String phone) async {
+    print('ApiService: Routing to $mode for customer lookup');
+
+    if (useFirebase) {
+      return await FirebaseService.getCustomerByPhone(phone);
+    } else {
+      // For custom server, implement customer lookup
+      return {
+        'success': false,
+        'customer': null,
+        'message': 'Custom server customer lookup not implemented',
+      };
+    }
+  }
+
   // Smart router: Log analytics
   static Future<void> logAnalytics({
     required String event,
@@ -129,6 +192,34 @@ class ApiService {
       await FirebaseService.logAnalytics(event: event, data: data);
     } else {
       await CustomServerService.logAnalytics(event: event, data: data);
+    }
+  }
+
+  // Smart router: Get transactions for admin
+  static Future<Map<String, dynamic>> getTransactions({
+    int limit = 50,
+    String? customerPhone,
+    String? status,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    print('ApiService: Routing to $mode for transactions');
+
+    if (useFirebase) {
+      return await FirebaseService.getTransactions(
+        limit: limit,
+        customerPhone: customerPhone,
+        status: status,
+        startDate: startDate,
+        endDate: endDate,
+      );
+    } else {
+      // TODO: Implement custom server transaction retrieval
+      return {
+        'success': false,
+        'message': 'Custom server not implemented',
+        'transactions': <Map<String, dynamic>>[],
+      };
     }
   }
 

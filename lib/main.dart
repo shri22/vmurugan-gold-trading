@@ -11,7 +11,12 @@ import 'features/gold/services/gold_price_service.dart';
 import 'features/gold/models/gold_price_model.dart';
 import 'core/widgets/vmurugan_logo.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/notifications/screens/notifications_screen.dart';
+import 'features/notifications/services/notification_service.dart';
+import 'features/notifications/models/notification_model.dart';
 import 'core/services/customer_service.dart';
+import 'features/schemes/screens/scheme_creation_screen.dart';
+import 'features/debug/screens/debug_screen.dart';
 
 void main() {
   runApp(const DigiGoldApp());
@@ -42,8 +47,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final GoldPriceService _priceService = GoldPriceService();
+  final NotificationService _notificationService = NotificationService();
   GoldPriceModel? _currentPrice;
   double investmentAmount = 2000.0;
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
@@ -53,12 +60,22 @@ class _HomePageState extends State<HomePage> {
 
   void _initializeServices() {
     _priceService.initialize();
+    _notificationService.initialize();
 
     // Listen to price updates
     _priceService.priceStream.listen((price) {
       if (mounted) {
         setState(() {
           _currentPrice = price;
+        });
+      }
+    });
+
+    // Listen to notification count updates
+    _notificationService.unreadCountStream.listen((count) {
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = count;
         });
       }
     });
@@ -88,29 +105,30 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            Text('Status: ${_priceService.isApiAvailable ? "🟢 Live Data" : "🟡 Simulated Data"}'),
+            Text('Status: ${_priceService.isMjdtaAvailable ? "🟢 MJDTA Live Data" : "🔴 MJDTA Unavailable"}'),
             const SizedBox(height: 8),
-            if (!_priceService.isApiAvailable) ...[
-              const Text('• Sources tried:'),
-              const Text('  - MJDTA (thejewellersassociation.org)'),
-              const Text('  - metals.live API'),
+            if (!_priceService.isMjdtaAvailable) ...[
+              const Text('• MJDTA service is currently unavailable'),
+              const Text('• Gold purchases are disabled'),
+              const Text('• No price data available'),
               const SizedBox(height: 8),
-              const Text('• Fallback: Realistic simulation'),
-              const Text('• Base price: ₹7,200/gram (22K)'),
+              const Text(
+                '⚠️ We only allow purchases with real-time MJDTA prices',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.orange),
+              ),
             ] else ...[
               const Text('• Source: MJDTA Chennai (22K)'),
               const Text('• Official South India benchmark'),
               const Text('• Update times: 9:30 AM & 3:30 PM IST'),
               const Text('• Update frequency: Every 2 minutes'),
+              const Text('• Purchases enabled with live prices'),
             ],
             const SizedBox(height: 16),
             const Text(
-              'To verify manually, check:',
+              'Official MJDTA source:',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            const Text('• thejewellersassociation.org (MJDTA)'),
-            const Text('• goodreturns.in/gold-rates'),
-            const Text('• groww.in/gold-rates'),
+            const Text('• thejewellersassociation.org'),
           ],
         ),
         actions: [
@@ -118,13 +136,13 @@ class _HomePageState extends State<HomePage> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
-          if (!_priceService.isApiAvailable)
+          if (!_priceService.isMjdtaAvailable)
             TextButton(
               onPressed: () async {
                 Navigator.pop(context);
-                await _priceService.retryApiConnection();
+                await _priceService.retryMjdtaConnection();
               },
-              child: const Text('Retry API'),
+              child: const Text('Retry MJDTA'),
             ),
         ],
       ),
@@ -133,8 +151,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final goldPrice = _currentPrice?.pricePerGram ?? 6250.50;
-    final goldQuantity = investmentAmount / goldPrice;
+    final goldPrice = _currentPrice?.pricePerGram;
+    final goldQuantity = goldPrice != null ? investmentAmount / goldPrice : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -165,35 +183,36 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                    MaterialPageRoute(builder: (context) => const NotificationsScreen()),
                   );
                 },
               ),
               // Notification badge
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: AppColors.error,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: const Text(
-                    '3',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+              if (_unreadNotificationCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    textAlign: TextAlign.center,
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      _unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           IconButton(
@@ -213,6 +232,10 @@ class _HomePageState extends State<HomePage> {
                 _showAboutDialog(context);
               } else if (value == 'test_register') {
                 _testRegistration(context);
+              } else if (value == 'create_scheme') {
+                _navigateToSchemeCreation(context);
+              } else if (value == 'debug') {
+                _navigateToDebug(context);
               }
             },
             itemBuilder: (context) => [
@@ -243,6 +266,26 @@ class _HomePageState extends State<HomePage> {
                     Icon(Icons.bug_report),
                     SizedBox(width: 8),
                     Text('Test Registration'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'create_scheme',
+                child: Row(
+                  children: [
+                    Icon(Icons.savings),
+                    SizedBox(width: 8),
+                    Text('Create Scheme'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'debug',
+                child: Row(
+                  children: [
+                    Icon(Icons.bug_report),
+                    SizedBox(width: 8),
+                    Text('Debug & Test'),
                   ],
                 ),
               ),
@@ -326,6 +369,11 @@ class _HomePageState extends State<HomePage> {
                               tooltip: 'Price Source Info',
                             ),
                             IconButton(
+                              icon: const Icon(Icons.add_alert),
+                              onPressed: _createTestNotification,
+                              tooltip: 'Test Notification',
+                            ),
+                            IconButton(
                               icon: const Icon(Icons.refresh),
                               onPressed: () async {
                                 await _priceService.refreshPrice();
@@ -388,9 +436,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      '₹${goldPrice.toStringAsFixed(2)}/gram',
+                      goldPrice != null ? '₹${goldPrice.toStringAsFixed(2)}/gram' : 'Price Unavailable',
                       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        color: AppColors.primaryGold,
+                        color: goldPrice != null ? AppColors.primaryGold : Colors.grey,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -409,17 +457,17 @@ class _HomePageState extends State<HomePage> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: _priceService.isApiAvailable
+                            color: _priceService.isMjdtaAvailable
                                 ? AppColors.success.withValues(alpha: 0.1)
-                                : AppColors.warning.withValues(alpha: 0.1),
+                                : Colors.red.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            _priceService.isApiAvailable ? 'LIVE' : 'DEMO',
+                            _priceService.isMjdtaAvailable ? 'MJDTA LIVE' : 'UNAVAILABLE',
                             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: _priceService.isApiAvailable
+                              color: _priceService.isMjdtaAvailable
                                   ? AppColors.success
-                                  : AppColors.warning,
+                                  : Colors.red,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -477,9 +525,9 @@ class _HomePageState extends State<HomePage> {
                               ),
                               const SizedBox(height: AppSpacing.xs),
                               Text(
-                                '${goldQuantity.toStringAsFixed(4)} grams',
+                                goldPrice != null ? '${goldQuantity.toStringAsFixed(4)} grams' : 'N/A',
                                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: AppColors.primaryGold,
+                                  color: goldPrice != null ? AppColors.primaryGold : Colors.grey,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -684,13 +732,16 @@ class _HomePageState extends State<HomePage> {
     try {
       print('🧪 Starting test registration...');
 
-      final success = await CustomerService.registerCustomer(
+      final result = await CustomerService.registerCustomer(
         phone: 'TEST_${DateTime.now().millisecondsSinceEpoch}',
         name: 'Test Customer ${DateTime.now().hour}:${DateTime.now().minute}',
         email: 'test${DateTime.now().millisecondsSinceEpoch}@vmurugan.com',
         address: 'Test Address, Chennai, Tamil Nadu',
         panCard: 'ABCDE1234F',
       );
+
+      final success = result['success'] as bool;
+      final customerId = result['customer_id'] as String?;
 
       Navigator.pop(context); // Close loading dialog
 
@@ -717,6 +768,18 @@ class _HomePageState extends State<HomePage> {
                 const Text('✅ Customer registration working!'),
                 const Text('✅ Data should appear in Firebase'),
                 const Text('✅ Check admin portal for test data'),
+                if (customerId != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[200]!),
+                    ),
+                    child: Text('🆔 Customer ID: $customerId'),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 const Text('📱 Check console logs for details'),
               ] else ...[
@@ -768,6 +831,83 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       );
+    }
+  }
+
+  void _navigateToSchemeCreation(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SchemeCreationScreen(),
+      ),
+    );
+  }
+
+  void _navigateToDebug(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const DebugScreen(),
+      ),
+    );
+  }
+
+  void _createTestNotification() async {
+    // Create a test notification to demonstrate the system
+    await NotificationTemplates.adminMessage(
+      title: 'Welcome to VMUrugan Gold Trading! 🎉',
+      message: 'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
+      priority: NotificationPriority.normal,
+    );
+
+    // Also create a test transaction for demo
+    await _createTestTransaction();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Test notification and transaction created!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _createTestTransaction() async {
+    try {
+      // Create a mock successful transaction for demo
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '+91 9876543210';
+      final customerName = customerInfo['name'] ?? 'Demo Customer';
+
+      final transactionData = {
+        'transaction_id': 'DEMO_${DateTime.now().millisecondsSinceEpoch}',
+        'customer_phone': customerPhone,
+        'customer_name': customerName,
+        'type': 'BUY',
+        'amount': 2000.0,
+        'gold_grams': 0.216,
+        'gold_price_per_gram': _currentPrice?.pricePerGram ?? 9259.0,
+        'payment_method': 'Demo Payment',
+        'status': 'SUCCESS',
+        'gateway_transaction_id': 'demo_pay_${DateTime.now().millisecondsSinceEpoch}',
+        'device_info': 'Demo Device',
+        'location': 'Demo Location',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      await CustomerService.saveTransactionWithCustomerData(
+        transactionId: transactionData['transaction_id'] as String,
+        type: transactionData['type'] as String,
+        amount: transactionData['amount'] as double,
+        goldGrams: transactionData['gold_grams'] as double,
+        goldPricePerGram: transactionData['gold_price_per_gram'] as double,
+        paymentMethod: transactionData['payment_method'] as String,
+        status: transactionData['status'] as String,
+        gatewayTransactionId: transactionData['gateway_transaction_id'] as String,
+      );
+
+      print('Demo transaction created successfully');
+    } catch (e) {
+      print('Error creating demo transaction: $e');
     }
   }
 }

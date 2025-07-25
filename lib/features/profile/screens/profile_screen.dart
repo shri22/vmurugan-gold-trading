@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
+import '../../notifications/screens/notification_preferences_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -57,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildAccountActions(),
             
             const SizedBox(height: AppSpacing.xl),
-            
+
             // Settings
             _buildSettings(),
           ],
@@ -265,14 +268,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icons.notifications,
             'Notification Settings',
             'Manage your notifications',
-            () => _showComingSoon('Notification Settings'),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationPreferencesScreen(),
+              ),
+            ),
           ),
           
           _buildActionTile(
             Icons.download,
             'Download Statements',
             'Get your transaction statements',
-            () => _showComingSoon('Download Statements'),
+            _showDownloadStatements,
           ),
         ],
       ),
@@ -316,14 +324,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icons.help,
             'Help & Support',
             'Get help and contact support',
-            () => _showComingSoon('Help & Support'),
+            _showHelpAndSupport,
           ),
           
           _buildActionTile(
             Icons.info,
             'About',
-            'App version and information',
-            () => _showComingSoon('About'),
+            'Learn about V Murugan Jewellery',
+            _showAboutDialog,
           ),
           
           _buildActionTile(
@@ -377,6 +385,909 @@ class _ProfileScreenState extends State<ProfileScreen> {
       SnackBar(
         content: Text('$feature feature coming soon!'),
         backgroundColor: AppColors.info,
+      ),
+    );
+  }
+
+  void _showDownloadStatements() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.download,
+                color: Colors.green[700],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Download Statements',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Statement Options
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue[200]!,
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.receipt_long, color: Colors.blue[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Available Statements',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Current Month Statement
+                    _buildStatementOption(
+                      'Current Month',
+                      'All transactions for ${_getCurrentMonthName()}',
+                      Icons.calendar_today,
+                      () => _downloadStatement('current_month'),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Last 3 Months Statement
+                    _buildStatementOption(
+                      'Last 3 Months',
+                      'Transaction history for the last 3 months',
+                      Icons.calendar_view_month,
+                      () => _downloadStatement('last_3_months'),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // All Transactions Statement
+                    _buildStatementOption(
+                      'All Transactions',
+                      'Complete transaction history',
+                      Icons.history,
+                      () => _downloadStatement('all_transactions'),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Custom Date Range
+                    _buildStatementOption(
+                      'Custom Date Range',
+                      'Select specific date range',
+                      Icons.date_range,
+                      () => _showCustomDateRange(),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Statement Information
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primaryGold.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info, color: AppColors.primaryGold, size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Statement Information',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '• Statements include all gold purchase transactions\n'
+                      '• PDF format with detailed transaction information\n'
+                      '• Includes customer details, amounts, and gold quantities\n'
+                      '• Suitable for record keeping and tax purposes\n'
+                      '• Downloaded files are saved to your device',
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatementOption(String title, String description, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, color: Colors.green[700], size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.download, color: Colors.green[700], size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getCurrentMonthName() {
+    final now = DateTime.now();
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return '${months[now.month - 1]} ${now.year}';
+  }
+
+  Future<void> _downloadStatement(String period) async {
+    Navigator.pop(context); // Close the dialog
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('Generating ${_getPeriodDisplayName(period)} statement...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Calculate date range based on period
+      final dateRange = _getDateRangeForPeriod(period);
+
+      // Fetch transactions from API
+      final result = await ApiService.getTransactions(
+        startDate: dateRange['start'],
+        endDate: dateRange['end'],
+      );
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (result['success']) {
+        final transactions = result['transactions'] as List<Map<String, dynamic>>;
+
+        if (transactions.isEmpty) {
+          _showNoTransactionsDialog(period);
+        } else {
+          // Generate and download PDF
+          await _generatePDFStatement(transactions, period);
+          _showDownloadSuccessDialog(period);
+        }
+      } else {
+        _showErrorDialog('Failed to fetch transactions: ${result['message']}');
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      _showErrorDialog('Error generating statement: $e');
+    }
+  }
+
+  Map<String, DateTime?> _getDateRangeForPeriod(String period) {
+    final now = DateTime.now();
+
+    switch (period) {
+      case 'current_month':
+        return {
+          'start': DateTime(now.year, now.month, 1),
+          'end': DateTime(now.year, now.month + 1, 0),
+        };
+      case 'last_3_months':
+        return {
+          'start': DateTime(now.year, now.month - 2, 1),
+          'end': now,
+        };
+      case 'all_transactions':
+        return {
+          'start': null,
+          'end': null,
+        };
+      default:
+        return {
+          'start': null,
+          'end': null,
+        };
+    }
+  }
+
+  String _getPeriodDisplayName(String period) {
+    switch (period) {
+      case 'current_month':
+        return 'Current Month';
+      case 'last_3_months':
+        return 'Last 3 Months';
+      case 'all_transactions':
+        return 'All Transactions';
+      default:
+        return 'Custom';
+    }
+  }
+
+  Future<void> _generatePDFStatement(List<Map<String, dynamic>> transactions, String period) async {
+    // For now, we'll create a simple text-based statement
+    // In a real implementation, you would use a PDF library like pdf package
+
+    final buffer = StringBuffer();
+    buffer.writeln('V MURUGAN JEWELLERY');
+    buffer.writeln('GOLD TRANSACTION STATEMENT');
+    buffer.writeln('=' * 50);
+    buffer.writeln('Period: ${_getPeriodDisplayName(period)}');
+    buffer.writeln('Generated: ${DateTime.now().toString().split('.')[0]}');
+    buffer.writeln('=' * 50);
+    buffer.writeln();
+
+    double totalAmount = 0;
+    double totalGold = 0;
+
+    for (int i = 0; i < transactions.length; i++) {
+      final txn = transactions[i];
+      buffer.writeln('Transaction ${i + 1}:');
+      buffer.writeln('  ID: ${txn['transaction_id']}');
+      buffer.writeln('  Date: ${txn['timestamp']}');
+      buffer.writeln('  Amount: ₹${(txn['amount'] as double).toStringAsFixed(2)}');
+      buffer.writeln('  Gold: ${(txn['gold_grams'] as double).toStringAsFixed(3)}g');
+      buffer.writeln('  Price/gram: ₹${(txn['gold_price_per_gram'] as double).toStringAsFixed(2)}');
+      buffer.writeln('  Payment: ${txn['payment_method']}');
+      buffer.writeln('  Status: ${txn['status']}');
+      buffer.writeln();
+
+      if (txn['status'] == 'SUCCESS') {
+        totalAmount += txn['amount'] as double;
+        totalGold += txn['gold_grams'] as double;
+      }
+    }
+
+    buffer.writeln('=' * 50);
+    buffer.writeln('SUMMARY:');
+    buffer.writeln('Total Transactions: ${transactions.length}');
+    buffer.writeln('Total Amount: ₹${totalAmount.toStringAsFixed(2)}');
+    buffer.writeln('Total Gold: ${totalGold.toStringAsFixed(3)}g');
+    buffer.writeln('=' * 50);
+
+    // Copy to clipboard (in a real app, you would save as PDF)
+    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+  }
+
+  void _showCustomDateRange() {
+    Navigator.pop(context); // Close current dialog
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Custom Date Range'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Custom date range selection will be available in the next update.'),
+            SizedBox(height: 16),
+            Text(
+              'For now, please use one of the predefined options or contact support for specific date ranges.',
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNoTransactionsDialog(String period) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info, color: Colors.blue[700]),
+            const SizedBox(width: 8),
+            const Text('No Transactions'),
+          ],
+        ),
+        content: Text(
+          'No transactions found for ${_getPeriodDisplayName(period).toLowerCase()}.\n\n'
+          'Start investing in gold to generate statements!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDownloadSuccessDialog(String period) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green[700]),
+            const SizedBox(width: 8),
+            const Text('Statement Generated'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Your ${_getPeriodDisplayName(period).toLowerCase()} statement has been generated successfully!'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: const Text(
+                'Note: The statement has been copied to your clipboard. In the full version, it will be saved as a PDF file to your device.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Colors.red[700]),
+            const SizedBox(width: 8),
+            const Text('Error'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpAndSupport() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.help_center,
+                color: Colors.blue[700],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Help & Support',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Store Information Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue[200]!,
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.store, color: Colors.blue[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Store Information',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Main Store
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.location_on, color: AppColors.primary, size: 16),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Main Store',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'No: 94 & 71, PRS Street,\nDharmapuri – 1.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Branch Store
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.business, color: AppColors.primaryGold, size: 16),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Branch',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Perumal Kovil Vaniga Valagam,\nArasambatti.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Contact Information
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green[200]!,
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.phone, color: Colors.green[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Contact Numbers',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildContactRow('+91 96779 44711', Icons.phone),
+                    _buildContactRow('+91 94449 92494', Icons.phone),
+                    _buildContactRow('+91 94431 93476', Icons.phone),
+
+                    const SizedBox(height: 12),
+
+                    Row(
+                      children: [
+                        Icon(Icons.email, color: Colors.green[700], size: 16),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Email',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'info@vmuruganjewellery.co.in',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Support Information
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primaryGold.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.support_agent, color: AppColors.primaryGold, size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Need Help?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '• For gold purchase queries, call our support numbers\n'
+                      '• For app-related issues, contact us via email\n'
+                      '• Visit our stores for in-person assistance\n'
+                      '• Our team is available during business hours',
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactRow(String phoneNumber, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.green[600], size: 14),
+          const SizedBox(width: 8),
+          Text(
+            phoneNumber,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGold.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.diamond,
+                color: AppColors.primaryGold,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'About V Murugan Jewellery',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Company Story
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primaryGold.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: const Text(
+                  'The journey of V Murugan Jewellery began with a vision—one that was rooted in a deep appreciation for the art of jewellery making and a desire to bring unparalleled craftsmanship to the world. Our Jewellery has grown from a small, passionate endeavour into a respected name in the jewellery industry, known for its commitment to quality and timeless designs.\n\n'
+                  'From the very beginning, our focus has been on creating jewellery that is as meaningful as it is beautiful. We believe that jewellery is not just an accessory but a reflection of one\'s personal story. Whether it\'s a symbol of love, a mark of achievement, or a cherished family heirloom, every piece of jewellery has a unique significance, and we take pride in being a part of those special moments.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Contact Information
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue[200]!,
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.contact_phone, color: Colors.blue[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Contact Information',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoRow('Business', 'V Murugan Jewellery'),
+                    _buildInfoRow('Email', 'info@vmuruganjewellery.com'),
+                    _buildInfoRow('Phone', '+91 9876543210'),
+                    _buildInfoRow('Website', 'www.vmuruganjewellery.com'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
