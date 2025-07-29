@@ -17,8 +17,18 @@ import 'features/notifications/models/notification_model.dart';
 import 'core/services/customer_service.dart';
 import 'features/schemes/screens/scheme_creation_screen.dart';
 import 'features/debug/screens/debug_screen.dart';
+import 'features/auth/screens/enhanced_app_wrapper.dart';
+import 'features/auth/screens/enhanced_phone_entry_screen.dart';
+import 'core/services/auth_service.dart';
+import 'core/config/firebase_init.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase for free SMS OTP functionality
+  await FirebaseInit.initialize();
+
   runApp(const DigiGoldApp());
 }
 
@@ -161,8 +171,8 @@ class _HomePageState extends State<HomePage> {
           children: [
             VMUruganSimpleLogo(
               size: 32,
-              backgroundColor: Colors.red,
-              textColor: Colors.white,
+              backgroundColor: AppColors.primaryGreen, // Dark Green
+              textColor: AppColors.primaryGold, // Pure Gold
             ),
             const SizedBox(width: 8),
             const Text(
@@ -315,8 +325,8 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       VMUruganLogo(
                         size: 50,
-                        primaryColor: Colors.red,
-                        textColor: Colors.white,
+                        primaryColor: AppColors.primaryGreen, // Dark Green
+                        textColor: AppColors.primaryGold, // Pure Gold
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -623,6 +633,22 @@ class _HomePageState extends State<HomePage> {
             label: 'Profile',
           ),
         ],
+      ),
+
+      // Floating Action Button for Enhanced Auth Test
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const EnhancedPhoneEntryScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.phone),
+        label: const Text('Enhanced Auth'),
+        backgroundColor: AppColors.primaryGold,
+        foregroundColor: AppColors.black,
       ),
     );
   }

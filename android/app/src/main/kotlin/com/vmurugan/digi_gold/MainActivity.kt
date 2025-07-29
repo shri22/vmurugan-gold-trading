@@ -1,4 +1,4 @@
-package com.digigold.app.digi_gold
+package com.vmurugan.digi_gold
 
 import io.flutter.embedding.android.FlutterActivity
 

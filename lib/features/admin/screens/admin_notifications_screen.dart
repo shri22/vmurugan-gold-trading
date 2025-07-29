@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_border_radius.dart';
-import '../../../core/widgets/gradient_button.dart';
+import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../../notifications/models/notification_model.dart';
 import '../../notifications/services/notification_service.dart';
@@ -356,13 +356,12 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   Widget _buildSendButton() {
     return SizedBox(
       width: double.infinity,
-      child: GradientButton(
+      child: CustomButton(
         text: _isLoading ? 'Sending...' : 'Send Notification to All Customers',
         onPressed: _isLoading || _titleController.text.isEmpty || _messageController.text.isEmpty
             ? null
             : _sendNotification,
-        gradient: AppColors.primaryGradient,
-        icon: _isLoading ? null : Icons.send,
+        isLoading: _isLoading,
         isFullWidth: true,
       ),
     );

@@ -13,7 +13,7 @@ class AppTheme {
       primaryColor: AppColors.primaryGold,
       scaffoldBackgroundColor: AppColors.backgroundLight,
       
-      // Color Scheme
+      // Color Scheme - Pleasant & Warm
       colorScheme: const ColorScheme.light(
         primary: AppColors.primaryGold,
         primaryContainer: AppColors.lightGold,
@@ -21,7 +21,7 @@ class AppTheme {
         secondaryContainer: AppColors.lightGreen,
         surface: AppColors.surfaceLight,
         error: AppColors.error,
-        onPrimary: AppColors.textPrimary,
+        onPrimary: AppColors.black,
         onSecondary: AppColors.white,
         onSurface: AppColors.textPrimary,
         onError: AppColors.white,
@@ -120,11 +120,11 @@ class AppTheme {
         margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       
-      // Floating Action Button Theme
+      // Floating Action Button Theme - Warm Gold
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primaryGold,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 4,
+        backgroundColor: AppColors.primaryGold, // Warm Gold
+        foregroundColor: AppColors.black, // Black icon on gold
+        elevation: 6,
       ),
       
       // Text Theme

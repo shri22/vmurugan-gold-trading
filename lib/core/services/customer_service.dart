@@ -71,12 +71,17 @@ class CustomerService {
         print('   Name: ${customer['name']}');
         print('   Email: ${customer['email']}');
         print('   Phone: ${customer['phone']}');
+        print('   Address: ${customer['address']}');
+        print('   PAN Card: ${customer['pan_card']}');
 
-        // Save customer info locally
+        // Save customer info locally (including address and PAN)
         await prefs.setString(_customerPhoneKey, customer['phone'] ?? '');
         await prefs.setString(_customerNameKey, customer['name'] ?? '');
         await prefs.setString(_customerEmailKey, customer['email'] ?? '');
         await prefs.setString('customer_id', customer['customer_id'] ?? '');
+        await prefs.setString('customer_address', customer['address'] ?? '');
+        await prefs.setString('customer_pan_card', customer['pan_card'] ?? '');
+        await prefs.setString('customer_registration_date', customer['registration_date'] ?? '');
         await prefs.setBool(_customerRegisteredKey, true);
 
         print('✅ Login session saved for customer: ${customer['customer_id']}');
@@ -98,6 +103,9 @@ class CustomerService {
       'name': prefs.getString(_customerNameKey),
       'email': prefs.getString(_customerEmailKey),
       'customer_id': prefs.getString('customer_id'),
+      'address': prefs.getString('customer_address'),
+      'pan_card': prefs.getString('customer_pan_card'),
+      'registration_date': prefs.getString('customer_registration_date'),
     };
 
     print('📱 Retrieved customer info from local storage:');
@@ -105,6 +113,9 @@ class CustomerService {
     print('   Name: ${customerInfo['name']}');
     print('   Email: ${customerInfo['email']}');
     print('   Customer ID: ${customerInfo['customer_id']}');
+    print('   Address: ${customerInfo['address']}');
+    print('   PAN Card: ${customerInfo['pan_card']}');
+    print('   Registration Date: ${customerInfo['registration_date']}');
 
     return customerInfo;
   }
@@ -270,6 +281,28 @@ class CustomerService {
       );
     } catch (e) {
       print('Error logging event: $e');
+    }
+  }
+
+  // Clear login session
+  static Future<void> clearLoginSession() async {
+    print('🗑️ Clearing login session...');
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear all customer data
+      await prefs.remove(_customerPhoneKey);
+      await prefs.remove(_customerNameKey);
+      await prefs.remove(_customerEmailKey);
+      await prefs.remove('customer_id');
+      await prefs.remove('customer_address');
+      await prefs.remove('customer_pan_card');
+      await prefs.setBool(_customerRegisteredKey, false);
+
+      print('✅ Login session cleared successfully');
+    } catch (e) {
+      print('❌ Error clearing login session: $e');
     }
   }
 }

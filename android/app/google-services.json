@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "286337779819",
+    "project_id": "vmurugan-gold-trading",
+    "storage_bucket": "vmurugan-gold-trading.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:286337779819:android:b1446b2a4ae7a7db7f492e",
+        "android_client_info": {
+          "package_name": "com.vmurugan.digi_gold"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnUA94trUucrr6VKu3bQhqen8gy-EL4m8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

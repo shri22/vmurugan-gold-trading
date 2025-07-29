@@ -4,6 +4,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/config/firebase_config.dart';
+import '../../../core/services/auth_service.dart';
+import '../../auth/screens/enhanced_phone_entry_screen.dart';
+import 'sms_debug_screen.dart';
+import 'sms_provider_test_screen.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key});
@@ -15,6 +19,60 @@ class DebugScreen extends StatefulWidget {
 class _DebugScreenState extends State<DebugScreen> {
   String _debugOutput = '';
   bool _isLoading = false;
+  bool _enhancedAuthEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEnhancedAuthState();
+  }
+
+  Future<void> _loadEnhancedAuthState() async {
+    final isEnabled = await AuthService.isEnhancedFlowEnabled();
+    setState(() {
+      _enhancedAuthEnabled = isEnabled;
+    });
+  }
+
+  Future<void> _toggleEnhancedAuth(bool enabled) async {
+    await AuthService.setEnhancedFlowEnabled(enabled);
+    setState(() {
+      _enhancedAuthEnabled = enabled;
+    });
+
+    _addOutput(
+      enabled
+          ? '✅ Enhanced authentication flow ENABLED'
+          : '❌ Enhanced authentication flow DISABLED'
+    );
+  }
+
+  void _testEnhancedAuth() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const EnhancedPhoneEntryScreen(),
+      ),
+    );
+  }
+
+  void _openSmsDebug() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SmsDebugScreen(),
+      ),
+    );
+  }
+
+  void _openSmsProviderTest() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SmsProviderTestScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +130,82 @@ class _DebugScreenState extends State<DebugScreen> {
                 ),
               ],
             ),
-            
+
+            const SizedBox(height: 20),
+
+            // Enhanced Authentication Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Enhanced Authentication Flow',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'New step-by-step authentication: Phone → Registration/Login → OTP → MPIN',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SwitchListTile(
+                            title: const Text('Enable Enhanced Flow'),
+                            subtitle: Text(
+                              _enhancedAuthEnabled
+                                  ? 'Enhanced flow is ACTIVE'
+                                  : 'Using original login screen',
+                            ),
+                            value: _enhancedAuthEnabled,
+                            onChanged: _toggleEnhancedAuth,
+                            activeColor: AppColors.primaryGold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: _testEnhancedAuth,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryGreen,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Test Enhanced Flow'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: _openSmsDebug,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryGold,
+                            foregroundColor: Colors.black,
+                          ),
+                          child: const Text('SMS Config'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: _openSmsProviderTest,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('SMS Test'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             const SizedBox(height: 20),
             
             // Loading indicator

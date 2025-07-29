@@ -38,6 +38,10 @@ dependencies:
   # HTTP client for API calls
   http: ^1.4.0
 
+  # Firebase packages for authentication and real OTP
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+
   # URL launcher for payment apps
   url_launcher: ^6.2.2
   shared_preferences: ^2.5.3
@@ -75,9 +79,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
+  assets:
+    - assets/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -106,9 +109,20 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 # Flutter Launcher Icons Configuration
-flutter_icons:
+flutter_launcher_icons:
   android: true
-  ios: false
-  image_path: "assets/vmurugan_icon.png"
-  adaptive_icon_background: "#DC143C"
-  adaptive_icon_foreground: "assets/vmurugan_icon_foreground.png"
+  ios: true
+  image_path: "assets/vm_launcher_centered.png"
+  adaptive_icon_background: "#FFFFFF"  # Pure white background
+  adaptive_icon_foreground: "assets/vm_launcher_centered.png"
+  # Additional configurations for better centering and scaling
+  min_sdk_android: 21
+  # Remove alpha channel for iOS
+  remove_alpha_ios: true
+  # Ensure proper scaling and centering
+  android_adaptive_icon_background: "#FFFFFF"
+  android_adaptive_icon_foreground: "assets/vm_launcher_centered.png"
+  web:
+    generate: true
+    image_path: "assets/vm_launcher_centered.png"
+    background_color: "#FFFFFF"

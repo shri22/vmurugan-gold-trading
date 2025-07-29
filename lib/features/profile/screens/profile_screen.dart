@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/customer_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
 
@@ -15,16 +16,65 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Mock user data - in real app, this would come from a service
-  final Map<String, String> _userProfile = {
-    'name': 'Demo User',
-    'phone': '+91 9999999999',
-    'email': 'demo@vmurugan.com',
-    'address': 'Chennai, Tamil Nadu',
-    'pan': 'ABCDE1234F',
-    'joinDate': '15 Jan 2025',
-    'kycStatus': 'Verified',
-  };
+  Map<String, String> _userProfile = {};
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomerProfile();
+  }
+
+  Future<void> _loadCustomerProfile() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+
+      // Get customer info from local storage (saved during login)
+      final customerInfo = await CustomerService.getCustomerInfo();
+
+      if (customerInfo['phone'] != null && customerInfo['phone']!.isNotEmpty) {
+        // Format the registration date
+        String formattedJoinDate = 'Recently';
+        if (customerInfo['registration_date'] != null && customerInfo['registration_date']!.isNotEmpty) {
+          try {
+            final regDate = DateTime.parse(customerInfo['registration_date']!);
+            formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
+          } catch (e) {
+            formattedJoinDate = 'Recently';
+          }
+        }
+
+        // Format the data for display
+        setState(() {
+          _userProfile = {
+            'name': customerInfo['name'] ?? 'Not Available',
+            'phone': customerInfo['phone'] ?? 'Not Available',
+            'email': customerInfo['email'] ?? 'Not Available',
+            'customer_id': customerInfo['customer_id'] ?? 'Not Available',
+            'address': customerInfo['address'] ?? 'Not Available',
+            'pan': customerInfo['pan_card'] ?? 'Not Available',
+            'joinDate': formattedJoinDate,
+            'kycStatus': 'Verified', // Since they can login, they're verified
+          };
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Please login to view profile';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,17 +87,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadCustomerProfile,
+          ),
+          IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _editProfile,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          children: [
-            // Profile Header
-            _buildProfileHeader(),
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading profile...'),
+                ],
+              ),
+            )
+          : _errorMessage.isNotEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.red[300],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage,
+                        style: const TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadCustomerProfile,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    children: [
+                      // Profile Header
+                      _buildProfileHeader(),
             
             const SizedBox(height: AppSpacing.xl),
             
@@ -106,19 +195,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           const SizedBox(height: AppSpacing.md),
           
+          // Customer ID (prominent display)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGold.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primaryGold),
+            ),
+            child: Text(
+              'ID: ${_userProfile['customer_id'] ?? 'Loading...'}',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryGold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
           // Name
           Text(
-            _userProfile['name']!,
+            _userProfile['name'] ?? 'Loading...',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
-          
+
           const SizedBox(height: AppSpacing.xs),
-          
+
           // Phone
           Text(
-            _userProfile['phone']!,
+            _userProfile['phone'] ?? 'Loading...',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -186,10 +294,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           const SizedBox(height: AppSpacing.lg),
           
-          _buildDetailRow(Icons.email, 'Email', _userProfile['email']!),
-          _buildDetailRow(Icons.location_on, 'Address', _userProfile['address']!),
-          _buildDetailRow(Icons.credit_card, 'PAN Card', _userProfile['pan']!),
-          _buildDetailRow(Icons.calendar_today, 'Member Since', _userProfile['joinDate']!),
+          _buildDetailRow(Icons.email, 'Email', _userProfile['email'] ?? 'Not Available'),
+          _buildDetailRow(Icons.location_on, 'Address', _userProfile['address'] ?? 'Not Available'),
+          _buildDetailRow(Icons.credit_card, 'PAN Card', _userProfile['pan'] ?? 'Not Available'),
+          _buildDetailRow(Icons.calendar_today, 'Member Since', _userProfile['joinDate'] ?? 'Recently'),
         ],
       ),
     );

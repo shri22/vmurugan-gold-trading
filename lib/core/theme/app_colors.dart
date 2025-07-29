@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 /// App color palette for Digi Gold theme
 class AppColors {
+  
   // Main App Colors (for compatibility)
   static const Color primary = Color(0xFFFFD700); // Gold
   static const Color secondary = Color(0xFFFFA500); // Orange
@@ -11,8 +12,11 @@ class AppColors {
   static const Color primaryGold = Color(0xFFFFD700); // Gold
   static const Color lightGold = Color(0xFFFFF8DC); // Cornsilk
   static const Color darkGold = Color(0xFFB8860B); // Dark Goldenrod
+  static const Color metallicGold = Color(0xFFD4AF37); // Metallic Gold
+  static const Color richGold = Color(0xFFFFB300); // Rich Gold
+  static const Color bronzeGold = Color(0xFFCD7F32); // Bronze Gold
   static const Color champagne = Color(0xFFF7E7CE); // Light champagne
-  
+
   // Dark Green Colors
   static const Color primaryGreen = Color(0xFF1B5E20); // Dark Green
   static const Color lightGreen = Color(0xFF2E7D32); // Medium Green
@@ -55,7 +59,7 @@ class AppColors {
       Color(0xFFB8860B),
     ],
   );
-  
+
   static const LinearGradient greenGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

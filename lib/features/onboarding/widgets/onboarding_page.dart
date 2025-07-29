@@ -72,32 +72,24 @@ class OnboardingPage extends StatelessWidget {
   }
 
   Widget _buildImageContent(BuildContext context) {
-    // For now, we'll use icons since we don't have actual images
-    // In a real app, you'd use Image.asset(onboardingData.imagePath)
-    
-    IconData iconData;
-    switch (onboardingData.title) {
-      case 'Invest in Digital Gold':
-        iconData = Icons.diamond;
-        break;
-      case '11-Month Gold Scheme':
-        iconData = Icons.savings;
-        break;
-      case 'Real-Time Gold Prices':
-        iconData = Icons.trending_up;
-        break;
-      case 'Secure Digital Vault':
-        iconData = Icons.security;
-        break;
-      default:
-        iconData = Icons.star;
-    }
-
+    // Use VM Logo for all onboarding pages
     return Center(
-      child: Icon(
-        iconData,
-        size: Responsive.getWidth(context) * 0.25,
-        color: AppColors.white,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        child: Image.asset(
+          'assets/vm_logo.png',
+          width: Responsive.getWidth(context) * 0.5,
+          height: Responsive.getHeight(context) * 0.25,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            // Fallback to icon if image fails to load
+            return Icon(
+              Icons.diamond,
+              size: Responsive.getWidth(context) * 0.25,
+              color: AppColors.white,
+            );
+          },
+        ),
       ),
     );
   }

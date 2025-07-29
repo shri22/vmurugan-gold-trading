@@ -19,12 +19,21 @@ class VMUruganLogo extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: VMUruganLogoPainter(
-          primaryColor: primaryColor,
-          secondaryColor: secondaryColor,
-          textColor: textColor,
-        ),
+      child: Image.asset(
+        'assets/vm_logo.png',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          // Fallback to custom painted logo if image fails to load
+          return CustomPaint(
+            painter: VMUruganLogoPainter(
+              primaryColor: primaryColor,
+              secondaryColor: secondaryColor,
+              textColor: textColor,
+            ),
+          );
+        },
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+// Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../models/gold_scheme_model.dart';
