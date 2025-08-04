@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_service.dart';
 import '../models/portfolio_model.dart';
 import '../../gold/models/gold_price_model.dart';
+import '../../schemes/models/scheme_installment_model.dart';
 
 class PortfolioService {
   final DatabaseService _db = DatabaseService();
@@ -18,6 +19,7 @@ class PortfolioService {
       return Portfolio(
         id: 1,
         totalGoldGrams: 0.0,
+        totalSilverGrams: 0.0,
         totalInvested: 0.0,
         currentValue: 0.0,
         profitLoss: 0.0,
@@ -63,6 +65,30 @@ class PortfolioService {
     }
   }
 
+  // Update portfolio after successful silver purchase
+  Future<void> addSilverPurchase({
+    required double silverGrams,
+    required double amountPaid,
+  }) async {
+    try {
+      final currentPortfolio = await getPortfolio();
+
+      final newTotalSilverGrams = currentPortfolio.totalSilverGrams + silverGrams;
+      final newTotalInvested = currentPortfolio.totalInvested + amountPaid;
+
+      final updatedPortfolio = {
+        'total_silver_grams': newTotalSilverGrams,
+        'total_invested': newTotalInvested,
+      };
+
+      await _db.updatePortfolio(updatedPortfolio);
+      print('Portfolio updated: +${silverGrams}g silver, +₹${amountPaid}');
+    } catch (e) {
+      print('Error updating portfolio with silver: $e');
+      rethrow;
+    }
+  }
+
   // Update portfolio value based on current gold price
   Future<void> updatePortfolioValue(GoldPriceModel currentPrice) async {
     try {
@@ -91,19 +117,28 @@ class PortfolioService {
     required String transactionId,
     required TransactionType type,
     required double amount,
-    required double goldGrams,
-    required double goldPricePerGram,
+    required double metalGrams,
+    required double metalPricePerGram,
+    required MetalType metalType,
     required String paymentMethod,
     required TransactionStatus status,
     String? gatewayTransactionId,
+    // Backward compatibility
+    double? goldGrams,
+    double? goldPricePerGram,
   }) async {
     try {
+      // Support backward compatibility
+      final finalMetalGrams = metalGrams ?? goldGrams ?? 0.0;
+      final finalMetalPricePerGram = metalPricePerGram ?? goldPricePerGram ?? 0.0;
+
       final transaction = Transaction(
         transactionId: transactionId,
         type: type,
         amount: amount,
-        goldGrams: goldGrams,
-        goldPricePerGram: goldPricePerGram,
+        metalGrams: finalMetalGrams,
+        metalPricePerGram: finalMetalPricePerGram,
+        metalType: metalType,
         paymentMethod: paymentMethod,
         status: status,
         gatewayTransactionId: gatewayTransactionId,
@@ -115,11 +150,18 @@ class PortfolioService {
       
       // If transaction is successful and it's a purchase, update portfolio
       if (status == TransactionStatus.SUCCESS && type == TransactionType.BUY) {
-        await addGoldPurchase(
-          goldGrams: goldGrams,
-          amountPaid: amount,
-          pricePerGram: goldPricePerGram,
-        );
+        if (metalType == MetalType.gold) {
+          await addGoldPurchase(
+            goldGrams: finalMetalGrams,
+            amountPaid: amount,
+            pricePerGram: finalMetalPricePerGram,
+          );
+        } else {
+          await addSilverPurchase(
+            silverGrams: finalMetalGrams,
+            amountPaid: amount,
+          );
+        }
       }
       
       print('Transaction saved: ${transaction.transactionId}');

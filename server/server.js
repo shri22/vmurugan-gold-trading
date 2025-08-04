@@ -75,17 +75,17 @@ app.post('/api/customers', [
     }
 
     const {
-      phone, name, email, address, pan_card, device_id, business_id = 'DIGI_GOLD_001'
+      phone, name, email, address, pan_card, device_id, mpin, business_id = 'DIGI_GOLD_001'
     } = req.body;
 
     const query = `
-      INSERT INTO customers (phone, name, email, address, pan_card, device_id, business_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (phone, name, email, address, pan_card, device_id, mpin, business_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
-      name = VALUES(name), email = VALUES(email), address = VALUES(address)
+      name = VALUES(name), email = VALUES(email), address = VALUES(address), mpin = VALUES(mpin)
     `;
 
-    await pool.execute(query, [phone, name, email, address, pan_card, device_id, business_id]);
+    await pool.execute(query, [phone, name, email, address, pan_card, device_id, mpin, business_id]);
 
     res.json({
       success: true,
@@ -95,6 +95,138 @@ app.post('/api/customers', [
 
   } catch (error) {
     console.error('Error saving customer:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Send OTP endpoint
+app.post('/api/auth/send-otp', [
+  body('phone').isMobilePhone('en-IN').withMessage('Invalid phone number')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { phone } = req.body;
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // For demo purposes, we'll just return success
+    // In production, integrate with SMS service
+    console.log(`📱 OTP for ${phone}: ${otp}`);
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      otp: otp // Remove this in production
+    });
+
+  } catch (error) {
+    console.error('Error sending OTP:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Verify OTP endpoint
+app.post('/api/auth/verify-otp', [
+  body('phone').isMobilePhone('en-IN').withMessage('Invalid phone number'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { phone, otp } = req.body;
+
+    // For demo purposes, accept any 6-digit OTP
+    // In production, verify against stored OTP
+    if (otp.length === 6) {
+      res.json({
+        success: true,
+        message: 'OTP verified successfully'
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Login endpoint
+app.post('/api/login', [
+  body('phone').isMobilePhone('en-IN').withMessage('Invalid phone number'),
+  body('encrypted_mpin').isLength({ min: 4, max: 4 }).withMessage('MPIN must be 4 digits')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { phone, encrypted_mpin } = req.body;
+
+    // Get customer from database
+    const [rows] = await pool.execute(
+      'SELECT * FROM customers WHERE phone = ?',
+      [phone]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found. Please register first.'
+      });
+    }
+
+    const customer = rows[0];
+
+    // Check if customer has MPIN set
+    if (!customer.mpin) {
+      return res.status(400).json({
+        success: false,
+        message: 'MPIN not set. Please complete registration first.'
+      });
+    }
+
+    // Verify MPIN (in production, this should be properly encrypted)
+    if (customer.mpin !== encrypted_mpin) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid MPIN. Please try again.'
+      });
+    }
+
+    // Login successful
+    res.json({
+      success: true,
+      message: 'Login successful',
+      customer: {
+        id: customer.id,
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email,
+        address: customer.address,
+        pan_card: customer.pan_card,
+        registration_date: customer.registration_date,
+        total_invested: customer.total_invested || 0,
+        total_gold: customer.total_gold || 0,
+        transaction_count: customer.transaction_count || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error during login:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

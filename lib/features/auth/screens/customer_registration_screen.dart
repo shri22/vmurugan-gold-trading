@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/config/sql_server_config.dart';
+import 'otp_verification_screen.dart';
 
 class CustomerRegistrationScreen extends StatefulWidget {
-  const CustomerRegistrationScreen({super.key});
+  final String? phoneNumber;
+
+  const CustomerRegistrationScreen({super.key, this.phoneNumber});
 
   @override
   State<CustomerRegistrationScreen> createState() => _CustomerRegistrationScreenState();
@@ -16,9 +25,22 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   final _panController = TextEditingController();
-  
+  final _mpinController = TextEditingController();
+  final _confirmMpinController = TextEditingController();
+
   bool _isLoading = false;
+  bool _obscureMpin = true;
+  bool _obscureConfirmMpin = true;
   bool _agreedToTerms = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize phone number if provided
+    if (widget.phoneNumber != null) {
+      _phoneController.text = widget.phoneNumber!;
+    }
+  }
 
   @override
   void dispose() {
@@ -39,27 +61,85 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       return;
     }
 
+    // Validate MPIN
+    final mpin = _mpinController.text.trim();
+    final confirmMpin = _confirmMpinController.text.trim();
+
+    if (mpin.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('MPIN must be 4 digits')),
+      );
+      return;
+    }
+
+    if (mpin != confirmMpin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('MPIN and Confirm MPIN do not match')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final result = await CustomerService.registerCustomer(
+      // Check server connectivity
+      final isServerReachable = await AuthService.isServerReachable();
+      if (!isServerReachable) {
+        throw Exception('Server not reachable. Please check your internet connection.');
+      }
+
+      // Register with encrypted MPIN
+      final result = await AuthService.registerWithEncryptedMPIN(
         phone: _phoneController.text.trim(),
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         address: _addressController.text.trim(),
         panCard: _panController.text.trim().toUpperCase(),
+        mpin: mpin,
+        deviceId: 'FLUTTER_APP_${DateTime.now().millisecondsSinceEpoch}',
       );
 
-      if (result['success']) {
-        // Log registration event
-        await CustomerService.logEvent('customer_registered', {
-          'phone': _phoneController.text.trim(),
-          'registration_method': 'app',
-        });
-
+      if (result['success'] == true) {
         if (mounted) {
-          // Show success dialog with customer ID
-          _showRegistrationSuccessDialog(result['customer_id']);
+          // Registration successful, save phone for future quick logins
+          final phone = _phoneController.text.trim();
+          await AuthService.savePhoneNumber(phone);
+
+          // Save MPIN for future logins
+          await AuthService.setMPIN(mpin);
+
+          // Complete login and save state
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_logged_in', true);
+          await prefs.setString('user_phone', phone);
+
+          // IMPORTANT: Mark customer as registered
+          await prefs.setBool('customer_registered', true);
+
+          // Save customer data if available
+          if (result['customer'] != null) {
+            await prefs.setString('user_data', jsonEncode(result['customer']));
+          }
+
+          // Also save to CustomerService for backward compatibility
+          await CustomerService.saveLoginSession(phone);
+
+          print('✅ Registration completed and phone saved for quick login: $phone');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Registration completed successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate to home screen
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/',
+            (route) => false,
+          );
         }
       } else {
         if (mounted) {
@@ -262,6 +342,27 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     );
   }
 
+  void _navigateToOTPVerification() {
+    final phone = _phoneController.text.trim();
+
+    // Show success message for registration
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ Registration successful! Please verify your mobile number.'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
+
+    // Navigate to OTP verification screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OTPVerificationScreen(phoneNumber: phone),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -415,9 +516,78 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   UpperCaseTextFormatter(),
                 ],
               ),
-              
+
+              const SizedBox(height: 16),
+
+              // MPIN Field
+              _buildTextField(
+                controller: _mpinController,
+                label: 'Create 4-Digit MPIN',
+                icon: Icons.lock,
+                obscureText: _obscureMpin,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureMpin ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () {
+                    setState(() {
+                      _obscureMpin = !_obscureMpin;
+                    });
+                  },
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'MPIN is required';
+                  }
+                  if (value.length != 4) {
+                    return 'MPIN must be 4 digits';
+                  }
+                  if (!RegExp(r'^[0-9]{4}$').hasMatch(value)) {
+                    return 'MPIN must contain only numbers';
+                  }
+                  return null;
+                },
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Confirm MPIN Field
+              _buildTextField(
+                controller: _confirmMpinController,
+                label: 'Confirm MPIN',
+                icon: Icons.lock_outline,
+                obscureText: _obscureConfirmMpin,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureConfirmMpin ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmMpin = !_obscureConfirmMpin;
+                    });
+                  },
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please confirm your MPIN';
+                  }
+                  if (value != _mpinController.text) {
+                    return 'MPIN does not match';
+                  }
+                  return null;
+                },
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                ],
+              ),
+
               const SizedBox(height: 24),
-              
+
               // Terms and Conditions
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,6 +658,9 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
+    bool obscureText = false,
+    int? maxLength,
+    Widget? suffixIcon,
   }) {
     return TextFormField(
       controller: controller,
@@ -495,9 +668,12 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       maxLines: maxLines,
+      obscureText: obscureText,
+      maxLength: maxLength,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFFFFD700)),
+        suffixIcon: suffixIcon,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -507,6 +683,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
         ),
         filled: true,
         fillColor: Colors.white,
+        counterText: maxLength != null ? '' : null, // Hide counter for MPIN fields
       ),
     );
   }

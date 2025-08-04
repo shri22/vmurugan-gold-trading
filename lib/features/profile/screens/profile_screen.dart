@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/language_service.dart';
+import '../../../core/services/translation_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
+import '../../onboarding/screens/onboarding_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,11 +25,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, String> _userProfile = {};
   bool _isLoading = true;
   String _errorMessage = '';
+  String _currentLanguage = 'en';
+  String _currentLanguageDisplay = 'English';
 
   @override
   void initState() {
     super.initState();
     _loadCustomerProfile();
+    _loadLanguagePreference();
   }
 
   Future<void> _loadCustomerProfile() async {
@@ -33,7 +42,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _errorMessage = '';
       });
 
-      // Get customer info from local storage (saved during login)
+      // Check both old and new authentication data
+      final prefs = await SharedPreferences.getInstance();
+
+      // First try new authentication data
+      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+      final userPhone = prefs.getString('user_phone');
+      final userDataString = prefs.getString('user_data');
+
+      Map<String, dynamic>? userData;
+      if (userDataString != null) {
+        try {
+          userData = jsonDecode(userDataString);
+        } catch (e) {
+          print('Error parsing user data: $e');
+        }
+      }
+
+      // If new auth data exists, use it
+      if (isLoggedIn && userPhone != null && userData != null) {
+        // Format the registration date
+        String formattedJoinDate = 'Recently';
+        if (userData['registration_date'] != null) {
+          try {
+            final regDate = DateTime.parse(userData['registration_date']);
+            formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
+          } catch (e) {
+            formattedJoinDate = 'Recently';
+          }
+        }
+
+        setState(() {
+          _userProfile = {
+            'name': userData!['name'] ?? 'User',
+            'phone': userPhone,
+            'email': userData['email'] ?? 'Not Available',
+            'customer_id': userData['customer_id']?.toString() ?? 'Not Available',
+            'address': userData['address'] ?? 'Not Available',
+            'pan': userData['pan_card'] ?? 'Not Available',
+            'joinDate': formattedJoinDate,
+            'kycStatus': 'Verified', // Since they can login, they're verified
+          };
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Fallback to old customer service data
       final customerInfo = await CustomerService.getCustomerInfo();
 
       if (customerInfo['phone'] != null && customerInfo['phone']!.isNotEmpty) {
@@ -254,7 +309,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
-                  'KYC ${_userProfile['kycStatus']}',
+                  _currentLanguage == 'ta'
+                    ? 'கேஒய்சி ${_userProfile['kycStatus'] == 'Verified' ? 'சரிபார்க்கப்பட்டது' : _userProfile['kycStatus']}'
+                    : 'KYC ${_userProfile['kycStatus']}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.success,
                     fontWeight: FontWeight.w600,
@@ -286,7 +343,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Personal Information',
+            _currentLanguage == 'ta' ? 'தனிப்பட்ட தகவல்' : 'Personal Information',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -294,10 +351,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           const SizedBox(height: AppSpacing.lg),
           
-          _buildDetailRow(Icons.email, 'Email', _userProfile['email'] ?? 'Not Available'),
-          _buildDetailRow(Icons.location_on, 'Address', _userProfile['address'] ?? 'Not Available'),
-          _buildDetailRow(Icons.credit_card, 'PAN Card', _userProfile['pan'] ?? 'Not Available'),
-          _buildDetailRow(Icons.calendar_today, 'Member Since', _userProfile['joinDate'] ?? 'Recently'),
+          _buildDetailRow(Icons.email, _currentLanguage == 'ta' ? 'மின்னஞ்சல்' : 'Email', _userProfile['email'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
+          _buildDetailRow(Icons.location_on, _currentLanguage == 'ta' ? 'முகவரி' : 'Address', _userProfile['address'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
+          _buildDetailRow(Icons.credit_card, _currentLanguage == 'ta' ? 'பான் கார்டு' : 'PAN Card', _userProfile['pan'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
+          _buildDetailRow(Icons.calendar_today, _currentLanguage == 'ta' ? 'சேர்ந்த தேதி' : 'Member Since', _userProfile['joinDate'] ?? (_currentLanguage == 'ta' ? 'சமீபத்தில்' : 'Recently')),
         ],
       ),
     );
@@ -413,7 +470,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Settings',
+            _currentLanguage == 'ta' ? 'அமைப்புகள்' : 'Settings',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -423,29 +480,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           _buildActionTile(
             Icons.language,
-            'Language',
-            'English',
-            () => _showComingSoon('Language Settings'),
+            _currentLanguage == 'ta' ? 'மொழி' : 'Language',
+            _currentLanguageDisplay,
+            _showLanguageSelector,
           ),
           
           _buildActionTile(
             Icons.help,
-            'Help & Support',
-            'Get help and contact support',
+            _currentLanguage == 'ta' ? 'உதவி மற்றும் ஆதரவு' : 'Help & Support',
+            _currentLanguage == 'ta' ? 'உதவி பெறுங்கள் மற்றும் ஆதரவைத் தொடர்பு கொள்ளுங்கள்' : 'Get help and contact support',
             _showHelpAndSupport,
           ),
-          
+
           _buildActionTile(
             Icons.info,
-            'About',
-            'Learn about V Murugan Jewellery',
+            _currentLanguage == 'ta' ? 'பற்றி' : 'About',
+            _currentLanguage == 'ta' ? 'வி முருகன் நகைகளைப் பற்றி அறிக' : 'Learn about V Murugan Jewellery',
             _showAboutDialog,
           ),
-          
+
           _buildActionTile(
             Icons.logout,
-            'Logout',
-            'Sign out of your account',
+            _currentLanguage == 'ta' ? 'வெளியேறு' : 'Logout',
+            _currentLanguage == 'ta' ? 'உங்கள் கணக்கிலிருந்து வெளியேறுங்கள்' : 'Sign out of your account',
             _logout,
             isDestructive: true,
           ),
@@ -486,6 +543,101 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (context) => const CustomerRegistrationScreen(),
       ),
     );
+  }
+
+  Future<void> _loadLanguagePreference() async {
+    try {
+      final language = await LanguageService.getCurrentLanguage();
+      final languageDisplay = await LanguageService.getCurrentLanguageDisplay();
+
+      if (mounted) {
+        setState(() {
+          _currentLanguage = language;
+          _currentLanguageDisplay = languageDisplay;
+        });
+      }
+    } catch (e) {
+      print('Error loading language preference: $e');
+    }
+  }
+
+  void _showLanguageSelector() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            _currentLanguage == 'ta' ? 'மொழியைத் தேர்ந்தெடுக்கவும்' : 'Select Language',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryGold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.language, color: AppColors.primaryGold),
+                title: const Text('English'),
+                trailing: _currentLanguage == 'en'
+                  ? const Icon(Icons.check, color: AppColors.primaryGold)
+                  : null,
+                onTap: () => _changeLanguage('en'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.language, color: AppColors.primaryGold),
+                title: const Text('தமிழ்'),
+                trailing: _currentLanguage == 'ta'
+                  ? const Icon(Icons.check, color: AppColors.primaryGold)
+                  : null,
+                onTap: () => _changeLanguage('ta'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                _currentLanguage == 'ta' ? 'ரத்து செய்' : 'Cancel',
+                style: const TextStyle(color: AppColors.primaryGold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _changeLanguage(String languageCode) async {
+    try {
+      await LanguageService.setLanguage(languageCode);
+      await _loadLanguagePreference();
+
+      Navigator.of(context).pop(); // Close dialog
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            languageCode == 'ta'
+              ? 'மொழி வெற்றிகரமாக மாற்றப்பட்டது'
+              : 'Language changed successfully',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+
+      // Refresh the screen to apply new language
+      setState(() {});
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error changing language: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   void _showComingSoon(String feature) {
@@ -1404,22 +1556,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: Text(_currentLanguage == 'ta' ? 'வெளியேறு' : 'Logout'),
+        content: Text(_currentLanguage == 'ta' ? 'நீங்கள் நிச்சயமாக வெளியேற விரும்புகிறீர்களா?' : 'Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(_currentLanguage == 'ta' ? 'ரத்து செய்' : 'Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              // Close dialog first
               Navigator.pop(context);
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                '/',
+
+              // Perform logout
+              await AuthService.logoutUser();
+
+              // Clear all local data
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
+
+              print('✅ Logout completed - navigating to onboarding');
+
+              // Navigate to onboarding
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const OnboardingScreen()),
                 (route) => false,
               );
             },
-            child: const Text('Logout'),
+            child: Text(_currentLanguage == 'ta' ? 'வெளியேறு' : 'Logout'),
           ),
         ],
       ),

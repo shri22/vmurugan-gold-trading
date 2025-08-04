@@ -44,6 +44,20 @@ async function setupDatabase() {
     `);
     console.log('✅ Customers table created');
 
+    // Add MPIN column if it doesn't exist
+    try {
+      await connection.execute(`
+        ALTER TABLE customers ADD COLUMN mpin VARCHAR(4) NULL
+      `);
+      console.log('✅ MPIN column added to customers table');
+    } catch (error) {
+      if (error.code === 'ER_DUP_FIELDNAME') {
+        console.log('✅ MPIN column already exists');
+      } else {
+        console.log('⚠️ Error adding MPIN column:', error.message);
+      }
+    }
+
     // Create transactions table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS transactions (

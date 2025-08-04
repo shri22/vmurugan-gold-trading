@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/customer_service.dart';
+import '../../../core/services/encryption_service.dart';
+import '../../../core/config/sql_server_config.dart';
 import '../../../main.dart';
+import 'phone_entry_screen.dart';
 
 /// Quick MPIN login screen for returning customers
 /// Shows only MPIN input with saved phone number
@@ -62,24 +69,60 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
     });
 
     try {
-      final isValid = await AuthService.verifyMPIN(mpin);
-      
-      if (isValid && _savedPhone != null) {
-        // Complete login
-        await AuthService.completeLogin(_savedPhone!);
-        
-        if (mounted) {
-          // Navigate to main app
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const DigiGoldApp()),
-            (route) => false,
-          );
+      if (_savedPhone != null) {
+        // Encrypt MPIN before sending to server
+        final encryptedMpin = EncryptionService.encryptMPIN(mpin);
+        print('🔐 Quick Login - Encrypted MPIN: $encryptedMpin');
+
+        // Use API-based login with encrypted MPIN
+        final response = await http.post(
+          Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone': _savedPhone!,
+            'encrypted_mpin': encryptedMpin,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+
+          if (data['success'] == true) {
+            // Save login state
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('is_logged_in', true);
+            await prefs.setString('user_phone', _savedPhone!);
+            await prefs.setString('user_data', jsonEncode(data['customer']));
+
+            // IMPORTANT: Mark customer as registered
+            await prefs.setBool('customer_registered', true);
+
+            // Also save to CustomerService for backward compatibility
+            await CustomerService.saveLoginSession(_savedPhone!);
+
+            print('✅ Quick MPIN Login successful for ${_savedPhone}');
+            print('✅ Customer marked as registered');
+
+            if (mounted) {
+              // Navigate to main app
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const HomePage()),
+                (route) => false,
+              );
+            }
+          } else {
+            _showError(data['message'] ?? 'Invalid MPIN. Please try again.');
+          }
+        } else {
+          final errorData = jsonDecode(response.body);
+          _showError(errorData['message'] ?? 'Login failed. Please try again.');
         }
       } else {
-        _showError('Invalid MPIN. Please try again.');
+        _showError('No saved phone number found.');
       }
     } catch (e) {
-      _showError('Login failed: $e');
+      _showError('Network error. Please check your connection.');
+      print('Quick MPIN login error: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -100,7 +143,10 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
 
   void _usePhoneLogin() {
     // Go back to phone entry for different number
-    Navigator.of(context).pushReplacementNamed('/enhanced-auth');
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+      (route) => false,
+    );
   }
 
   @override

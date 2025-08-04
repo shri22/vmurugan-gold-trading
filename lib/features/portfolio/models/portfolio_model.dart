@@ -1,6 +1,9 @@
+import '../../schemes/models/scheme_installment_model.dart';
+
 class Portfolio {
   final int id;
   final double totalGoldGrams;
+  final double totalSilverGrams;
   final double totalInvested;
   final double currentValue;
   final double profitLoss;
@@ -10,6 +13,7 @@ class Portfolio {
   Portfolio({
     required this.id,
     required this.totalGoldGrams,
+    required this.totalSilverGrams,
     required this.totalInvested,
     required this.currentValue,
     required this.profitLoss,
@@ -21,6 +25,7 @@ class Portfolio {
     return Portfolio(
       id: map['id'] ?? 0,
       totalGoldGrams: (map['total_gold_grams'] ?? 0.0).toDouble(),
+      totalSilverGrams: (map['total_silver_grams'] ?? 0.0).toDouble(),
       totalInvested: (map['total_invested'] ?? 0.0).toDouble(),
       currentValue: (map['current_value'] ?? 0.0).toDouble(),
       profitLoss: (map['profit_loss'] ?? 0.0).toDouble(),
@@ -33,6 +38,7 @@ class Portfolio {
     return {
       'id': id,
       'total_gold_grams': totalGoldGrams,
+      'total_silver_grams': totalSilverGrams,
       'total_invested': totalInvested,
       'current_value': currentValue,
       'profit_loss': profitLoss,
@@ -44,6 +50,7 @@ class Portfolio {
   Portfolio copyWith({
     int? id,
     double? totalGoldGrams,
+    double? totalSilverGrams,
     double? totalInvested,
     double? currentValue,
     double? profitLoss,
@@ -53,6 +60,7 @@ class Portfolio {
     return Portfolio(
       id: id ?? this.id,
       totalGoldGrams: totalGoldGrams ?? this.totalGoldGrams,
+      totalSilverGrams: totalSilverGrams ?? this.totalSilverGrams,
       totalInvested: totalInvested ?? this.totalInvested,
       currentValue: currentValue ?? this.currentValue,
       profitLoss: profitLoss ?? this.profitLoss,
@@ -71,8 +79,9 @@ class Transaction {
   final String transactionId;
   final TransactionType type;
   final double amount;
-  final double goldGrams;
-  final double goldPricePerGram;
+  final double metalGrams;
+  final double metalPricePerGram;
+  final MetalType metalType;
   final String paymentMethod;
   final TransactionStatus status;
   final String? gatewayTransactionId;
@@ -84,8 +93,9 @@ class Transaction {
     required this.transactionId,
     required this.type,
     required this.amount,
-    required this.goldGrams,
-    required this.goldPricePerGram,
+    required this.metalGrams,
+    required this.metalPricePerGram,
+    required this.metalType,
     required this.paymentMethod,
     required this.status,
     this.gatewayTransactionId,
@@ -102,8 +112,12 @@ class Transaction {
         orElse: () => TransactionType.BUY,
       ),
       amount: (map['amount'] ?? 0.0).toDouble(),
-      goldGrams: (map['gold_grams'] ?? 0.0).toDouble(),
-      goldPricePerGram: (map['gold_price_per_gram'] ?? 0.0).toDouble(),
+      metalGrams: (map['metal_grams'] ?? map['gold_grams'] ?? 0.0).toDouble(), // Support both old and new field names
+      metalPricePerGram: (map['metal_price_per_gram'] ?? map['gold_price_per_gram'] ?? 0.0).toDouble(),
+      metalType: MetalType.values.firstWhere(
+        (e) => e.name.toUpperCase() == (map['metal_type'] ?? 'GOLD').toUpperCase(),
+        orElse: () => MetalType.gold,
+      ),
       paymentMethod: map['payment_method'] ?? '',
       status: TransactionStatus.values.firstWhere(
         (e) => e.toString().split('.').last == map['status'],
@@ -121,8 +135,9 @@ class Transaction {
       'transaction_id': transactionId,
       'type': type.toString().split('.').last,
       'amount': amount,
-      'gold_grams': goldGrams,
-      'gold_price_per_gram': goldPricePerGram,
+      'metal_grams': metalGrams,
+      'metal_price_per_gram': metalPricePerGram,
+      'metal_type': metalType.name.toUpperCase(),
       'payment_method': paymentMethod,
       'status': status.toString().split('.').last,
       'gateway_transaction_id': gatewayTransactionId,
@@ -145,13 +160,20 @@ class Transaction {
   }
 
   String get typeDisplay {
+    final metalName = metalType == MetalType.gold ? 'Gold' : 'Silver';
     switch (type) {
       case TransactionType.BUY:
-        return 'Buy Gold';
+        return 'Buy $metalName';
       case TransactionType.SELL:
-        return 'Sell Gold';
+        return 'Sell $metalName';
     }
   }
+
+  String get metalTypeDisplay => metalType == MetalType.gold ? 'Gold' : 'Silver';
+
+  // Backward compatibility getter
+  double get goldGrams => metalGrams;
+  double get goldPricePerGram => metalPricePerGram;
 }
 
 enum TransactionType { BUY, SELL }

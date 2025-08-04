@@ -83,6 +83,18 @@ class PaymentResponse {
     );
   }
 
+  factory PaymentResponse.pending({
+    required String transactionId,
+    Map<String, dynamic>? additionalData,
+  }) {
+    return PaymentResponse(
+      transactionId: transactionId,
+      status: PaymentStatus.pending,
+      timestamp: DateTime.now(),
+      additionalData: additionalData,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'transactionId': transactionId,
@@ -188,9 +200,9 @@ class UpiConfig {
   static const String merchantCode = 'DIGIGOLD';
 
   // Different UPI IDs for different payment methods
-  static const String gpayUpiId = 'louismary@okicici';      // Google Pay UPI ID
-  static const String phonepeUpiId = 'rockstarphpe@ibl';    // PhonePe UPI ID
-  static const String defaultUpiId = 'louismary@okicici';   // Default for other UPI apps
+  static const String gpayUpiId = 'sjlouismary@okicici';    // V Murugan Gold Trading UPI ID
+  static const String phonepeUpiId = 'sjlouismary@okicici'; // V Murugan Gold Trading UPI ID
+  static const String defaultUpiId = 'sjlouismary@okicici'; // V Murugan Gold Trading UPI ID
 
   // Get UPI ID based on payment method
   static String getUpiId(PaymentMethod method) {
@@ -207,7 +219,7 @@ class UpiConfig {
   }
   
   // UPI URL schemes
-  static const String gpayScheme = 'tez://upi/pay';
+  static const String gpayScheme = 'gpay://upi/pay';        // Updated Google Pay scheme
   static const String phonepeScheme = 'phonepe://pay';
   static const String upiScheme = 'upi://pay';
   

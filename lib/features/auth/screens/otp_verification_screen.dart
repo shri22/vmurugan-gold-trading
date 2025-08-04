@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/customer_service.dart';
+import '../../../core/config/sql_server_config.dart';
+import 'customer_registration_screen.dart';
+import 'quick_mpin_login_screen.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -35,6 +43,27 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   void initState() {
     super.initState();
     _startResendTimer();
+    _generateInitialOTP();
+  }
+
+  void _generateInitialOTP() async {
+    try {
+      // Generate OTP when screen loads
+      final otp = await AuthService.generateOTP(widget.phoneNumber);
+
+      // Show demo OTP if available (for testing)
+      if (mounted && otp.length == 6 && RegExp(r'^\d{6}$').hasMatch(otp)) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            _showSnackBar('🎭 Demo Mode: Your OTP is $otp', AppColors.primaryGold);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Error generating OTP: $e', AppColors.error);
+      }
+    }
   }
 
   @override
@@ -258,7 +287,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   void _handleVerifyOTP() async {
     final otpCode = _getOTPCode();
-    
+
     if (otpCode.length != 6) {
       _showSnackBar('Please enter complete OTP', AppColors.error);
       return;
@@ -268,29 +297,113 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       _isLoading = true;
     });
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Use new API-based OTP verification
+      final response = await http.post(
+        Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/auth/verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': widget.phoneNumber,
+          'otp': otpCode,
+        }),
+      );
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
 
-    // For demo purposes, accept any 6-digit OTP
-    if (otpCode == '123456') {
-      _showSnackBar('OTP verified successfully!', AppColors.success);
-      // TODO: Navigate to MPIN setup or home screen
-    } else {
-      _showSnackBar('Invalid OTP. Please try again.', AppColors.error);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          // Save login state using AuthService
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_logged_in', true);
+          await prefs.setString('user_phone', widget.phoneNumber);
+          await prefs.setString('user_data', jsonEncode(data['customer']));
+
+          // Also save to CustomerService for backward compatibility
+          await CustomerService.saveLoginSession(widget.phoneNumber);
+
+          _showSnackBar('OTP verified successfully!', AppColors.success);
+
+          // Wait a moment for the success message to be visible
+          await Future.delayed(const Duration(seconds: 1));
+
+          // Navigate based on user type
+          if (mounted) {
+            if (data['isNewUser'] == true) {
+              // Case 1: First Time Install - New user goes to registration
+              // This will set up MPIN and save phone for future quick logins
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CustomerRegistrationScreen(
+                    phoneNumber: widget.phoneNumber,
+                  ),
+                ),
+              );
+            } else {
+              // Case 3: Registered User on New Device - Existing user verified
+              // Save phone for future quick logins and go to MPIN login
+              await AuthService.savePhoneNumber(widget.phoneNumber);
+
+              // Mark as registered customer
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('customer_registered', true);
+
+              print('✅ Existing user verified - going to MPIN login');
+
+              // Go to MPIN login screen for existing users
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const QuickMpinLoginScreen(),
+                ),
+              );
+            }
+          }
+        } else {
+          _showSnackBar(data['message'] ?? 'Invalid OTP. Please try again.', AppColors.error);
+          _clearOTP();
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        _showSnackBar(errorData['message'] ?? 'Verification failed. Please try again.', AppColors.error);
+        _clearOTP();
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar('Network error. Please check your connection.', AppColors.error);
       _clearOTP();
+      print('OTP verification error: $e');
     }
   }
 
   void _handleResendOTP() async {
     if (!_canResend) return;
 
-    _showSnackBar('OTP sent successfully!', AppColors.success);
-    _startResendTimer();
-    _clearOTP();
+    try {
+      // Generate new OTP using AuthService
+      final otp = await AuthService.generateOTP(widget.phoneNumber);
+
+      _showSnackBar('OTP sent successfully!', AppColors.success);
+      _startResendTimer();
+      _clearOTP();
+
+      // Show demo OTP if available (for testing)
+      if (otp.length == 6 && RegExp(r'^\d{6}$').hasMatch(otp)) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            _showSnackBar('🎭 Demo Mode: Your OTP is $otp', AppColors.primaryGold);
+          }
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error sending OTP: $e', AppColors.error);
+    }
   }
 
   void _clearOTP() {

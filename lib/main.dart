@@ -3,12 +3,18 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/utils/responsive.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
+import 'features/auth/screens/phone_entry_screen.dart';
 import 'features/portfolio/screens/portfolio_screen.dart';
 import 'features/gold/screens/schemes_screen.dart';
 import 'features/gold/screens/transaction_history_screen.dart';
 import 'features/gold/screens/buy_gold_screen.dart';
 import 'features/gold/services/gold_price_service.dart';
 import 'features/gold/models/gold_price_model.dart';
+import 'features/silver/services/silver_price_service.dart';
+import 'features/silver/models/silver_price_model.dart';
+import 'features/silver/screens/buy_silver_screen.dart';
+import 'features/schemes/services/scheme_management_service.dart';
+import 'features/schemes/models/scheme_installment_model.dart';
 import 'core/widgets/vmurugan_logo.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/notifications/screens/notifications_screen.dart';
@@ -18,7 +24,8 @@ import 'core/services/customer_service.dart';
 import 'features/schemes/screens/scheme_creation_screen.dart';
 import 'features/debug/screens/debug_screen.dart';
 import 'features/auth/screens/enhanced_app_wrapper.dart';
-import 'features/auth/screens/enhanced_phone_entry_screen.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/quick_mpin_login_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/config/firebase_init.dart';
 
@@ -43,7 +50,100 @@ class DigiGoldApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const OnboardingScreen(),
+      home: const AppInitializer(),
+    );
+  }
+}
+
+/// App initializer that checks login status and routes accordingly
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialRoute();
+  }
+
+  Future<void> _checkInitialRoute() async {
+    // Small delay to show splash
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    try {
+      // Get comprehensive authentication state
+      final savedPhone = await AuthService.getSavedPhoneNumber();
+      final isLoggedIn = await AuthService.isLoggedIn();
+
+      if (mounted) {
+        // Smart login flow based on user state
+        if (isLoggedIn && savedPhone != null) {
+          // Case 2: Subsequent Logins - User is logged in with saved phone
+          // Go directly to home page
+          print('✅ Smart Login: Returning user - going to home');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        } else if (savedPhone != null && !isLoggedIn) {
+          // Case 3: Registered User on New Device - Has phone but not logged in
+          // Go to quick MPIN login (no OTP needed)
+          print('✅ Smart Login: Registered user on new device - MPIN login');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const QuickMpinLoginScreen()),
+          );
+        } else {
+          // Case 1: First Time Install - No saved phone
+          // Go directly to phone entry screen
+          print('✅ Smart Login: First time user - phone entry');
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error checking initial route: $e');
+      if (mounted) {
+        // On error, go to phone entry
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.primaryGold,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            VMUruganLogo(
+              size: 120,
+              primaryColor: AppColors.primaryGreen,
+              textColor: AppColors.black,
+            ),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Loading...',
+              style: TextStyle(
+                color: AppColors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -57,19 +157,44 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final GoldPriceService _priceService = GoldPriceService();
+  final SilverPriceService _silverPriceService = SilverPriceService();
   final NotificationService _notificationService = NotificationService();
+  final SchemeManagementService _schemeService = SchemeManagementService();
   GoldPriceModel? _currentPrice;
+  SilverPriceModel? _currentSilverPrice;
   double investmentAmount = 2000.0;
   int _unreadNotificationCount = 0;
+  Map<String, dynamic>? _currentUser;
+  Map<String, dynamic>? _schemeStatus;
 
   @override
   void initState() {
     super.initState();
-    _initializeServices();
+    _initializeApp();
+  }
+
+  /// Initialize app services and load user data
+  Future<void> _initializeApp() async {
+    try {
+      // Load current user data
+      final currentUser = await AuthService.getCurrentLoggedInUser();
+      setState(() {
+        _currentUser = currentUser;
+      });
+
+      // Initialize services
+      _initializeServices();
+
+      // Load scheme status
+      await _loadSchemeStatus();
+    } catch (e) {
+      print('❌ Error initializing app: $e');
+    }
   }
 
   void _initializeServices() {
     _priceService.initialize();
+    _silverPriceService.initialize();
     _notificationService.initialize();
 
     // Listen to price updates
@@ -77,6 +202,15 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _currentPrice = price;
+        });
+      }
+    });
+
+    // Listen to silver price updates
+    _silverPriceService.priceStream.listen((price) {
+      if (mounted) {
+        setState(() {
+          _currentSilverPrice = price;
         });
       }
     });
@@ -90,8 +224,9 @@ class _HomePageState extends State<HomePage> {
       }
     });
 
-    // Load initial price
+    // Load initial prices
     _loadInitialPrice();
+    _loadInitialSilverPrice();
   }
 
   void _loadInitialPrice() async {
@@ -99,6 +234,26 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _currentPrice = price;
     });
+  }
+
+  void _loadInitialSilverPrice() async {
+    final price = await _silverPriceService.getCurrentPrice();
+    setState(() {
+      _currentSilverPrice = price;
+    });
+  }
+
+  Future<void> _loadSchemeStatus() async {
+    try {
+      if (_currentUser != null && _currentUser!['phone'] != null) {
+        final status = await _schemeService.getSchemeStatusForMainScreen(_currentUser!['phone']);
+        setState(() {
+          _schemeStatus = status;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading scheme status: $e');
+    }
   }
 
   void _showPriceSourceInfo() {
@@ -246,6 +401,8 @@ class _HomePageState extends State<HomePage> {
                 _navigateToSchemeCreation(context);
               } else if (value == 'debug') {
                 _navigateToDebug(context);
+              } else if (value == 'logout') {
+                _handleLogout();
               }
             },
             itemBuilder: (context) => [
@@ -299,8 +456,17 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-
-
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Logout', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -353,201 +519,417 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.xl),
 
-            // Gold Price Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Current Gold Price (22K)',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.info_outline),
-                              onPressed: () {
-                                _showPriceSourceInfo();
-                              },
-                              tooltip: 'Price Source Info',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_alert),
-                              onPressed: _createTestNotification,
-                              tooltip: 'Test Notification',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.refresh),
-                              onPressed: () async {
-                                await _priceService.refreshPrice();
-                              },
-                              tooltip: 'Refresh Price',
-                            ),
-                            if (_currentPrice != null)
-                              Flexible(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.sm,
-                                    vertical: AppSpacing.xs,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _currentPrice!.isPositive
-                                        ? AppColors.success.withValues(alpha: 0.1)
-                                        : _currentPrice!.isNegative
-                                            ? AppColors.error.withValues(alpha: 0.1)
-                                            : AppColors.grey.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                Icon(
-                                  _currentPrice!.isPositive
-                                      ? Icons.trending_up
-                                      : _currentPrice!.isNegative
-                                          ? Icons.trending_down
-                                          : Icons.trending_flat,
-                                  size: 12,
-                                  color: _currentPrice!.isPositive
-                                      ? AppColors.success
-                                      : _currentPrice!.isNegative
-                                          ? AppColors.error
-                                          : AppColors.grey,
-                                ),
-                                const SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    _currentPrice!.formattedChange,
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: _currentPrice!.isPositive
-                                          ? AppColors.success
-                                          : _currentPrice!.isNegative
-                                              ? AppColors.error
-                                              : AppColors.grey,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                      ),
-                                    ],
-                                  ),
+            // Price Update Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                gradient: AppColors.goldGreenGradient,
+                borderRadius: BorderRadius.circular(AppBorderRadius.md),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Rate updated on ${DateTime.now().toString().substring(0, 16)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, color: Colors.white),
+                        onPressed: _showPriceSourceInfo,
+                        tooltip: 'Price Source Info',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, color: Colors.white),
+                        onPressed: () async {
+                          await _priceService.refreshPrice();
+                          await _silverPriceService.refreshPrice();
+                        },
+                        tooltip: 'Refresh Prices',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // Gold and Silver Price Cards
+            Row(
+              children: [
+                // Gold Rate Card
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.circle, color: AppColors.primaryGold, size: 12),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Gold Rate',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      goldPrice != null ? '₹${goldPrice.toStringAsFixed(2)}/gram' : 'Price Unavailable',
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        color: goldPrice != null ? AppColors.primaryGold : Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Last updated: ${_currentPrice?.timestamp.toString().substring(0, 16) ?? DateTime.now().toString().substring(0, 16)}',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            ],
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xs,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _priceService.isMjdtaAvailable
-                                ? AppColors.success.withValues(alpha: 0.1)
-                                : Colors.red.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _priceService.isMjdtaAvailable ? 'MJDTA LIVE' : 'UNAVAILABLE',
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: _priceService.isMjdtaAvailable
-                                  ? AppColors.success
-                                  : Colors.red,
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            goldPrice != null ? '₹${goldPrice.toStringAsFixed(0)}' : '₹9160',
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              color: AppColors.primaryGold,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                      ],
+                          Text(
+                            '22KT Per gram',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
+                const SizedBox(width: AppSpacing.md),
+                // Silver Rate Card
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.circle, color: Colors.grey, size: 12),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Silver Rate',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(2)}' : '₹85.50',
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Per gram',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // Investment Schemes Section
+            Text(
+              'Investment Schemes',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Choose from a range of investment products with unique benefits to suit your needs and convenience',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
               ),
             ),
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Investment Calculator Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Investment Calculator',
-                      style: Theme.of(context).textTheme.titleLarge,
+            // GOLDPLUS Flexi Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                gradient: AppColors.goldGreenGradient,
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Investment Amount',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGold,
+                      borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                    ),
+                    child: const Text(
+                      'VMUrugan Plus',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'GOLDPLUS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
                               ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                '₹${investmentAmount.toStringAsFixed(0)}',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: AppColors.primaryGreen,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                            const Text(
+                              'flexi',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
                               ),
-                            ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            const Text(
+                              'GPS | 15 months | 75% benefit on VA*',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.trending_up,
+                        color: AppColors.primaryGold,
+                        size: 32,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                          ),
+                          child: const Text(
+                            'Know More',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        const Icon(Icons.arrow_forward, color: AppColors.grey),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Gold Quantity',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const BuyGoldScreen(),
                               ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                goldPrice != null ? '${goldQuantity.toStringAsFixed(4)} grams' : 'N/A',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: goldPrice != null ? AppColors.primaryGold : Colors.grey,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGold,
+                              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                            ),
+                            child: Text(
+                              _schemeStatus?['gold']?['buttonText'] ?? 'Join Now',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // SILVERPLUS Flexi Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.grey[700]!, Colors.grey[500]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                    ),
+                    child: const Text(
+                      'VMUrugan Plus',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'SILVERPLUS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Text(
+                              'flexi',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            const Text(
+                              'SPS | 15 months | 65% benefit on VA*',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.trending_up,
+                        color: Colors.grey.shade300,
+                        size: 32,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                          ),
+                          child: const Text(
+                            'Know More',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const BuySilverScreen(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                            ),
+                            child: Text(
+                              _schemeStatus?['silver']?['buttonText'] ?? 'Join Now',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
 
@@ -572,17 +954,21 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const SchemesScreen(),
+                          builder: (context) => const BuySilverScreen(),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.trending_up),
-                    label: const Text('View Schemes'),
+                    icon: const Icon(Icons.add_shopping_cart),
+                    label: const Text('Buy Silver'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[700],
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -635,18 +1021,18 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
 
-      // Floating Action Button for Enhanced Auth Test
+      // Floating Action Button for Login
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const EnhancedPhoneEntryScreen(),
+              builder: (context) => const LoginScreen(),
             ),
           );
         },
-        icon: const Icon(Icons.phone),
-        label: const Text('Enhanced Auth'),
+        icon: const Icon(Icons.login),
+        label: const Text('Login'),
         backgroundColor: AppColors.primaryGold,
         foregroundColor: AppColors.black,
       ),
@@ -934,6 +1320,57 @@ class _HomePageState extends State<HomePage> {
       print('Demo transaction created successfully');
     } catch (e) {
       print('Error creating demo transaction: $e');
+    }
+  }
+
+  /// Handle user logout
+  Future<void> _handleLogout() async {
+    try {
+      // Show confirmation dialog
+      final shouldLogout = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Logout'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldLogout == true) {
+        // Logout user
+        await AuthService.logoutUser();
+
+        // Navigate to phone entry screen
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+            (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error during logout: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Logout failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

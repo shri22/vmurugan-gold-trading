@@ -12,38 +12,55 @@ class UpiPaymentService {
   /// Initiate payment with GPay
   Future<PaymentResponse> payWithGPay(PaymentRequest request) async {
     try {
-      final upiUrl = _buildGPayUrl(request);
-      print('UpiPaymentService: Launching GPay with URL: $upiUrl');
-      
-      if (await _canLaunchApp(PaymentMethod.gpay)) {
-        final launched = await launchUrl(
-          Uri.parse(upiUrl),
+      // Try Google Pay specific URL first
+      final gpayUrl = _buildGPayUrl(request);
+      print('UpiPaymentService: Trying GPay specific URL: $gpayUrl');
+
+      bool launched = false;
+
+      try {
+        launched = await launchUrl(
+          Uri.parse(gpayUrl),
           mode: LaunchMode.externalApplication,
         );
-        
-        if (launched) {
-          // Wait for user to complete payment and return to app
-          return await _waitForPaymentResult(request.transactionId);
-        } else {
-          return PaymentResponse.failed(
-            transactionId: request.transactionId,
-            errorMessage: 'Failed to launch Google Pay',
+      } catch (e) {
+        print('UpiPaymentService: GPay specific URL failed: $e');
+        launched = false;
+      }
+
+      // If GPay specific URL failed, try standard UPI scheme
+      if (!launched) {
+        final alternativeUrl = _buildGPayAlternativeUrl(request);
+        print('UpiPaymentService: Trying alternative UPI URL: $alternativeUrl');
+
+        try {
+          launched = await launchUrl(
+            Uri.parse(alternativeUrl),
+            mode: LaunchMode.externalApplication,
           );
+        } catch (e) {
+          print('UpiPaymentService: Alternative UPI URL failed: $e');
+          launched = false;
         }
+      }
+
+      if (launched) {
+        // Wait for user to complete payment and return to app
+        return await _waitForPaymentResult(request.transactionId);
       } else {
-        // GPay not installed, redirect to Play Store
-        await _redirectToPlayStore(PaymentMethod.gpay);
-        return PaymentResponse.failed(
-          transactionId: request.transactionId,
-          errorMessage: 'Google Pay not installed',
-        );
+        // Both URLs failed, show helpful message and try UPI Intent
+        print('UpiPaymentService: Google Pay could not be launched');
+        print('UpiPaymentService: This might be because:');
+        print('  1. Google Pay is not installed');
+        print('  2. No payment account is set up in Google Pay');
+        print('  3. Google Pay needs to be updated');
+        print('UpiPaymentService: Trying UPI Intent as fallback...');
+        return await payWithUpiIntent(request);
       }
     } catch (e) {
       print('UpiPaymentService: GPay error: $e');
-      return PaymentResponse.failed(
-        transactionId: request.transactionId,
-        errorMessage: 'GPay payment failed: ${e.toString()}',
-      );
+      // Try UPI Intent as final fallback
+      return await payWithUpiIntent(request);
     }
   }
 
@@ -69,11 +86,10 @@ class UpiPaymentService {
           );
         }
       } else {
-        // PhonePe not installed, redirect to Play Store
-        await _redirectToPlayStore(PaymentMethod.phonepe);
+        // PhonePe not available, provide helpful message
         return PaymentResponse.failed(
           transactionId: request.transactionId,
-          errorMessage: 'PhonePe not installed',
+          errorMessage: 'PhonePe is not available. Please try UPI Apps or install PhonePe from Play Store.',
         );
       }
     } catch (e) {
@@ -100,9 +116,15 @@ class UpiPaymentService {
         // Wait for user to complete payment and return to app
         return await _waitForPaymentResult(request.transactionId);
       } else {
-        return PaymentResponse.failed(
+        // If UPI Intent fails, return pending status for manual verification
+        print('UpiPaymentService: UPI Intent launch failed, returning pending for manual verification');
+        return PaymentResponse.pending(
           transactionId: request.transactionId,
-          errorMessage: 'No UPI apps available',
+          additionalData: {
+            'message': 'Payment app could not be launched. Please complete payment manually and verify.',
+            'upi_id': request.merchantUpiId,
+            'amount': request.amount,
+          },
         );
       }
     } catch (e) {
@@ -116,19 +138,23 @@ class UpiPaymentService {
 
   /// Check if specific UPI app is installed
   Future<bool> _canLaunchApp(PaymentMethod method) async {
-    // On web, we can't check if apps are installed, so return true for demo
+    // On web, we can't check if apps are installed, so return true
     if (kIsWeb) {
       return true;
     }
 
     try {
-      final packageName = method.packageName;
-      if (packageName.isEmpty) return true;
-
-      // Check if app is installed using package name (Android only)
-      const platform = MethodChannel('app_checker');
-      final isInstalled = await platform.invokeMethod('isAppInstalled', packageName);
-      return isInstalled ?? false;
+      // For mobile platforms, assume UPI apps are available
+      // Most Android devices have at least one UPI app installed
+      // We'll handle the actual launch failure gracefully
+      switch (method) {
+        case PaymentMethod.gpay:
+        case PaymentMethod.phonepe:
+        case PaymentMethod.upiIntent:
+          return true; // Assume available, handle launch failure later
+        default:
+          return true;
+      }
     } catch (e) {
       print('UpiPaymentService: App check error: $e');
       return true; // Assume available if check fails
@@ -171,6 +197,25 @@ class UpiPaymentService {
     return '${UpiConfig.gpayScheme}?$queryString';
   }
 
+  /// Build alternative GPay URL using standard UPI scheme
+  String _buildGPayAlternativeUrl(PaymentRequest request) {
+    final params = {
+      'pa': UpiConfig.gpayUpiId,
+      'pn': request.merchantName,
+      'am': request.amount.toStringAsFixed(2),
+      'cu': request.currency,
+      'tn': request.description,
+      'tr': request.transactionId,
+      'mc': UpiConfig.merchantCode,
+    };
+
+    final queryString = params.entries
+        .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+
+    return '${UpiConfig.upiScheme}?$queryString';
+  }
+
   /// Build PhonePe specific UPI URL
   String _buildPhonePeUrl(PaymentRequest request) {
     final params = {
@@ -211,23 +256,38 @@ class UpiPaymentService {
 
   /// Wait for payment result - User will return to app after payment
   Future<PaymentResponse> _waitForPaymentResult(String transactionId) async {
-    // Show a dialog asking user to confirm payment completion
-    // In production, you would implement proper deep link callbacks
-
     print('UpiPaymentService: Payment app launched. Waiting for user to return...');
 
-    // For now, we'll simulate the user completing payment
-    // In production, implement proper payment status checking
-    await Future.delayed(const Duration(seconds: 2));
+    // Wait for user to return from UPI app
+    await Future.delayed(const Duration(seconds: 3));
 
-    // Return success for demo - in production, verify payment status
-    return PaymentResponse.success(
+    // Return pending status - actual verification will be done by the calling screen
+    return PaymentResponse.pending(
       transactionId: transactionId,
-      gatewayTransactionId: 'UPI_${DateTime.now().millisecondsSinceEpoch}',
       additionalData: {
         'paymentMethod': 'UPI',
         'timestamp': DateTime.now().toIso8601String(),
-        'note': 'Real payment initiated - verify status manually',
+        'note': 'Payment initiated - verification required',
+      },
+    );
+  }
+
+  /// Verify payment status with user confirmation
+  Future<PaymentResponse> verifyPaymentStatus(String transactionId, PaymentRequest request) async {
+    // This method will be called by the UI to verify payment status
+    // In a real implementation, this would:
+    // 1. Check with payment gateway/bank API
+    // 2. Verify transaction status
+    // 3. Return actual payment result
+
+    // For now, we'll implement user-based verification
+    return PaymentResponse.pending(
+      transactionId: transactionId,
+      additionalData: {
+        'verification_required': 'true',
+        'amount': request.amount.toString(),
+        'merchant_upi': request.merchantUpiId,
+        'description': request.description,
       },
     );
   }

@@ -48,6 +48,7 @@ class DatabaseService {
       CREATE TABLE portfolio (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         total_gold_grams REAL NOT NULL DEFAULT 0,
+        total_silver_grams REAL NOT NULL DEFAULT 0,
         total_invested REAL NOT NULL DEFAULT 0,
         current_value REAL NOT NULL DEFAULT 0,
         profit_loss REAL NOT NULL DEFAULT 0,
@@ -70,6 +71,7 @@ class DatabaseService {
     // Insert initial portfolio record
     await db.insert('portfolio', {
       'total_gold_grams': 0.0,
+      'total_silver_grams': 0.0,
       'total_invested': 0.0,
       'current_value': 0.0,
       'profit_loss': 0.0,

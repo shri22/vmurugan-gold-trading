@@ -5,7 +5,7 @@ import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../models/onboarding_model.dart';
 import '../widgets/onboarding_page.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/phone_entry_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -194,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _navigateToLogin() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => const LoginScreen(),
+        builder: (context) => const PhoneEntryScreen(),
       ),
     );
   }

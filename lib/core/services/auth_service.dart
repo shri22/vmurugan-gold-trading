@@ -1,9 +1,13 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'firebase_service.dart';
 import 'customer_service.dart';
 import 'sms_service.dart';
 import 'firebase_phone_auth_service.dart';
+import 'encryption_service.dart';
+import '../config/sql_server_config.dart';
 
 /// Enhanced Authentication service to handle the complete login flow
 /// This works alongside existing login functionality without breaking it
@@ -363,6 +367,206 @@ class AuthService {
   static Future<void> savePhoneNumber(String phone) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('saved_phone_number', phone);
+  }
+
+  // =============================================================================
+  // NEW LOGIN FUNCTIONALITY WITH ENCRYPTED MPIN
+  // =============================================================================
+
+  // API base URL
+  static String get baseUrl => 'http://${SqlServerConfig.serverIP}:3001/api';
+
+  // Headers for API requests
+  static Map<String, String> get headers => {
+    'Content-Type': 'application/json',
+  };
+
+  /// Register new user with encrypted MPIN
+  static Future<Map<String, dynamic>> registerWithEncryptedMPIN({
+    required String phone,
+    required String name,
+    required String email,
+    required String address,
+    required String panCard,
+    required String mpin,
+    required String deviceId,
+  }) async {
+    try {
+      print('📝 AuthService: Registering user with encrypted MPIN: $phone');
+
+      // Encrypt MPIN
+      final encryptedMpin = EncryptionService.encryptMPIN(mpin);
+
+      // Prepare customer data
+      final customerData = {
+        'phone': phone,
+        'name': name,
+        'email': email,
+        'address': address,
+        'pan_card': panCard,
+        'device_id': deviceId,
+        'encrypted_mpin': encryptedMpin,
+      };
+
+      // Send to API
+      final response = await http.post(
+        Uri.parse('$baseUrl/customers'),
+        headers: headers,
+        body: jsonEncode(customerData),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          // Save login state
+          await _saveUserLoginState(phone, {
+            'phone': phone,
+            'name': name,
+            'email': email,
+          });
+
+          print('✅ AuthService: Registration successful for: $phone');
+          return {
+            'success': true,
+            'message': 'Registration successful',
+            'user': {
+              'phone': phone,
+              'name': name,
+              'email': email,
+            }
+          };
+        } else {
+          return data;
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Registration failed',
+        };
+      }
+    } catch (e) {
+      print('❌ AuthService: Registration error: $e');
+      return {
+        'success': false,
+        'message': 'Registration failed: $e',
+      };
+    }
+  }
+
+  /// Login user with phone and MPIN
+  static Future<Map<String, dynamic>> loginWithMPIN({
+    required String phone,
+    required String mpin,
+  }) async {
+    try {
+      print('🔐 AuthService: Attempting login for: $phone');
+
+      // Encrypt MPIN for verification
+      final encryptedMpin = EncryptionService.encryptMPIN(mpin);
+
+      // Prepare login data
+      final loginData = {
+        'phone': phone,
+        'encrypted_mpin': encryptedMpin,
+      };
+
+      // Send to API
+      final response = await http.post(
+        Uri.parse('$baseUrl/login'),
+        headers: headers,
+        body: jsonEncode(loginData),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          // Save login state
+          await _saveUserLoginState(phone, data['customer']);
+
+          print('✅ AuthService: Login successful for: $phone');
+          return {
+            'success': true,
+            'message': 'Login successful',
+            'user': data['customer'],
+          };
+        } else {
+          return data;
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Login failed',
+        };
+      }
+    } catch (e) {
+      print('❌ AuthService: Login error: $e');
+      return {
+        'success': false,
+        'message': 'Login failed: $e',
+      };
+    }
+  }
+
+  /// Save user login state to local storage
+  static Future<void> _saveUserLoginState(String phone, Map<String, dynamic> userData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_isLoggedInKey, true);
+      await prefs.setString('user_phone', phone);
+      await prefs.setString('user_data', jsonEncode(userData));
+      print('✅ AuthService: User login state saved');
+    } catch (e) {
+      print('❌ AuthService: Error saving user login state: $e');
+    }
+  }
+
+  /// Get current logged in user data
+  static Future<Map<String, dynamic>?> getCurrentLoggedInUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userDataString = prefs.getString('user_data');
+
+      if (userDataString != null) {
+        final userData = jsonDecode(userDataString);
+        return Map<String, dynamic>.from(userData);
+      }
+      return null;
+    } catch (e) {
+      print('❌ AuthService: Error getting current user: $e');
+      return null;
+    }
+  }
+
+  /// Check if server is reachable
+  static Future<bool> isServerReachable() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://${SqlServerConfig.serverIP}:3001/health'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('❌ AuthService: Server not reachable: $e');
+      return false;
+    }
+  }
+
+  /// Logout current user
+  static Future<void> logoutUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_isLoggedInKey, false);
+      await prefs.remove('user_phone');
+      await prefs.remove('user_data');
+      print('✅ AuthService: User logged out');
+    } catch (e) {
+      print('❌ AuthService: Error during logout: $e');
+    }
   }
 }
 

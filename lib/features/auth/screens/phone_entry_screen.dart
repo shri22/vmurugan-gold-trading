@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
-import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
+import '../../../core/config/sql_server_config.dart';
 import '../../../core/services/auth_service.dart';
-// import 'mpin_login_screen.dart'; // Temporarily disabled
+import 'mpin_entry_screen.dart';
 import 'customer_registration_screen.dart';
 
 class PhoneEntryScreen extends StatefulWidget {
@@ -18,8 +21,8 @@ class PhoneEntryScreen extends StatefulWidget {
 
 class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   final TextEditingController _phoneController = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void dispose() {
@@ -28,45 +31,61 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   }
 
   Future<void> _checkPhoneNumber() async {
-    if (!_formKey.currentState!.validate()) return;
+    final phone = _phoneController.text.trim();
+    
+    if (phone.isEmpty) {
+      _showError('Please enter your phone number');
+      return;
+    }
+
+    if (phone.length < 10) {
+      _showError('Please enter a valid phone number');
+      return;
+    }
 
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
-      final phone = _phoneController.text.trim();
-      print('📱 PhoneEntryScreen: Checking phone number: $phone');
-
-      // Check if phone is registered
-      final isRegistered = await AuthService.isPhoneRegistered(phone);
+      // Check if phone number is registered by trying to get customer info
+      final response = await http.get(
+        Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/customers/$phone'),
+        headers: {'Content-Type': 'application/json'},
+      );
 
       if (mounted) {
-        if (isRegistered) {
-          // Phone is registered, go to MPIN login
-          print('✅ PhoneEntryScreen: Phone registered, navigating to MPIN login');
-          // Navigate to enhanced auth instead
-          Navigator.pushReplacementNamed(context, '/enhanced-auth');
+        if (response.statusCode == 200) {
+          // Phone number is registered - go to MPIN entry
+          final data = jsonDecode(response.body);
+          if (data['success'] == true) {
+            print('✅ Phone number registered - going to MPIN entry');
+            
+            // Save phone number for future use
+            await AuthService.savePhoneNumber(phone);
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MpinEntryScreen(phoneNumber: phone),
+              ),
+            );
+          } else {
+            // Phone number not registered - go to registration
+            _goToRegistration(phone);
+          }
+        } else if (response.statusCode == 404) {
+          // Phone number not registered - show registration option
+          _showRegistrationOption(phone);
         } else {
-          // Phone not registered, go to registration
-          print('📝 PhoneEntryScreen: Phone not registered, navigating to registration');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CustomerRegistrationScreen(phoneNumber: phone),
-            ),
-          );
+          _showError('Server error. Please try again.');
         }
       }
     } catch (e) {
-      print('❌ PhoneEntryScreen: Error checking phone: $e');
+      print('Phone check error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error checking phone number: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        _showError('Network error. Please check your connection.');
       }
     } finally {
       if (mounted) {
@@ -77,165 +96,219 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
     }
   }
 
-  String? _validatePhone(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your phone number';
-    }
+  void _goToRegistration(String phone) {
+    print('✅ Phone number not registered - going to registration');
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomerRegistrationScreen(phoneNumber: phone),
+      ),
+    );
+  }
+
+  void _showRegistrationOption(String phone) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Phone Number Not Registered'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('The phone number +91 $phone is not registered.'),
+            const SizedBox(height: 16),
+            const Text(
+              'Would you like to register now?',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _goToRegistration(phone);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGold,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Register Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    setState(() {
+      _errorMessage = message;
+    });
     
-    // Remove any non-digit characters
-    final digitsOnly = value.replaceAll(RegExp(r'[^\d]'), '');
-    
-    if (digitsOnly.length != 10) {
-      return 'Please enter a valid 10-digit phone number';
-    }
-    
-    return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.05),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(height: MediaQuery.of(context).size.height * 0.08),
-                
-                // Logo
-                VMUruganLogo(
-                  size: MediaQuery.of(context).size.width * 0.25,
-                  primaryColor: AppColors.primaryGreen,
-                  textColor: AppColors.primaryGold,
-                ),
-                
-                SizedBox(height: MediaQuery.of(context).size.height * 0.06),
-                
-                // Welcome Text
-                Text(
-                  'Welcome to VMUrugan',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryGreen,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-                
-                Text(
-                  'Enter your phone number to get started',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                SizedBox(height: MediaQuery.of(context).size.height * 0.06),
-                
-                // Phone Number Input
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 10,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryGold,
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Phone Number',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
+                      child: const Icon(
+                        Icons.diamond,
+                        size: 60,
+                        color: Colors.white,
                       ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      CustomTextField(
+                    ),
+
+                    const SizedBox(height: 40),
+                    
+                    // Welcome Text
+                    Text(
+                      'Welcome to V Murugan Gold Trading',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryGold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    Text(
+                      'Enter your mobile number to continue',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    
+                    const SizedBox(height: 40),
+                    
+                    // Phone Number Input
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: TextField(
                         controller: _phoneController,
-                        hint: 'Enter your phone number',
-                        prefixIcon: Icons.phone,
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(10),
                         ],
-                        validator: _validatePhone,
-                        enabled: !_isLoading,
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      
-                      // Continue Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: CustomButton(
-                          text: _isLoading ? 'Checking...' : 'Continue',
-                          onPressed: _isLoading ? null : _checkPhoneNumber,
-                          isLoading: _isLoading,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                SizedBox(height: MediaQuery.of(context).size.height * 0.04),
-                
-                // Info Text
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryGold.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primaryGold.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: AppColors.primaryGold,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'We\'ll check if you\'re already registered and guide you through the process.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        decoration: InputDecoration(
+                          hintText: 'Enter mobile number',
+                          prefixIcon: const Icon(Icons.phone, color: AppColors.primaryGold),
+                          prefixText: '+91 ',
+                          prefixStyle: const TextStyle(
                             color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
                           ),
                         ),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        onSubmitted: (_) => _checkPhoneNumber(),
+                      ),
+                    ),
+                    
+                    if (_errorMessage.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage,
+                                style: TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // Continue Button
+                    CustomButton(
+                      text: 'Continue',
+                      onPressed: _isLoading ? null : _checkPhoneNumber,
+                      isLoading: _isLoading,
+                      icon: Icons.arrow_forward,
+                    ),
+                  ],
                 ),
-                
-                SizedBox(height: MediaQuery.of(context).size.height * 0.08),
-                
-                // Footer
-                Text(
-                  'Secure • Trusted • Regulated',
+              ),
+              
+              // Footer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'By continuing, you agree to our Terms & Conditions',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
                   ),
+                  textAlign: TextAlign.center,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

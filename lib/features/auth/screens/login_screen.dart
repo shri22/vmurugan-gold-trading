@@ -6,6 +6,7 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../main.dart';
 import 'customer_registration_screen.dart';
 
@@ -141,14 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
 
-                      // Demo Login Button (Temporary)
-                      GradientButton(
-                        text: 'Demo Login (Skip OTP)',
-                        onPressed: _handleDemoLogin,
-                        gradient: AppColors.goldGreenGradient,
-                        icon: Icons.play_arrow,
-                        isFullWidth: true,
-                      ),
+
 
                       const SizedBox(height: AppSpacing.md),
 
@@ -233,32 +227,44 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
-        // Check if customer exists with this phone number
-        final customerExists = await _validateCustomer(_phoneController.text.trim());
+        final phone = _phoneController.text.trim();
+        final mpin = _mpinController.text.trim();
 
-        if (customerExists) {
-          // For now, accept any 4-digit MPIN for registered customers
-          // In production, you would validate the actual MPIN
-          if (_mpinController.text.length == 4) {
-            // Save login session
-            await CustomerService.saveLoginSession(_phoneController.text.trim());
+        // Validate MPIN length
+        if (mpin.length != 4) {
+          _showErrorMessage('Please enter 4-digit MPIN');
+          return;
+        }
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Login successful! Welcome back.'),
-                backgroundColor: AppColors.success,
-              ),
-            );
+        // Check server connectivity
+        final isServerReachable = await AuthService.isServerReachable();
+        if (!isServerReachable) {
+          _showErrorMessage('Server not reachable. Please check your internet connection.');
+          return;
+        }
 
-            _navigateToHome();
-          } else {
-            _showErrorMessage('Invalid MPIN. Please enter 4 digits.');
-          }
+        // Attempt login with encrypted MPIN
+        final result = await AuthService.loginWithMPIN(
+          phone: phone,
+          mpin: mpin,
+        );
+
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ ${result['message']}'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+
+          // Navigate to home page
+          _navigateToHome();
         } else {
-          _showErrorMessage('Phone number not registered. Please register first.');
+          _showErrorMessage(result['message'] ?? 'Login failed');
         }
       } catch (e) {
-        _showErrorMessage('Login failed. Please try again.');
+        print('❌ Login error: $e');
+        _showErrorMessage('Login failed: $e');
       } finally {
         setState(() {
           _isLoading = false;
@@ -287,58 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _handleDemoLogin() {
-    // Show info about demo login
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.info, color: Colors.blue[700]),
-            const SizedBox(width: 8),
-            const Text('Demo Login'),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Demo login will use a temporary session.',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-            SizedBox(height: 12),
-            Text('To test with registered customers:'),
-            SizedBox(height: 8),
-            Text('1. Register a customer first'),
-            Text('2. Use the registered phone number'),
-            Text('3. Enter any 4-digit MPIN'),
-            SizedBox(height: 12),
-            Text(
-              'Note: Customer ID and scheme creation will work properly only with registered customers.',
-              style: TextStyle(
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _navigateToHome();
-            },
-            child: const Text('Continue Demo'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   void _handleBiometricLogin() async {
     setState(() {
@@ -385,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateToHome() {
-    // Navigate to home screen (we'll import this from main.dart)
+    // Navigate directly to home page after successful login
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (context) => const HomePage(),

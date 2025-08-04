@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Access Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .info {
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Network Access Test</h1>
+        
+        <div class="info">
+            <h3>📱 Mobile Testing Instructions:</h3>
+            <ol>
+                <li>Make sure your mobile device is connected to the same Wi-Fi network</li>
+                <li>Open this page on your mobile browser: <strong>http://192.168.31.129:3001/test_network_access.html</strong></li>
+                <li>Click the test buttons below</li>
+                <li>All tests should show ✅ Success</li>
+            </ol>
+        </div>
+
+        <div id="health-test" class="test-section loading">
+            <h3>🏥 Health Check Test</h3>
+            <p>Testing: <code>GET /health</code></p>
+            <button onclick="testHealth()">Test Health Endpoint</button>
+            <div id="health-result">Click button to test...</div>
+        </div>
+
+        <div id="otp-test" class="test-section loading">
+            <h3>📱 OTP Test</h3>
+            <p>Testing: <code>POST /api/auth/send-otp</code></p>
+            <button onclick="testOTP()">Test OTP Endpoint</button>
+            <div id="otp-result">Click button to test...</div>
+        </div>
+
+        <div id="connection-test" class="test-section loading">
+            <h3>🔗 Database Connection Test</h3>
+            <p>Testing: <code>GET /api/test-connection</code></p>
+            <button onclick="testConnection()">Test Database Connection</button>
+            <div id="connection-result">Click button to test...</div>
+        </div>
+
+        <div class="info">
+            <h3>🔧 Troubleshooting:</h3>
+            <ul>
+                <li><strong>If tests fail from mobile:</strong> Check Windows Firewall settings</li>
+                <li><strong>Connection refused:</strong> Ensure server is running on port 3001</li>
+                <li><strong>Network unreachable:</strong> Verify both devices are on same Wi-Fi</li>
+                <li><strong>CORS errors:</strong> Server should allow cross-origin requests</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = 'http://192.168.31.129:3001';
+
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            const testDiv = document.getElementById('health-test');
+            
+            try {
+                resultDiv.innerHTML = '⏳ Testing...';
+                testDiv.className = 'test-section loading';
+                
+                const response = await fetch(`${baseUrl}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <strong>✅ Success!</strong><br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    testDiv.className = 'test-section success';
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <strong>❌ Failed!</strong><br>
+                    Error: ${error.message}
+                `;
+                testDiv.className = 'test-section error';
+            }
+        }
+
+        async function testOTP() {
+            const resultDiv = document.getElementById('otp-result');
+            const testDiv = document.getElementById('otp-test');
+            
+            try {
+                resultDiv.innerHTML = '⏳ Testing...';
+                testDiv.className = 'test-section loading';
+                
+                const response = await fetch(`${baseUrl}/api/auth/send-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone: '+919876543210'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.innerHTML = `
+                        <strong>✅ Success!</strong><br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    testDiv.className = 'test-section success';
+                } else {
+                    throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <strong>❌ Failed!</strong><br>
+                    Error: ${error.message}
+                `;
+                testDiv.className = 'test-section error';
+            }
+        }
+
+        async function testConnection() {
+            const resultDiv = document.getElementById('connection-result');
+            const testDiv = document.getElementById('connection-test');
+            
+            try {
+                resultDiv.innerHTML = '⏳ Testing...';
+                testDiv.className = 'test-section loading';
+                
+                const response = await fetch(`${baseUrl}/api/test-connection`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.innerHTML = `
+                        <strong>✅ Success!</strong><br>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    testDiv.className = 'test-section success';
+                } else {
+                    throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <strong>❌ Failed!</strong><br>
+                    Error: ${error.message}
+                `;
+                testDiv.className = 'test-section error';
+            }
+        }
+
+        // Auto-run health test when page loads
+        window.onload = function() {
+            setTimeout(testHealth, 1000);
+        };
+    </script>
+</body>
+</html>

@@ -2,13 +2,31 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'firebase_service.dart';
 import 'custom_server_service.dart';
+import 'local_api_service.dart';
+import 'sql_server_api_service.dart';
 
 class ApiService {
-  // CONFIGURATION: Switch between Firebase and Custom Server
-  static const bool useFirebase = true; // Set to false to use custom server
+  // CONFIGURATION: Choose your data storage method
+  static const String storageMode = 'sqlserver'; // Options: 'firebase', 'server', 'local', 'sqlserver'
 
-  // Firebase will be used by default, custom server when ready
-  static const String mode = useFirebase ? 'Firebase' : 'Custom Server';
+  // Legacy compatibility
+  static bool get useFirebase => storageMode == 'firebase';
+
+  // Current mode description
+  static String get mode {
+    switch (storageMode) {
+      case 'firebase':
+        return 'Firebase Cloud';
+      case 'server':
+        return 'Custom Server';
+      case 'local':
+        return 'Local SQLite Database';
+      case 'sqlserver':
+        return 'SQL Server (SSMS)';
+      default:
+        return 'Unknown';
+    }
+  }
 
   // Smart router: Save transaction to active service
   static Future<Map<String, dynamic>> saveTransaction({
@@ -27,36 +45,72 @@ class ApiService {
   }) async {
     print('ApiService: Routing to $mode for transaction save');
 
-    if (useFirebase) {
-      return await FirebaseService.saveTransaction(
-        transactionId: transactionId,
-        customerPhone: customerPhone,
-        customerName: customerName,
-        type: type,
-        amount: amount,
-        goldGrams: goldGrams,
-        goldPricePerGram: goldPricePerGram,
-        paymentMethod: paymentMethod,
-        status: status,
-        gatewayTransactionId: gatewayTransactionId,
-        deviceInfo: deviceInfo,
-        location: location,
-      );
-    } else {
-      return await CustomServerService.saveTransaction(
-        transactionId: transactionId,
-        customerPhone: customerPhone,
-        customerName: customerName,
-        type: type,
-        amount: amount,
-        goldGrams: goldGrams,
-        goldPricePerGram: goldPricePerGram,
-        paymentMethod: paymentMethod,
-        status: status,
-        gatewayTransactionId: gatewayTransactionId,
-        deviceInfo: deviceInfo,
-        location: location,
-      );
+    switch (storageMode) {
+      case 'firebase':
+        return await FirebaseService.saveTransaction(
+          transactionId: transactionId,
+          customerPhone: customerPhone,
+          customerName: customerName,
+          type: type,
+          amount: amount,
+          goldGrams: goldGrams,
+          goldPricePerGram: goldPricePerGram,
+          paymentMethod: paymentMethod,
+          status: status,
+          gatewayTransactionId: gatewayTransactionId,
+          deviceInfo: deviceInfo,
+          location: location,
+        );
+      case 'server':
+        return await CustomServerService.saveTransaction(
+          transactionId: transactionId,
+          customerPhone: customerPhone,
+          customerName: customerName,
+          type: type,
+          amount: amount,
+          goldGrams: goldGrams,
+          goldPricePerGram: goldPricePerGram,
+          paymentMethod: paymentMethod,
+          status: status,
+          gatewayTransactionId: gatewayTransactionId,
+          deviceInfo: deviceInfo,
+          location: location,
+        );
+      case 'local':
+        return await LocalApiService.saveTransaction(
+          transactionId: transactionId,
+          customerPhone: customerPhone,
+          customerName: customerName,
+          type: type,
+          amount: amount,
+          goldGrams: goldGrams,
+          goldPricePerGram: goldPricePerGram,
+          paymentMethod: paymentMethod,
+          status: status,
+          gatewayTransactionId: gatewayTransactionId,
+          deviceInfo: deviceInfo,
+          location: location,
+        );
+      case 'sqlserver':
+        return await SqlServerApiService.saveTransaction(
+          transactionId: transactionId,
+          customerPhone: customerPhone,
+          customerName: customerName,
+          type: type,
+          amount: amount,
+          goldGrams: goldGrams,
+          goldPricePerGram: goldPricePerGram,
+          paymentMethod: paymentMethod,
+          status: status,
+          gatewayTransactionId: gatewayTransactionId,
+          deviceInfo: deviceInfo,
+          location: location,
+        );
+      default:
+        return {
+          'success': false,
+          'message': 'Invalid storage mode: $storageMode',
+        };
     }
   }
 
@@ -97,24 +151,48 @@ class ApiService {
   }) async {
     print('ApiService: Routing to $mode for customer save');
 
-    if (useFirebase) {
-      return await FirebaseService.saveCustomer(
-        phone: phone,
-        name: name,
-        email: email,
-        address: address,
-        panCard: panCard,
-        deviceId: deviceId,
-      );
-    } else {
-      return await CustomServerService.saveCustomer(
-        phone: phone,
-        name: name,
-        email: email,
-        address: address,
-        panCard: panCard,
-        deviceId: deviceId,
-      );
+    switch (storageMode) {
+      case 'firebase':
+        return await FirebaseService.saveCustomer(
+          phone: phone,
+          name: name,
+          email: email,
+          address: address,
+          panCard: panCard,
+          deviceId: deviceId,
+        );
+      case 'server':
+        return await CustomServerService.saveCustomer(
+          phone: phone,
+          name: name,
+          email: email,
+          address: address,
+          panCard: panCard,
+          deviceId: deviceId,
+        );
+      case 'local':
+        return await LocalApiService.saveCustomerInfo(
+          phone: phone,
+          name: name,
+          email: email,
+          address: address,
+          panCard: panCard,
+          deviceId: deviceId,
+        );
+      case 'sqlserver':
+        return await SqlServerApiService.saveCustomerInfo(
+          phone: phone,
+          name: name,
+          email: email,
+          address: address,
+          panCard: panCard,
+          deviceId: deviceId,
+        );
+      default:
+        return {
+          'success': false,
+          'message': 'Invalid storage mode: $storageMode',
+        };
     }
   }
 

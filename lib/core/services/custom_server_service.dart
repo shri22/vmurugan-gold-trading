@@ -1,21 +1,15 @@
 // CUSTOM SERVER IMPLEMENTATION
-// This is ready for when you want to migrate from Firebase to your own server
-// Simply uncomment and update the URLs/credentials
+// Local MySQL server implementation for testing
 
-/*
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/server_config.dart';
 
 class CustomServerService {
-  // TODO: Replace with your actual server details
-  static const String baseUrl = 'https://your-domain.com/api';
-  static const String adminToken = 'YOUR_SECURE_ADMIN_TOKEN_HERE';
-  
-  static const Map<String, String> headers = {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $adminToken',
-    'X-Business-ID': 'DIGI_GOLD_001',
-  };
+  // Use centralized server configuration
+  static String get baseUrl => ServerConfig.baseUrl;
+  static String get adminToken => ServerConfig.adminToken;
+  static Map<String, String> get headers => ServerConfig.headers;
 
   // Save customer to your server
   static Future<Map<String, dynamic>> saveCustomer({
@@ -35,7 +29,7 @@ class CustomServerService {
         'pan_card': panCard,
         'device_id': deviceId,
         'registration_date': DateTime.now().toIso8601String(),
-        'business_id': 'DIGI_GOLD_001',
+        'business_id': 'VMURUGAN_001',
         'total_invested': 0.0,
         'total_gold': 0.0,
         'transaction_count': 0,
@@ -317,51 +311,4 @@ class CustomServerService {
     }
   }
 }
-*/
 
-// PLACEHOLDER FOR FUTURE USE
-class CustomServerService {
-  static Future<Map<String, dynamic>> saveCustomer({
-    required String phone,
-    required String name,
-    required String email,
-    required String address,
-    required String panCard,
-    required String deviceId,
-  }) async {
-    print('CustomServerService: Not implemented yet - using Firebase');
-    return {'success': false, 'message': 'Custom server not implemented'};
-  }
-
-  static Future<Map<String, dynamic>> saveTransaction({
-    required String transactionId,
-    required String customerPhone,
-    required String customerName,
-    required String type,
-    required double amount,
-    required double goldGrams,
-    required double goldPricePerGram,
-    required String paymentMethod,
-    required String status,
-    required String gatewayTransactionId,
-    required String deviceInfo,
-    required String location,
-  }) async {
-    print('CustomServerService: Not implemented yet - using Firebase');
-    return {'success': false, 'message': 'Custom server not implemented'};
-  }
-
-  static Future<void> logAnalytics({
-    required String event,
-    required Map<String, dynamic> data,
-  }) async {
-    print('CustomServerService: Analytics not implemented yet - using Firebase');
-  }
-
-  static Future<Map<String, dynamic>> getDashboardData({
-    required String adminToken,
-  }) async {
-    print('CustomServerService: Dashboard not implemented yet - using Firebase');
-    return {'success': false, 'message': 'Custom server not implemented'};
-  }
-}

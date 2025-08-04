@@ -10,7 +10,10 @@ import '../models/gold_price_model.dart';
 import '../services/gold_price_service.dart';
 // import '../../payment/screens/payment_screen.dart';
 import '../../payment/services/upi_payment_service.dart';
+import '../../payment/services/payment_verification_service.dart';
 import '../../payment/models/payment_model.dart';
+import '../../schemes/services/scheme_management_service.dart';
+import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
 import '../../portfolio/models/portfolio_model.dart';
 import '../../../core/services/customer_service.dart';
@@ -29,7 +32,9 @@ class BuyGoldScreen extends StatefulWidget {
 class _BuyGoldScreenState extends State<BuyGoldScreen> {
   final GoldPriceService _priceService = GoldPriceService();
   final UpiPaymentService _paymentService = UpiPaymentService();
+  final PaymentVerificationService _verificationService = PaymentVerificationService();
   final PortfolioService _portfolioService = PortfolioService();
+  final SchemeManagementService _schemeService = SchemeManagementService();
   final TextEditingController _amountController = TextEditingController();
   
   GoldPriceModel? _currentPrice;
@@ -584,6 +589,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             _buildPaymentOption('💳 UPI Apps', 'Pay with any UPI app', () => _processRealPayment(PaymentMethod.upiIntent, goldGrams)),
             const SizedBox(height: 8),
             _buildPaymentOption('📱 QR Code', 'Scan QR to pay', () => _processRealPayment(PaymentMethod.qrCode, goldGrams)),
+            const SizedBox(height: 8),
+            _buildPaymentOption('💰 Manual UPI', 'Pay manually with UPI details', () => _showManualUpiPayment(goldGrams)),
           ],
         ),
         actions: [
@@ -664,6 +671,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         case PaymentMethod.upiIntent:
           response = await _paymentService.payWithUpiIntent(request);
           break;
+        case PaymentMethod.qrCode:
+          response = await _showQRCodePayment(request);
+          break;
         default:
           response = PaymentResponse.failed(
             transactionId: request.transactionId,
@@ -673,39 +683,284 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
       Navigator.pop(context); // Close launching dialog
 
-      // Handle payment response
-      if (response.status == PaymentStatus.success) {
-        print('🎉 Payment successful! Creating scheme...');
+      // Handle payment response based on status
+      if (response.status == PaymentStatus.pending) {
+        // Payment was initiated, now verify with user
+        print('💳 Payment initiated, showing verification dialog...');
 
-        // Get customer info for scheme creation
-        final customerInfo = await CustomerService.getCustomerInfo();
-        final customerId = customerInfo['customer_id'];
+        final verificationResult = await _verificationService.showPaymentVerificationDialog(
+          context: context,
+          request: request,
+          transactionId: response.transactionId,
+        );
 
-        String? schemeId;
-        if (customerId != null && customerId.isNotEmpty) {
-          // Auto-create scheme for this purchase
-          schemeId = await _getOrCreateAutoScheme(customerId, Map<String, String>.from(customerInfo));
-          print('✅ Scheme created for payment: $schemeId');
-        } else {
-          print('⚠️ No customer ID found, skipping scheme creation');
-        }
+        // Handle verification result
+        await _handleVerifiedPayment(verificationResult, method.displayName, goldGrams);
 
-        // Save transaction to database (with scheme ID if available)
-        await _saveTransaction(response, method.displayName, goldGrams, schemeId: schemeId);
-        _showRealSuccessDialog(method.displayName, goldGrams, response, schemeId: schemeId);
+      } else if (response.status == PaymentStatus.success) {
+        // Direct success (shouldn't happen with new flow, but handle it)
+        await _handleVerifiedPayment(response, method.displayName, goldGrams);
+
       } else {
-        // Create payment failed notification
+        // Payment failed or cancelled
         await NotificationTemplates.paymentFailed(
           transactionId: response.transactionId,
           amount: _selectedAmount,
-          reason: response.errorMessage ?? 'Unknown error',
+          reason: response.errorMessage ?? 'Payment failed',
         );
-        _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Unknown error'}');
+        _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment was not completed'}');
       }
 
     } catch (e) {
       Navigator.pop(context); // Close any open dialog
       _showErrorDialog('Payment error: ${e.toString()}');
+    }
+  }
+
+  Future<PaymentResponse> _showQRCodePayment(PaymentRequest request) async {
+    // Show QR code payment dialog
+    return await showDialog<PaymentResponse>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('QR Code Payment'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Scan this QR code with any UPI app to pay:'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.qr_code, size: 100, color: Colors.black54),
+                  const SizedBox(height: 8),
+                  Text('UPI ID: ${request.merchantUpiId}'),
+                  Text('Amount: ₹${request.amount.toStringAsFixed(2)}'),
+                  Text('Transaction: ${request.transactionId}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('After completing payment, click "Payment Done" below.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(
+              PaymentResponse.cancelled(transactionId: request.transactionId),
+            ),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(
+              PaymentResponse.pending(
+                transactionId: request.transactionId,
+                additionalData: {'method': 'qr_code'},
+              ),
+            ),
+            child: const Text('Payment Done'),
+          ),
+        ],
+      ),
+    ) ?? PaymentResponse.cancelled(transactionId: request.transactionId);
+  }
+
+  Future<void> _showManualUpiPayment(double goldGrams) async {
+    final amount = goldGrams * (_currentPrice?.pricePerGram ?? 0);
+    final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.account_balance_wallet, color: AppColors.primaryGold),
+            const SizedBox(width: 8),
+            const Text('Manual UPI Payment'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pay using any UPI app with these details:',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPaymentDetail('UPI ID:', 'sjlouismary@okicici'),
+                  _buildPaymentDetail('Amount:', '₹${amount.toStringAsFixed(2)}'),
+                  _buildPaymentDetail('Merchant:', 'V Murugan Gold Trading'),
+                  _buildPaymentDetail('Transaction ID:', transactionId),
+                  _buildPaymentDetail('Description:', 'Gold Purchase - ${goldGrams}g'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.blue.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'After completing payment, click "Payment Done" below.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _handleManualPaymentDone(amount, goldGrams, transactionId);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGold,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Payment Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentDetail(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleManualPaymentDone(double amount, double goldGrams, String transactionId) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Payment'),
+        content: Text(
+          'Have you completed the payment of ₹${amount.toStringAsFixed(2)} for ${goldGrams}g gold?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No, Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGold,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Yes, Completed'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // Process the manual payment
+      final response = PaymentResponse.pending(
+        transactionId: transactionId,
+        additionalData: {
+          'method': 'manual_upi',
+          'amount': amount,
+          'gold_grams': goldGrams,
+        },
+      );
+
+      await _handleVerifiedPayment(response, 'Manual UPI', goldGrams);
+    }
+  }
+
+  Future<void> _handleVerifiedPayment(PaymentResponse response, String paymentMethod, double goldGrams) async {
+    if (response.status == PaymentStatus.success) {
+      print('🎉 Payment verified successful! Creating scheme...');
+
+      // Get customer info for scheme creation
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerId = customerInfo['customer_id'];
+
+      String? schemeId;
+      if (customerId != null && customerId.isNotEmpty) {
+        // Auto-create scheme for this purchase
+        schemeId = await _getOrCreateAutoScheme(customerId, Map<String, String>.from(customerInfo));
+        print('✅ Scheme created for verified payment: $schemeId');
+      } else {
+        print('⚠️ No customer ID found, skipping scheme creation');
+      }
+
+      // Save transaction to database (with scheme ID if available)
+      await _saveTransaction(response, paymentMethod, goldGrams, schemeId: schemeId);
+      _showRealSuccessDialog(paymentMethod, goldGrams, response, schemeId: schemeId);
+
+    } else if (response.status == PaymentStatus.failed) {
+      // Create payment failed notification
+      await NotificationTemplates.paymentFailed(
+        transactionId: response.transactionId,
+        amount: _selectedAmount,
+        reason: response.errorMessage ?? 'Payment verification failed',
+      );
+      _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment verification failed'}');
+
+    } else if (response.status == PaymentStatus.cancelled) {
+      // Payment was cancelled by user
+      _showErrorDialog('Payment was cancelled');
+
+    } else {
+      // Unknown status
+      _showErrorDialog('Payment status unknown. Please check your bank statement and contact support if money was debited.');
     }
   }
 
@@ -716,8 +971,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         transactionId: response.transactionId,
         type: TransactionType.BUY,
         amount: _selectedAmount,
-        goldGrams: goldGrams,
-        goldPricePerGram: _currentPrice?.pricePerGram ?? 0,
+        metalGrams: goldGrams,
+        metalPricePerGram: _currentPrice?.pricePerGram ?? 0,
+        metalType: MetalType.gold,
         paymentMethod: paymentMethod,
         status: TransactionStatus.SUCCESS,
         gatewayTransactionId: response.gatewayTransactionId,
@@ -1046,7 +1302,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       );
 
       // Update scheme with payment
-      await _updateSchemePayment(schemeId, _selectedAmount, goldGrams);
+      await _updateSchemePayment(schemeId, _selectedAmount, goldGrams, 'Demo', transactionId);
 
       // Close loading dialog
       Navigator.pop(context);
@@ -1178,57 +1434,56 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     print('   Selected Amount: $_selectedAmount');
 
     try {
-      // For now, always create a new scheme for each purchase
-      // In production, you might want to check for existing active schemes
+      final customerPhone = customerInfo['phone'] ?? '';
+      final customerName = customerInfo['name'] ?? '';
 
-      print('📝 Step 1: Generating scheme ID...');
-      // Generate scheme ID
-      final schemeId = await ApiService.generateSchemeId(customerId);
-      print('✅ Generated scheme ID: $schemeId');
+      // Check if customer already has an active gold scheme
+      final existingScheme = await _schemeService.getCustomerSchemeByMetal(customerPhone, MetalType.gold);
 
-      print('📝 Step 2: Creating scheme in Firebase...');
-      // Create auto scheme with purchase amount as monthly target
-      final result = await ApiService.saveScheme(
-        schemeId: schemeId,
-        customerId: customerId,
-        customerPhone: customerInfo['phone'] ?? '',
-        customerName: customerInfo['name'] ?? '',
+      if (existingScheme != null) {
+        print('✅ Found existing gold scheme: ${existingScheme.schemeId}');
+        return existingScheme.schemeId;
+      }
+
+      print('📝 Creating new GOLDPLUS scheme...');
+      // Create new GOLDPLUS scheme with 15 months duration
+      final newScheme = await _schemeService.createScheme(
+        customerPhone: customerPhone,
+        customerName: customerName,
         monthlyAmount: _selectedAmount, // Use current purchase as monthly amount
-        durationMonths: 11, // Default 11 months
-        schemeType: 'AUTO_GOLD_SAVINGS',
-        status: 'ACTIVE',
+        metalType: MetalType.gold,
+        durationMonths: 15, // GOLDPLUS is 15 months
       );
 
-      print('📝 Step 3: Checking save result...');
-      print('   Success: ${result['success']}');
-      print('   Message: ${result['message']}');
-
-      if (result['success']) {
-        print('✅ Auto-created scheme: $schemeId');
-        print('🎯 SCHEME SHOULD NOW BE IN FIREBASE!');
-        print('   Collection: schemes');
-        print('   Document ID: $schemeId');
-        return schemeId;
-      } else {
-        print('❌ Failed to create auto scheme: ${result['message']}');
-        return null;
-      }
+      print('✅ Created new GOLDPLUS scheme: ${newScheme.schemeId}');
+      return newScheme.schemeId;
     } catch (e) {
-      print('❌ Error creating auto scheme: $e');
-      print('❌ Stack trace: ${StackTrace.current}');
+      print('❌ Error creating/getting gold scheme: $e');
       return null;
     }
   }
 
   // Update scheme with payment
-  Future<void> _updateSchemePayment(String schemeId, double amount, double goldGrams) async {
+  Future<void> _updateSchemePayment(String schemeId, double amount, double goldGrams, String paymentMethod, String transactionId) async {
     try {
-      // In production, this would update the scheme's payment progress
-      // For now, we'll just log the payment
-      print('💰 Payment recorded for scheme $schemeId: ₹$amount for ${goldGrams}g gold');
+      print('💰 Recording payment for scheme $schemeId: ₹$amount for ${goldGrams}g gold');
 
-      // You can implement scheme payment tracking here
-      // Example: Update paid_amount, paid_months, gold_accumulated in Firebase
+      // Get the current gold price per gram
+      final goldPricePerGram = _currentPrice?.pricePerGram ?? 0.0;
+
+      // Find the next pending installment for this scheme
+      // For now, we'll create a dummy installment ID - in production this would be retrieved from database
+      final installmentId = '${schemeId}_INST_01'; // This should be the actual next pending installment
+
+      // Pay the installment
+      await _schemeService.payInstallment(
+        installmentId: installmentId,
+        metalPricePerGram: goldPricePerGram,
+        paymentMethod: paymentMethod,
+        transactionId: transactionId,
+      );
+
+      print('✅ Installment payment recorded successfully');
     } catch (e) {
       print('❌ Error updating scheme payment: $e');
     }
