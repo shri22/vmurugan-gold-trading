@@ -24,7 +24,7 @@ git add .
 
 ### **Step 5: Commit Changes**
 ```bash
-git commit -m "Initial commit: VMUrugan Digital Gold Trading Platform
+git commit -m "Initial commit: VMurugan Digital Gold Trading Platform
 
 ✨ Features:
 - Flutter mobile app with Firebase integration
@@ -107,4 +107,4 @@ git pull origin main
 
 ---
 
-**Ready to push your VMUrugan Gold Trading Platform to GitHub!** 🚀
+**Ready to push your VMurugan Gold Trading Platform to GitHub!** 🚀

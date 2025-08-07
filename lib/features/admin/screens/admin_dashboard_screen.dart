@@ -98,7 +98,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       const Text(
-                        'VMUrugan',
+                        'VMurugan',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 20,

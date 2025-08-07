@@ -47,8 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 Center(
                   child: Column(
                     children: [
-                      VMUruganLogo(
-                        size: 120,
+                      VMuruganLogo(
+                        size: 80,
                         primaryColor: Colors.red,
                         textColor: Colors.white,
                       ),

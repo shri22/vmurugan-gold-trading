@@ -161,7 +161,7 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
               const SizedBox(height: AppSpacing.xxl),
               
               // Logo
-              const VMUruganLogo(size: 100),
+              const VMuruganLogo(size: 80),
               const SizedBox(height: AppSpacing.xl),
               
               // Welcome back message

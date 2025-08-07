@@ -3,6 +3,7 @@ import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/vmurugan_logo.dart';
 import '../models/gold_scheme_model.dart';
 import '../services/gold_scheme_service.dart';
 
@@ -56,7 +57,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transaction History'),
+        title: const VMuruganAppBarLogo(
+          logoSize: 28,
+          fontSize: 16,
+          textColor: Colors.white,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),

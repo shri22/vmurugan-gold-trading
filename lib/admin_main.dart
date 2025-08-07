@@ -3,16 +3,16 @@ import 'core/theme/app_theme.dart';
 import 'features/admin/screens/admin_login_screen.dart';
 
 void main() {
-  runApp(const VMUruganAdminApp());
+  runApp(const VMuruganAdminApp());
 }
 
-class VMUruganAdminApp extends StatelessWidget {
-  const VMUruganAdminApp({super.key});
+class VMuruganAdminApp extends StatelessWidget {
+  const VMuruganAdminApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'VMUrugan Admin Portal',
+      title: 'VMurugan Admin Portal',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       home: const AdminLoginScreen(),

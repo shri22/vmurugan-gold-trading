@@ -633,8 +633,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
           SizedBox(height: Responsive.getHeight(context) * 0.08),
 
           // Logo
-          VMUruganLogo(
-            size: Responsive.getWidth(context) * 0.25,
+          VMuruganLogo(
+            size: Responsive.getWidth(context) * 0.18,
             primaryColor: AppColors.primaryGreen,
             textColor: AppColors.primaryGold,
           ),
@@ -643,7 +643,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
 
           // Welcome Text
           Text(
-            'Welcome to VMUrugan',
+            'Welcome to VMurugan',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.primaryGreen,
@@ -772,8 +772,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Logo
-          VMUruganLogo(
-            size: Responsive.getWidth(context) * 0.15,
+          VMuruganLogo(
+            size: Responsive.getWidth(context) * 0.12,
             primaryColor: AppColors.primaryGreen,
             textColor: AppColors.primaryGold,
           ),
@@ -936,8 +936,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
         SizedBox(height: Responsive.getHeight(context) * 0.04),
 
         // Logo
-        VMUruganLogo(
-          size: Responsive.getWidth(context) * 0.2,
+        VMuruganLogo(
+          size: Responsive.getWidth(context) * 0.15,
           primaryColor: AppColors.primaryGreen,
           textColor: AppColors.primaryGold,
         ),
@@ -1151,8 +1151,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
           SizedBox(height: Responsive.getHeight(context) * 0.06),
 
           // Logo
-          VMUruganLogo(
-            size: Responsive.getWidth(context) * 0.2,
+          VMuruganLogo(
+            size: Responsive.getWidth(context) * 0.15,
             primaryColor: AppColors.primaryGreen,
             textColor: AppColors.primaryGold,
           ),
@@ -1353,8 +1353,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
           SizedBox(height: Responsive.getHeight(context) * 0.04),
 
           // Logo
-          VMUruganLogo(
-            size: Responsive.getWidth(context) * 0.2,
+          VMuruganLogo(
+            size: Responsive.getWidth(context) * 0.15,
             primaryColor: AppColors.primaryGreen,
             textColor: AppColors.primaryGold,
           ),

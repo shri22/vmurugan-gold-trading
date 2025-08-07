@@ -1,4 +1,4 @@
-# 🏆 VMUrugan Digital Gold Trading Platform
+# 🏆 VMurugan Digital Gold Trading Platform
 
 A complete digital gold trading ecosystem built with Flutter and Firebase, featuring a mobile app for customers and web-based admin portals for business management.
 

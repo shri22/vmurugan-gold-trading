@@ -21,8 +21,7 @@ import 'features/notifications/screens/notifications_screen.dart';
 import 'features/notifications/services/notification_service.dart';
 import 'features/notifications/models/notification_model.dart';
 import 'core/services/customer_service.dart';
-import 'features/schemes/screens/scheme_creation_screen.dart';
-import 'features/debug/screens/debug_screen.dart';
+
 import 'features/auth/screens/enhanced_app_wrapper.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/quick_mpin_login_screen.dart';
@@ -123,8 +122,8 @@ class _AppInitializerState extends State<AppInitializer> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            VMUruganLogo(
-              size: 120,
+            VMuruganLogo(
+              size: 80,
               primaryColor: AppColors.primaryGreen,
               textColor: AppColors.black,
             ),
@@ -321,24 +320,10 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            VMUruganSimpleLogo(
-              size: 32,
-              backgroundColor: AppColors.primaryGreen, // Dark Green
-              textColor: AppColors.primaryGold, // Pure Gold
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'VMUrugan',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
+        title: const VMuruganAppBarLogo(
+          logoSize: 32,
+          fontSize: 18,
+          textColor: Colors.black,
         ),
         actions: [
           Stack(
@@ -395,12 +380,6 @@ class _HomePageState extends State<HomePage> {
                 _showHelpDialog(context);
               } else if (value == 'about') {
                 _showAboutDialog(context);
-              } else if (value == 'test_register') {
-                _testRegistration(context);
-              } else if (value == 'create_scheme') {
-                _navigateToSchemeCreation(context);
-              } else if (value == 'debug') {
-                _navigateToDebug(context);
               } else if (value == 'logout') {
                 _handleLogout();
               }
@@ -422,37 +401,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Icon(Icons.info_outline),
                     SizedBox(width: 8),
-                    Text('About VMUrugan'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'test_register',
-                child: Row(
-                  children: [
-                    Icon(Icons.bug_report),
-                    SizedBox(width: 8),
-                    Text('Test Registration'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'create_scheme',
-                child: Row(
-                  children: [
-                    Icon(Icons.savings),
-                    SizedBox(width: 8),
-                    Text('Create Scheme'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'debug',
-                child: Row(
-                  children: [
-                    Icon(Icons.bug_report),
-                    SizedBox(width: 8),
-                    Text('Debug & Test'),
+                    Text('About VMurugan'),
                   ],
                 ),
               ),
@@ -489,7 +438,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Row(
                     children: [
-                      VMUruganLogo(
+                      VMuruganLogo(
                         size: 50,
                         primaryColor: AppColors.primaryGreen, // Dark Green
                         textColor: AppColors.primaryGold, // Pure Gold
@@ -497,7 +446,7 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          'Welcome to VMUrugan',
+                          'Welcome to VMurugan',
                           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             color: AppColors.white,
                             fontWeight: FontWeight.bold,
@@ -1126,143 +1075,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _testRegistration(BuildContext context) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Testing customer registration...'),
-          ],
-        ),
-      ),
-    );
 
-    try {
-      print('🧪 Starting test registration...');
-
-      final result = await CustomerService.registerCustomer(
-        phone: 'TEST_${DateTime.now().millisecondsSinceEpoch}',
-        name: 'Test Customer ${DateTime.now().hour}:${DateTime.now().minute}',
-        email: 'test${DateTime.now().millisecondsSinceEpoch}@vmurugan.com',
-        address: 'Test Address, Chennai, Tamil Nadu',
-        panCard: 'ABCDE1234F',
-      );
-
-      final success = result['success'] as bool;
-      final customerId = result['customer_id'] as String?;
-
-      Navigator.pop(context); // Close loading dialog
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(
-                success ? Icons.check_circle : Icons.error,
-                color: success ? Colors.green : Colors.red,
-              ),
-              const SizedBox(width: 8),
-              Text('Registration Test ${success ? 'Passed' : 'Failed'}'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Status: ${success ? "✅ Success" : "❌ Failed"}'),
-              const SizedBox(height: 16),
-              if (success) ...[
-                const Text('✅ Customer registration working!'),
-                const Text('✅ Data should appear in Firebase'),
-                const Text('✅ Check admin portal for test data'),
-                if (customerId != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green[200]!),
-                    ),
-                    child: Text('🆔 Customer ID: $customerId'),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                const Text('📱 Check console logs for details'),
-              ] else ...[
-                const Text('❌ Registration failed'),
-                const Text('❌ Check console logs for errors'),
-                const Text('❌ Likely Firebase permission issue'),
-                const SizedBox(height: 16),
-                const Text('🔧 Check Firebase configuration'),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.error, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Registration Test Error'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('❌ Test Registration Failed'),
-              const SizedBox(height: 8),
-              Text('Error: $e'),
-              const SizedBox(height: 16),
-              const Text('🔧 Check console logs for details'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  void _navigateToSchemeCreation(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const SchemeCreationScreen(),
-      ),
-    );
-  }
-
-  void _navigateToDebug(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const DebugScreen(),
-      ),
-    );
-  }
 
   void _createTestNotification() async {
     // Create a test notification to demonstrate the system

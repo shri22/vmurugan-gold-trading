@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-class VMUruganLogo extends StatelessWidget {
+class VMuruganLogo extends StatelessWidget {
   final double size;
   final Color primaryColor;
   final Color secondaryColor;
   final Color textColor;
 
-  const VMUruganLogo({
+  const VMuruganLogo({
     super.key,
     this.size = 60.0,
     this.primaryColor = Colors.red,
@@ -19,15 +19,16 @@ class VMUruganLogo extends StatelessWidget {
     return Container(
       width: size,
       height: size,
+      padding: EdgeInsets.all(size * 0.05), // Add 5% padding to prevent cropping
       child: Image.asset(
         'assets/vm_logo.png',
-        width: size,
-        height: size,
+        width: size * 0.9, // Slightly smaller to ensure no cropping
+        height: size * 0.9,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
           // Fallback to custom painted logo if image fails to load
           return CustomPaint(
-            painter: VMUruganLogoPainter(
+            painter: VMuruganLogoPainter(
               primaryColor: primaryColor,
               secondaryColor: secondaryColor,
               textColor: textColor,
@@ -39,12 +40,12 @@ class VMUruganLogo extends StatelessWidget {
   }
 }
 
-class VMUruganLogoPainter extends CustomPainter {
+class VMuruganLogoPainter extends CustomPainter {
   final Color primaryColor;
   final Color secondaryColor;
   final Color textColor;
 
-  VMUruganLogoPainter({
+  VMuruganLogoPainter({
     required this.primaryColor,
     required this.secondaryColor,
     required this.textColor,
@@ -171,12 +172,12 @@ class VMUruganLogoPainter extends CustomPainter {
 }
 
 // Alternative simple logo widget
-class VMUruganSimpleLogo extends StatelessWidget {
+class VMuruganSimpleLogo extends StatelessWidget {
   final double size;
   final Color backgroundColor;
   final Color textColor;
 
-  const VMUruganSimpleLogo({
+  const VMuruganSimpleLogo({
     super.key,
     this.size = 60.0,
     this.backgroundColor = Colors.red,
@@ -216,26 +217,48 @@ class VMUruganSimpleLogo extends StatelessWidget {
 }
 
 // Logo for app bar (smaller version)
-class VMUruganAppBarLogo extends StatelessWidget {
-  const VMUruganAppBarLogo({super.key});
+class VMuruganAppBarLogo extends StatelessWidget {
+  final double logoSize;
+  final double fontSize;
+  final Color textColor;
+
+  const VMuruganAppBarLogo({
+    super.key,
+    this.logoSize = 32.0,
+    this.fontSize = 18.0,
+    this.textColor = Colors.black,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        VMUruganSimpleLogo(
-          size: 32,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
+        Container(
+          width: logoSize,
+          height: logoSize,
+          child: Image.asset(
+            'assets/vm_logo.png',
+            width: logoSize,
+            height: logoSize,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              // Fallback to simple logo if image fails to load
+              return VMuruganSimpleLogo(
+                size: logoSize,
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+              );
+            },
+          ),
         ),
         const SizedBox(width: 8),
-        const Text(
-          'VMUrugan',
+        Text(
+          'VMurugan',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: fontSize,
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: textColor,
           ),
         ),
       ],

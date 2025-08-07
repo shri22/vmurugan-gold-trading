@@ -3,6 +3,7 @@ import '../models/portfolio_model.dart';
 import '../services/portfolio_service.dart';
 import '../../gold/models/gold_price_model.dart';
 import '../../gold/services/gold_price_service.dart';
+import '../../../core/widgets/vmurugan_logo.dart';
 
 class PortfolioScreen extends StatefulWidget {
   const PortfolioScreen({super.key});
@@ -59,7 +60,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('My Portfolio'),
+        title: const VMuruganAppBarLogo(
+          logoSize: 28,
+          fontSize: 16,
+          textColor: Colors.black,
+        ),
         backgroundColor: const Color(0xFFFFD700),
         foregroundColor: Colors.black,
         elevation: 0,

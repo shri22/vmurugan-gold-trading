@@ -1,4 +1,4 @@
-# 🏆 VMUrugan Admin Portal
+# 🏆 VMurugan Admin Portal
 
 ## 🌐 **ADMIN PORTAL ACCESS**
 

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/widgets/vmurugan_logo.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
@@ -136,7 +137,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('My Profile'),
+        title: const VMuruganAppBarLogo(
+          logoSize: 28,
+          fontSize: 16,
+          textColor: Colors.black,
+        ),
         backgroundColor: AppColors.primaryGold,
         foregroundColor: Colors.black,
         elevation: 0,
