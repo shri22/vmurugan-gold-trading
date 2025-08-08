@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -13,6 +17,7 @@ import '../../../core/services/language_service.dart';
 import '../../../core/services/translation_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
+import 'change_mpin_screen.dart';
 import '../../onboarding/screens/onboarding_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -431,7 +436,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icons.security,
             'Change MPIN',
             'Update your security PIN',
-            () => _showComingSoon('Change MPIN'),
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ChangeMpinScreen(),
+              ),
+            ),
           ),
           
           _buildActionTile(
@@ -972,12 +982,196 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _generatePDFStatement(List<Map<String, dynamic>> transactions, String period) async {
-    // For now, we'll create a simple text-based statement
-    // In a real implementation, you would use a PDF library like pdf package
+    try {
+      // Create PDF document
+      final pdf = pw.Document();
 
+      // Calculate totals
+      double totalAmount = 0;
+      double totalGold = 0;
+      double totalSilver = 0;
+
+      for (final txn in transactions) {
+        if (txn['status'] == 'SUCCESS') {
+          totalAmount += (txn['amount'] as num).toDouble();
+          if (txn['gold_grams'] != null) {
+            totalGold += (txn['gold_grams'] as num).toDouble();
+          }
+          if (txn['silver_grams'] != null) {
+            totalSilver += (txn['silver_grams'] as num).toDouble();
+          }
+        }
+      }
+
+      // Add page to PDF
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) {
+            return [
+              // Header
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'V MURUGAN JEWELLERY',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'TRANSACTION STATEMENT',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 16),
+                    pw.Divider(),
+                  ],
+                ),
+              ),
+
+              // Statement Info
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Period: ${_getPeriodDisplayName(period)}'),
+                  pw.Text('Generated: ${DateTime.now().toString().split('.')[0]}'),
+                ],
+              ),
+              pw.SizedBox(height: 16),
+
+              // Transactions Table
+              pw.Table(
+                border: pw.TableBorder.all(),
+                columnWidths: {
+                  0: const pw.FlexColumnWidth(2),
+                  1: const pw.FlexColumnWidth(2),
+                  2: const pw.FlexColumnWidth(1.5),
+                  3: const pw.FlexColumnWidth(1.5),
+                  4: const pw.FlexColumnWidth(1.5),
+                  5: const pw.FlexColumnWidth(1),
+                },
+                children: [
+                  // Header row
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Transaction ID', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Date', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Amount', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Gold (g)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Payment', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text('Status', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  // Data rows
+                  ...transactions.map((txn) => pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(txn['transaction_id'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(
+                          txn['timestamp']?.toString().split('T')[0] ?? '',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(
+                          '₹${((txn['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(
+                          '${((txn['gold_grams'] as num?)?.toDouble() ?? 0).toStringAsFixed(3)}',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(txn['payment_method'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(8),
+                        child: pw.Text(txn['status'] ?? '', style: const pw.TextStyle(fontSize: 10)),
+                      ),
+                    ],
+                  )),
+                ],
+              ),
+
+              pw.SizedBox(height: 20),
+
+              // Summary
+              pw.Container(
+                padding: const pw.EdgeInsets.all(16),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(),
+                  color: PdfColors.grey100,
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('SUMMARY', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 8),
+                    pw.Text('Total Transactions: ${transactions.length}'),
+                    pw.Text('Total Amount: ₹${totalAmount.toStringAsFixed(2)}'),
+                    pw.Text('Total Gold: ${totalGold.toStringAsFixed(3)}g'),
+                    if (totalSilver > 0) pw.Text('Total Silver: ${totalSilver.toStringAsFixed(3)}g'),
+                  ],
+                ),
+              ),
+            ];
+          },
+        ),
+      );
+
+      // Save PDF to device
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'VMurugan_Statement_${period}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(await pdf.save());
+
+      print('PDF saved to: ${file.path}');
+    } catch (e) {
+      print('Error generating PDF: $e');
+      // Fallback to clipboard
+      await _generateTextStatement(transactions, period);
+    }
+  }
+
+  Future<void> _generateTextStatement(List<Map<String, dynamic>> transactions, String period) async {
     final buffer = StringBuffer();
     buffer.writeln('V MURUGAN JEWELLERY');
-    buffer.writeln('GOLD TRANSACTION STATEMENT');
+    buffer.writeln('TRANSACTION STATEMENT');
     buffer.writeln('=' * 50);
     buffer.writeln('Period: ${_getPeriodDisplayName(period)}');
     buffer.writeln('Generated: ${DateTime.now().toString().split('.')[0]}');
@@ -992,16 +1186,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       buffer.writeln('Transaction ${i + 1}:');
       buffer.writeln('  ID: ${txn['transaction_id']}');
       buffer.writeln('  Date: ${txn['timestamp']}');
-      buffer.writeln('  Amount: ₹${(txn['amount'] as double).toStringAsFixed(2)}');
-      buffer.writeln('  Gold: ${(txn['gold_grams'] as double).toStringAsFixed(3)}g');
-      buffer.writeln('  Price/gram: ₹${(txn['gold_price_per_gram'] as double).toStringAsFixed(2)}');
+      buffer.writeln('  Amount: ₹${((txn['amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}');
+      buffer.writeln('  Gold: ${((txn['gold_grams'] as num?)?.toDouble() ?? 0).toStringAsFixed(3)}g');
+      buffer.writeln('  Price/gram: ₹${((txn['gold_price_per_gram'] as num?)?.toDouble() ?? 0).toStringAsFixed(2)}');
       buffer.writeln('  Payment: ${txn['payment_method']}');
       buffer.writeln('  Status: ${txn['status']}');
       buffer.writeln();
 
       if (txn['status'] == 'SUCCESS') {
-        totalAmount += txn['amount'] as double;
-        totalGold += txn['gold_grams'] as double;
+        totalAmount += (txn['amount'] as num?)?.toDouble() ?? 0;
+        totalGold += (txn['gold_grams'] as num?)?.toDouble() ?? 0;
       }
     }
 
@@ -1012,7 +1206,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     buffer.writeln('Total Gold: ${totalGold.toStringAsFixed(3)}g');
     buffer.writeln('=' * 50);
 
-    // Copy to clipboard (in a real app, you would save as PDF)
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
   }
 
@@ -1094,7 +1287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 border: Border.all(color: Colors.blue[200]!),
               ),
               child: const Text(
-                'Note: The statement has been copied to your clipboard. In the full version, it will be saved as a PDF file to your device.',
+                '✅ PDF statement has been generated and saved to your device documents folder. You can find it in your file manager under Documents.',
                 style: TextStyle(fontSize: 13),
               ),
             ),

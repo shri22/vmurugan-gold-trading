@@ -365,15 +365,6 @@ class _HomePageState extends State<HomePage> {
                 ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
-            },
-          ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'help') {
@@ -468,47 +459,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.xl),
 
-            // Price Update Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                gradient: AppColors.goldGreenGradient,
-                borderRadius: BorderRadius.circular(AppBorderRadius.md),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Rate updated on ${DateTime.now().toString().substring(0, 16)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.info_outline, color: Colors.white),
-                        onPressed: _showPriceSourceInfo,
-                        tooltip: 'Price Source Info',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.white),
-                        onPressed: () async {
-                          await _priceService.refreshPrice();
-                          await _silverPriceService.refreshPrice();
-                        },
-                        tooltip: 'Refresh Prices',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
 
-            const SizedBox(height: AppSpacing.md),
 
             // Gold and Silver Price Cards
             Row(
@@ -882,46 +833,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: AppSpacing.xl),
 
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BuyGoldScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.add_shopping_cart),
-                    label: const Text('Buy Gold'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BuySilverScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.add_shopping_cart),
-                    label: const Text('Buy Silver'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -968,22 +880,6 @@ class _HomePageState extends State<HomePage> {
             label: 'Profile',
           ),
         ],
-      ),
-
-      // Floating Action Button for Login
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
-            ),
-          );
-        },
-        icon: const Icon(Icons.login),
-        label: const Text('Login'),
-        backgroundColor: AppColors.primaryGold,
-        foregroundColor: AppColors.black,
       ),
     );
   }

@@ -38,11 +38,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   final TextEditingController _amountController = TextEditingController();
 
   SilverPriceModel? _currentPrice;
-  double _selectedAmount = 2000.0;
-  bool _isCustomAmount = false;
-
-  // Predefined amount options
-  final List<double> _predefinedAmounts = [500, 1000, 2000, 5000, 10000];
+  double _selectedAmount = 0.0;
 
   @override
   void initState() {
@@ -206,13 +202,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Last updated: ${_formatTime(_currentPrice!.timestamp)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[500],
-              ),
-            ),
+
           ],
         ),
       ),
@@ -227,75 +217,42 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Select Investment Amount',
+              'Enter Investment Amount',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Predefined amounts
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: _predefinedAmounts.map((amount) {
-                final isSelected = !_isCustomAmount && _selectedAmount == amount;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedAmount = amount;
-                      _isCustomAmount = false;
-                      _amountController.text = amount.toStringAsFixed(0);
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.grey[300] : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                      border: Border.all(
-                        color: isSelected ? Colors.grey[600]! : Colors.grey[300]!,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: Text(
-                      '₹${amount.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.black : Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
             // Custom amount input
-            Text(
-              'Or enter custom amount:',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
             CustomTextField(
               controller: _amountController,
-              label: 'Amount (₹)',
+              label: 'Investment Amount (₹)',
+              hint: 'Enter amount in ₹',
               keyboardType: TextInputType.number,
+              prefixIcon: Icons.currency_rupee,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(7), // Max 10 lakh
               ],
               onChanged: (value) {
                 final amount = double.tryParse(value) ?? 0;
                 setState(() {
                   _selectedAmount = amount;
-                  _isCustomAmount = amount > 0 && !_predefinedAmounts.contains(amount);
                 });
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter an amount';
+                }
+                final amount = double.tryParse(value);
+                if (amount == null || amount < 100) {
+                  return 'Minimum amount is ₹100';
+                }
+                if (amount > 1000000) {
+                  return 'Maximum amount is ₹10,00,000';
+                }
+                return null;
               },
             ),
           ],
@@ -761,7 +718,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                '⚠️ Please verify payment status in your bank app. Silver will be added to your portfolio once payment is confirmed.',
+                '✅ Payment has been automatically verified. Silver will be added to your portfolio.',
                 style: TextStyle(fontSize: 12),
                 textAlign: TextAlign.center,
               ),
@@ -769,10 +726,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Check Payment Status'),
-          ),
+
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context); // Close success dialog

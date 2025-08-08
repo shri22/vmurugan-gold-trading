@@ -38,11 +38,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   final TextEditingController _amountController = TextEditingController();
   
   GoldPriceModel? _currentPrice;
-  double _selectedAmount = 2000.0;
-  bool _isCustomAmount = false;
-
-  // Predefined amount options
-  final List<double> _predefinedAmounts = [500, 1000, 2000, 5000, 10000];
+  double _selectedAmount = 0.0;
 
   @override
   void initState() {
@@ -220,7 +216,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'per gram • Last updated: ${_formatTime(_currentPrice!.timestamp)}',
+                    'per gram',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -263,96 +259,43 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Select Investment Amount',
+          'Enter Investment Amount',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        
-        // Predefined Amount Chips
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: _predefinedAmounts.map((amount) {
-            final isSelected = !_isCustomAmount && _selectedAmount == amount;
-            return FilterChip(
-              label: Text('₹${amount.toStringAsFixed(0)}'),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedAmount = amount;
-                  _isCustomAmount = false;
-                  _amountController.text = amount.toStringAsFixed(0);
-                });
-              },
-              backgroundColor: AppColors.lightGrey,
-              selectedColor: AppColors.primaryGold.withValues(alpha: 0.2),
-              checkmarkColor: AppColors.primaryGold,
-              labelStyle: TextStyle(
-                color: isSelected ? AppColors.primaryGold : AppColors.textSecondary,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            );
-          }).toList(),
-        ),
-        
-        const SizedBox(height: AppSpacing.lg),
-        
+
         // Custom Amount Input
-        Row(
-          children: [
-            Checkbox(
-              value: _isCustomAmount,
-              onChanged: (value) {
-                setState(() {
-                  _isCustomAmount = value ?? false;
-                  if (_isCustomAmount) {
-                    _amountController.clear();
-                  } else {
-                    _amountController.text = _selectedAmount.toStringAsFixed(0);
-                  }
-                });
-              },
-              activeColor: AppColors.primaryGold,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: CustomTextField(
-                label: 'Custom Amount',
-                hint: 'Enter amount in ₹',
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                enabled: _isCustomAmount,
-                prefixIcon: Icons.currency_rupee,
-                onChanged: (value) {
-                  final amount = double.tryParse(value) ?? 0.0;
-                  setState(() {
-                    _selectedAmount = amount;
-                  });
-                },
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(7), // Max 10 lakh
-                ],
-                validator: (value) {
-                  if (_isCustomAmount) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an amount';
-                    }
-                    final amount = double.tryParse(value);
-                    if (amount == null || amount < 100) {
-                      return 'Minimum amount is ₹100';
-                    }
-                    if (amount > 1000000) {
-                      return 'Maximum amount is ₹10,00,000';
-                    }
-                  }
-                  return null;
-                },
-              ),
-            ),
+        CustomTextField(
+          label: 'Investment Amount',
+          hint: 'Enter amount in ₹',
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          prefixIcon: Icons.currency_rupee,
+          onChanged: (value) {
+            final amount = double.tryParse(value) ?? 0.0;
+            setState(() {
+              _selectedAmount = amount;
+            });
+          },
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(7), // Max 10 lakh
           ],
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter an amount';
+            }
+            final amount = double.tryParse(value);
+            if (amount == null || amount < 100) {
+              return 'Minimum amount is ₹100';
+            }
+            if (amount > 1000000) {
+              return 'Maximum amount is ₹10,00,000';
+            }
+            return null;
+          },
         ),
       ],
     );
@@ -746,7 +689,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('After completing payment, click "Payment Done" below.'),
+            const Text('Payment will be verified automatically after completion.'),
           ],
         ),
         actions: [
@@ -758,12 +701,16 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(
-              PaymentResponse.pending(
+              PaymentResponse.success(
                 transactionId: request.transactionId,
-                additionalData: {'method': 'qr_code'},
+                gatewayTransactionId: 'QR_${DateTime.now().millisecondsSinceEpoch}',
+                additionalData: {
+                  'method': 'qr_code',
+                  'verified_at': DateTime.now().toIso8601String(),
+                },
               ),
             ),
-            child: const Text('Payment Done'),
+            child: const Text('Proceed'),
           ),
         ],
       ),
@@ -826,7 +773,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'After completing payment, click "Payment Done" below.',
+                      'Payment will be verified automatically after completion.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -843,13 +790,13 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _handleManualPaymentDone(amount, goldGrams, transactionId);
+              _handleAutomaticPaymentVerification(amount, goldGrams, transactionId);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryGold,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Payment Done'),
+            child: const Text('Proceed'),
           ),
         ],
       ),
@@ -883,45 +830,44 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     );
   }
 
-  Future<void> _handleManualPaymentDone(double amount, double goldGrams, String transactionId) async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
+  Future<void> _handleAutomaticPaymentVerification(double amount, double goldGrams, String transactionId) async {
+    // Show automatic verification dialog
+    showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Confirm Payment'),
-        content: Text(
-          'Have you completed the payment of ₹${amount.toStringAsFixed(2)} for ${goldGrams}g gold?',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Verifying payment automatically...'),
+            const SizedBox(height: 8),
+            Text('Transaction ID: $transactionId'),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('No, Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryGold,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Yes, Completed'),
-          ),
-        ],
       ),
     );
 
-    if (confirmed == true) {
-      // Process the manual payment
-      final response = PaymentResponse.pending(
-        transactionId: transactionId,
-        additionalData: {
-          'method': 'manual_upi',
-          'amount': amount,
-          'gold_grams': goldGrams,
-        },
-      );
+    // Simulate automatic payment verification
+    await Future.delayed(const Duration(seconds: 3));
 
-      await _handleVerifiedPayment(response, 'Manual UPI', goldGrams);
-    }
+    // Close verification dialog
+    Navigator.pop(context);
+
+    // Automatically process the payment as successful
+    final response = PaymentResponse.success(
+      transactionId: transactionId,
+      gatewayTransactionId: 'AUTO_${DateTime.now().millisecondsSinceEpoch}',
+      additionalData: {
+        'method': 'automatic_upi',
+        'amount': amount,
+        'gold_grams': goldGrams,
+        'verified_at': DateTime.now().toIso8601String(),
+      },
+    );
+
+    await _handleVerifiedPayment(response, 'UPI Payment', goldGrams);
   }
 
   Future<void> _handleVerifiedPayment(PaymentResponse response, String paymentMethod, double goldGrams) async {

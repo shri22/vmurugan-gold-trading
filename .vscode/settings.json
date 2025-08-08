@@ -1,0 +1,11 @@
+{
+    "cmake.sourceDirectory": "E:/Projects/vmurugan-gold-trading/windows",
+    "C_Cpp.files.exclude": {
+        "**/linux/**": true
+    },
+    "C_Cpp.errorSquiggles": "enabled",
+    "files.exclude": {
+        "**/linux/flutter/generated_plugin_registrant.cc": true,
+        "**/linux/flutter/generated_plugin_registrant.h": true
+    }
+}

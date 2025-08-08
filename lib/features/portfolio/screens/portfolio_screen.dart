@@ -3,6 +3,8 @@ import '../models/portfolio_model.dart';
 import '../services/portfolio_service.dart';
 import '../../gold/models/gold_price_model.dart';
 import '../../gold/services/gold_price_service.dart';
+import '../../silver/models/silver_price_model.dart';
+import '../../silver/services/silver_price_service.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 
 class PortfolioScreen extends StatefulWidget {
@@ -14,11 +16,13 @@ class PortfolioScreen extends StatefulWidget {
 
 class _PortfolioScreenState extends State<PortfolioScreen> {
   final PortfolioService _portfolioService = PortfolioService();
-  final GoldPriceService _priceService = GoldPriceService();
-  
+  final GoldPriceService _goldPriceService = GoldPriceService();
+  final SilverPriceService _silverPriceService = SilverPriceService();
+
   Portfolio? _portfolio;
   List<Transaction> _transactions = [];
-  GoldPriceModel? _currentPrice;
+  GoldPriceModel? _currentGoldPrice;
+  SilverPriceModel? _currentSilverPrice;
   bool _isLoading = true;
 
   @override
@@ -29,22 +33,24 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Future<void> _loadPortfolioData() async {
     setState(() => _isLoading = true);
-    
+
     try {
-      // Load portfolio and current price in parallel
+      // Load portfolio and current prices in parallel
       final results = await Future.wait([
         _portfolioService.getPortfolio(),
         _portfolioService.getTransactionHistory(limit: 10),
-        _priceService.getCurrentPrice(),
+        _goldPriceService.getCurrentPrice(),
+        _silverPriceService.getCurrentPrice(),
       ]);
-      
+
       _portfolio = results[0] as Portfolio;
       _transactions = results[1] as List<Transaction>;
-      _currentPrice = results[2] as GoldPriceModel?;
-      
-      // Update portfolio value with current price
-      if (_currentPrice != null) {
-        await _portfolioService.updatePortfolioValue(_currentPrice!);
+      _currentGoldPrice = results[2] as GoldPriceModel?;
+      _currentSilverPrice = results[3] as SilverPriceModel?;
+
+      // Update portfolio value with current prices
+      if (_currentGoldPrice != null) {
+        await _portfolioService.updatePortfolioValue(_currentGoldPrice!);
         _portfolio = await _portfolioService.getPortfolio();
       }
       
@@ -170,13 +176,36 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     'Gold Holdings',
                     '${_portfolio!.totalGoldGrams.toStringAsFixed(4)} g',
                     Icons.star,
+                    Colors.amber,
                   ),
                 ),
+                Expanded(
+                  child: _buildStatItem(
+                    'Silver Holdings',
+                    '${_portfolio!.totalSilverGrams.toStringAsFixed(4)} g',
+                    Icons.circle,
+                    Colors.grey[400]!,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: _buildStatItem(
                     'Total Invested',
                     '₹${_portfolio!.totalInvested.toStringAsFixed(2)}',
                     Icons.account_balance,
+                    Colors.green,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    'Current Value',
+                    '₹${_portfolio!.currentValue.toStringAsFixed(2)}',
+                    Icons.trending_up,
+                    Colors.blue,
                   ),
                 ),
               ],
@@ -187,13 +216,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
+  Widget _buildStatItem(String label, String value, IconData icon, [Color? iconColor]) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 16, color: Colors.black54),
+            Icon(icon, size: 16, color: iconColor ?? Colors.black54),
             const SizedBox(width: 4),
             Text(
               label,
@@ -219,7 +248,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _buildCurrentPrice() {
-    if (_currentPrice == null) return const SizedBox();
+    if (_currentGoldPrice == null && _currentSilverPrice == null) return const SizedBox();
 
     return Card(
       elevation: 2,
@@ -234,7 +263,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 Icon(Icons.trending_up, color: Colors.orange),
                 SizedBox(width: 8),
                 Text(
-                  'Current Gold Price',
+                  'Current Prices',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -243,39 +272,81 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('22K Gold', style: TextStyle(color: Colors.grey)),
-                    Text(
-                      '₹${_currentPrice!.pricePerGram.toStringAsFixed(2)}/g',
-                      style: const TextStyle(
-                        fontSize: 20,
+
+            // Gold Price Row
+            if (_currentGoldPrice != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('22K Gold', style: TextStyle(color: Colors.grey)),
+                      Text(
+                        '₹${_currentGoldPrice!.pricePerGram.toStringAsFixed(2)}/g',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Live',
+                      style: TextStyle(
+                        color: Colors.green[700],
                         fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green[100],
-                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    'Live',
-                    style: TextStyle(
-                      color: Colors.green[700],
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Silver Price Row
+            if (_currentSilverPrice != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Silver', style: TextStyle(color: Colors.grey)),
+                      Text(
+                        '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(2)}/g',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Live',
+                      style: TextStyle(
+                        color: Colors.blue[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

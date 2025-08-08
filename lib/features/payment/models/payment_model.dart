@@ -199,10 +199,10 @@ class UpiConfig {
   static const String merchantName = 'Digi Gold';
   static const String merchantCode = 'DIGIGOLD';
 
-  // Different UPI IDs for different payment methods
-  static const String gpayUpiId = 'sjlouismary@okicici';    // V Murugan Gold Trading UPI ID
-  static const String phonepeUpiId = 'sjlouismary@okicici'; // V Murugan Gold Trading UPI ID
-  static const String defaultUpiId = 'sjlouismary@okicici'; // V Murugan Gold Trading UPI ID
+  // Single UPI ID for all payment methods
+  static const String gpayUpiId = 'vmuruganjew2127@fbl';    // V Murugan Gold Trading UPI ID
+  static const String phonepeUpiId = 'vmuruganjew2127@fbl'; // V Murugan Gold Trading UPI ID
+  static const String defaultUpiId = 'vmuruganjew2127@fbl'; // V Murugan Gold Trading UPI ID
 
   // Get UPI ID based on payment method
   static String getUpiId(PaymentMethod method) {
