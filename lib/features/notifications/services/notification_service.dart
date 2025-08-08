@@ -42,6 +42,25 @@ class NotificationService {
     String? imageUrl,
     String? actionUrl,
   }) async {
+    // Check if user has enabled this notification type
+    final isEnabled = await _isNotificationTypeEnabled(type);
+    if (!isEnabled) {
+      print('Notification type ${type.toString()} is disabled by user');
+      // Return a dummy notification that won't be shown
+      return NotificationModel(
+        id: 'disabled_${DateTime.now().millisecondsSinceEpoch}',
+        userId: 'disabled',
+        type: type,
+        title: title,
+        message: message,
+        createdAt: DateTime.now(),
+        data: data,
+        priority: priority,
+        imageUrl: imageUrl,
+        actionUrl: actionUrl,
+      );
+    }
+
     final customerInfo = await CustomerService.getCustomerInfo();
     final userId = customerInfo['phone'] ?? 'unknown';
 
@@ -60,6 +79,12 @@ class NotificationService {
 
     await _addNotification(notification);
     return notification;
+  }
+
+  // Check if notification type is enabled by user
+  Future<bool> _isNotificationTypeEnabled(NotificationType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('notification_${type.toString()}') ?? true; // Default enabled
   }
 
   // Add notification to list and save

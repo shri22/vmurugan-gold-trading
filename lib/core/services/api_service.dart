@@ -292,12 +292,13 @@ class ApiService {
         endDate: endDate,
       );
     } else {
-      // TODO: Implement custom server transaction retrieval
-      return {
-        'success': false,
-        'message': 'Custom server not implemented',
-        'transactions': <Map<String, dynamic>>[],
-      };
+      return await SqlServerApiService.getTransactions(
+        limit: limit,
+        customerPhone: customerPhone,
+        status: status,
+        startDate: startDate,
+        endDate: endDate,
+      );
     }
   }
 

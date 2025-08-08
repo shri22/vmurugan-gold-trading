@@ -526,7 +526,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           Text(
-                            _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(2)}' : '₹85.50',
+                            _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '₹86',
                             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               color: Colors.grey[700],
                               fontWeight: FontWeight.bold,
@@ -565,7 +565,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // GOLDPLUS Flexi Card
+            // GOLDPLUS Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -609,14 +609,7 @@ class _HomePageState extends State<HomePage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const Text(
-                              'flexi',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
+
                             const SizedBox(height: AppSpacing.sm),
                             const Text(
                               'GPS | 15 months | 75% benefit on VA*',
@@ -698,7 +691,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // SILVERPLUS Flexi Card
+            // SILVERPLUS Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -746,14 +739,7 @@ class _HomePageState extends State<HomePage> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const Text(
-                              'flexi',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
+
                             const SizedBox(height: AppSpacing.sm),
                             const Text(
                               'SPS | 15 months | 65% benefit on VA*',

@@ -8,6 +8,7 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../models/gold_price_model.dart';
 import '../services/gold_price_service.dart';
+import '../../notifications/services/notification_service.dart';
 // import '../../payment/screens/payment_screen.dart';
 import '../../payment/services/upi_payment_service.dart';
 import '../../payment/services/payment_verification_service.dart';
@@ -889,6 +890,15 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
       // Save transaction to database (with scheme ID if available)
       await _saveTransaction(response, paymentMethod, goldGrams, schemeId: schemeId);
+
+      // Create payment success notification
+      await NotificationTemplates.paymentSuccess(
+        transactionId: response.transactionId,
+        amount: _selectedAmount,
+        goldGrams: goldGrams,
+        paymentMethod: paymentMethod,
+      );
+
       _showRealSuccessDialog(paymentMethod, goldGrams, response, schemeId: schemeId);
 
     } else if (response.status == PaymentStatus.failed) {
