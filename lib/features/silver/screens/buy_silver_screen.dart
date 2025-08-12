@@ -12,6 +12,7 @@ import '../models/silver_price_model.dart';
 import '../../payment/services/upi_payment_service.dart';
 import '../../payment/services/payment_verification_service.dart';
 import '../../payment/models/payment_model.dart';
+import '../../../core/services/auto_logout_service.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
@@ -35,6 +36,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   final PaymentVerificationService _verificationService = PaymentVerificationService();
   final PortfolioService _portfolioService = PortfolioService();
   final SchemeManagementService _schemeService = SchemeManagementService();
+  final AutoLogoutService _autoLogoutService = AutoLogoutService();
   final TextEditingController _amountController = TextEditingController();
 
   SilverPriceModel? _currentPrice;
@@ -490,6 +492,9 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
     Navigator.pop(context); // Close payment dialog
 
     try {
+      // Set payment in progress to prevent auto logout
+      _autoLogoutService.setPaymentInProgress(true);
+
       // Create payment request with method-specific UPI ID
       final request = PaymentRequest(
         transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
@@ -570,11 +575,17 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           reason: response.errorMessage ?? 'Payment was not completed',
         );
         _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment was not completed'}');
+
+        // Payment process completed (failed), resume auto logout monitoring
+        _autoLogoutService.setPaymentInProgress(false);
       }
 
     } catch (e) {
       Navigator.pop(context); // Close any open dialog
       _showErrorDialog('Payment error: ${e.toString()}');
+
+      // Payment process completed (error), resume auto logout monitoring
+      _autoLogoutService.setPaymentInProgress(false);
     }
   }
 
@@ -616,6 +627,9 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       // Unknown status
       _showErrorDialog('Payment status unknown. Please check your bank statement and contact support if money was debited.');
     }
+
+    // Payment process completed, resume auto logout monitoring
+    _autoLogoutService.setPaymentInProgress(false);
   }
 
   Future<void> _saveTransaction(PaymentResponse response, String paymentMethod, double silverGrams, {String? schemeId}) async {

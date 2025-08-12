@@ -254,7 +254,7 @@ class VMuruganAppBarLogo extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          'VMurugan',
+          'VMurugan Jewellery',
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.bold,

@@ -8,6 +8,7 @@ import 'sms_service.dart';
 import 'firebase_phone_auth_service.dart';
 import 'encryption_service.dart';
 import '../config/sql_server_config.dart';
+import '../config/validation_config.dart';
 
 /// Enhanced Authentication service to handle the complete login flow
 /// This works alongside existing login functionality without breaking it
@@ -79,10 +80,16 @@ class AuthService {
   static Future<String> generateOTP(String phone) async {
     try {
       print('🔐 AuthService: Generating OTP for phone $phone');
+      print('🔧 AuthService: Current validation mode: ${ValidationConfig.getModeDescription()}');
 
-      // Use demo mode for immediate testing
-      print('🎭 AuthService: Using demo mode for immediate testing...');
-      return await _generateOTPFallback(phone);
+      // Check validation mode
+      if (ValidationConfig.isDemoMode) {
+        print('🎭 AuthService: Using demo mode...');
+        return await _generateOTPFallback(phone);
+      } else {
+        print('🚀 AuthService: Using production mode...');
+        return await _generateProductionOTP(phone);
+      }
 
       // Commented out for demo mode - uncomment when SMS is ready
       /*
@@ -162,38 +169,70 @@ class AuthService {
     }
   }
 
-  /// Fallback OTP generation using custom SMS service or demo
+  /// Production OTP generation using SMS service
+  static Future<String> _generateProductionOTP(String phone) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Try custom SMS service first (more reliable than Firebase billing issues)
+      print('📱 AuthService: Trying custom SMS service...');
+      final customSmsResult = await _tryCustomSmsFirst(phone);
+      if (customSmsResult != null) {
+        return customSmsResult;
+      }
+
+      // If custom SMS fails, try Firebase as fallback
+      print('🔥 AuthService: Trying Firebase Phone Authentication as fallback...');
+
+      try {
+        // Clear any previous verification data
+        FirebasePhoneAuthService.clearVerificationData();
+
+        // Send OTP via Firebase Phone Authentication
+        final firebaseResult = await FirebasePhoneAuthService.sendOTP(phone);
+
+        if (firebaseResult['success'] == true) {
+          // Firebase handles OTP generation and SMS sending automatically
+          await prefs.setInt(_otpTimestampKey, DateTime.now().millisecondsSinceEpoch);
+          await prefs.setString('firebase_verification_id', firebaseResult['verificationId'] ?? '');
+
+          print('✅ AuthService: Firebase OTP sent successfully');
+          print('🔥 Provider: Firebase (FREE SMS)');
+
+          // Return a placeholder since Firebase manages the actual OTP
+          return 'FIREBASE_OTP';
+        }
+      } catch (firebaseError) {
+        print('⚠️ AuthService: Firebase error: $firebaseError');
+      }
+
+      throw Exception('All SMS services failed. Please check your configuration.');
+    } catch (e) {
+      print('❌ AuthService: Production OTP generation error: $e');
+      throw e;
+    }
+  }
+
+  /// Demo OTP generation using fixed OTP
   static Future<String> _generateOTPFallback(String phone) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Generate 6-digit OTP
-      final random = Random();
-      final otp = (100000 + random.nextInt(900000)).toString();
+      // Use configured demo OTP
+      final otp = ValidationConfig.getOtp();
 
-      print('🔐 AuthService: Generated fallback OTP $otp for phone $phone');
+      print('🔐 AuthService: Using demo OTP $otp for phone $phone');
 
-      // Try custom SMS service
-      final smsResult = await SmsService.sendOtp(phone, otp);
+      // Store OTP and timestamp
+      await prefs.setString(_lastOtpKey, otp);
+      await prefs.setInt(_otpTimestampKey, DateTime.now().millisecondsSinceEpoch);
 
-      if (smsResult['success'] == true) {
-        // Store OTP and timestamp only after successful SMS send
-        await prefs.setString(_lastOtpKey, otp);
-        await prefs.setInt(_otpTimestampKey, DateTime.now().millisecondsSinceEpoch);
-        await prefs.setString('sms_message_id', smsResult['messageId'] ?? '');
+      print('🎭 AuthService: Demo mode - OTP: $otp');
+      print('💡 AuthService: Switch to production mode in ValidationConfig for real SMS');
 
-        print('✅ AuthService: Fallback OTP sent via ${smsResult['provider']}');
-        return otp;
-      } else {
-        // Demo mode fallback
-        await prefs.setString(_lastOtpKey, otp);
-        await prefs.setInt(_otpTimestampKey, DateTime.now().millisecondsSinceEpoch);
-
-        print('⚠️ AuthService: Using demo OTP: $otp');
-        print('💡 AuthService: Configure Firebase or SMS service for production');
-        return otp;
-      }
+      return otp;
     } catch (e) {
+      print('❌ AuthService: Demo OTP generation error: $e');
       throw Exception('Failed to generate OTP: $e');
     }
   }
@@ -245,20 +284,23 @@ class AuthService {
       return false;
     }
 
-    // Check if OTP is expired (5 minutes)
+    // Check if OTP is expired using validation config
     final now = DateTime.now().millisecondsSinceEpoch;
     final otpAge = now - timestamp;
-    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+    final expiryDuration = ValidationConfig.isDemoMode
+        ? ValidationConfig.demoOtpExpiry
+        : ValidationConfig.productionOtpExpiry;
+    final expiryMilliseconds = expiryDuration.inMilliseconds;
 
-    if (otpAge > fiveMinutes) {
-      print('❌ AuthService: Fallback OTP expired');
+    if (otpAge > expiryMilliseconds) {
+      print('❌ AuthService: Fallback OTP expired (${expiryDuration.inMinutes} minutes)');
       await prefs.remove(_lastOtpKey);
       await prefs.remove(_otpTimestampKey);
       return false;
     }
 
-    // Verify OTP
-    final isValid = storedOtp == enteredOtp;
+    // Verify OTP using validation config
+    final isValid = ValidationConfig.validateOtp(enteredOtp, storedOtp);
 
     if (isValid) {
       print('✅ AuthService: Fallback OTP verified successfully');

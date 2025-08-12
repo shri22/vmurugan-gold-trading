@@ -235,18 +235,10 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Logo
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryGold,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.diamond,
-                        size: 50,
-                        color: Colors.white,
-                      ),
+                    const VMuruganLogo(
+                      size: 70,
+                      primaryColor: AppColors.primaryGreen,
+                      textColor: AppColors.primaryGold,
                     ),
 
                     const SizedBox(height: 32),

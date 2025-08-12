@@ -1,9 +1,21 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'sql_server_service.dart';
+import '../config/sql_server_config.dart';
 
 /// SQL Server API Service
 /// This service provides the same interface as other API services
 /// but stores data in local SQL Server (SSMS) database
 class SqlServerApiService {
+
+  // Base URL for API calls
+  static String get baseUrl => 'http://${SqlServerConfig.serverIP}:3001';
+
+  // Headers for API calls
+  static Map<String, String> get headers => {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
   
   // =============================================================================
   // INITIALIZATION
@@ -315,47 +327,4 @@ class SqlServerApiService {
     };
   }
 
-  // Get transactions with filters
-  static Future<Map<String, dynamic>> getTransactions({
-    int limit = 50,
-    String? customerPhone,
-    String? status,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
-    try {
-      final queryParams = <String, String>{
-        'limit': limit.toString(),
-      };
-
-      if (customerPhone != null) queryParams['customer_phone'] = customerPhone;
-      if (status != null) queryParams['status'] = status;
-      if (startDate != null) queryParams['start_date'] = startDate.toIso8601String();
-      if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
-
-      final uri = Uri.parse('$baseUrl/api/transactions').replace(queryParameters: queryParams);
-      final response = await http.get(uri, headers: headers);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'transactions': data['transactions'] ?? [],
-          'count': data['count'] ?? 0,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': 'Failed to fetch transactions',
-          'transactions': [],
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: $e',
-        'transactions': [],
-      };
-    }
-  }
 }

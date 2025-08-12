@@ -26,6 +26,7 @@ import 'features/auth/screens/enhanced_app_wrapper.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/quick_mpin_login_screen.dart';
 import 'core/services/auth_service.dart';
+import 'core/services/auto_logout_service.dart';
 import 'core/config/firebase_init.dart';
 
 void main() async {
@@ -43,14 +44,23 @@ class DigiGoldApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'VMUrugan',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      home: const AppInitializer(),
+    return AutoLogoutWrapper(
+      onAutoLogout: _handleAutoLogout,
+      child: MaterialApp(
+        title: 'VMurugan',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
+        home: const AppInitializer(),
+      ),
     );
+  }
+
+  void _handleAutoLogout() {
+    // This will be called when auto logout occurs
+    // The app will automatically navigate to login screen
+    print('🔒 Auto logout triggered - user will be redirected to login');
   }
 }
 
@@ -159,6 +169,7 @@ class _HomePageState extends State<HomePage> {
   final SilverPriceService _silverPriceService = SilverPriceService();
   final NotificationService _notificationService = NotificationService();
   final SchemeManagementService _schemeService = SchemeManagementService();
+  final AutoLogoutService _autoLogoutService = AutoLogoutService();
   GoldPriceModel? _currentPrice;
   SilverPriceModel? _currentSilverPrice;
   double investmentAmount = 2000.0;
@@ -195,6 +206,9 @@ class _HomePageState extends State<HomePage> {
     _priceService.initialize();
     _silverPriceService.initialize();
     _notificationService.initialize();
+
+    // Start auto logout monitoring
+    _autoLogoutService.startMonitoring();
 
     // Listen to price updates
     _priceService.priceStream.listen((price) {
@@ -885,9 +899,9 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('📞 Customer Support: +91 9999999999'),
+            Text('📞 Customer Support: +91 9677944711'),
             SizedBox(height: 8),
-            Text('📧 Email: support@vmurugan.com'),
+            Text('📧 Email: vmuruganjewellery@gmail.com'),
             SizedBox(height: 8),
             Text('🕒 Hours: 9 AM - 6 PM (Mon-Sat)'),
             SizedBox(height: 16),
@@ -896,6 +910,8 @@ class _HomePageState extends State<HomePage> {
             Text('• View Portfolio: Use bottom navigation'),
             Text('• Transaction History: Check History tab'),
             Text('• Profile: Tap profile icon or tab'),
+            SizedBox(height: 16),
+            Text('🌐 Website: www.vmuruganjewellery.co.in'),
           ],
         ),
         actions: [
@@ -916,7 +932,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             Icon(Icons.info_outline, color: AppColors.primaryGold),
             SizedBox(width: 8),
-            Text('About VMUrugan'),
+            Text('About VMurugan'),
           ],
         ),
         content: const Column(
@@ -924,7 +940,7 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'VMUrugan Gold Trading',
+              'VMurugan Gold Trading',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -945,6 +961,18 @@ class _HomePageState extends State<HomePage> {
             Text('🏆 Licensed & Regulated'),
             Text('🔒 Bank-grade security'),
             Text('💎 Pure 24K digital gold'),
+            SizedBox(height: 16),
+            Text(
+              '📞 Contact Details:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryGold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('📧 Email: vmuruganjewellery@gmail.com'),
+            Text('📱 Phone: 9677944711'),
+            Text('🌐 Website: www.vmuruganjewellery.co.in'),
           ],
         ),
         actions: [
@@ -962,7 +990,7 @@ class _HomePageState extends State<HomePage> {
   void _createTestNotification() async {
     // Create a test notification to demonstrate the system
     await NotificationTemplates.adminMessage(
-      title: 'Welcome to VMUrugan Gold Trading! 🎉',
+      title: 'Welcome to VMurugan Gold Trading! 🎉',
       message: 'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
       priority: NotificationPriority.normal,
     );
@@ -1045,6 +1073,9 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (shouldLogout == true) {
+        // Stop auto logout monitoring
+        _autoLogoutService.stopMonitoring();
+
         // Logout user
         await AuthService.logoutUser();
 

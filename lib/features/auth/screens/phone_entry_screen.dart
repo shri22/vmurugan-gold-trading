@@ -172,18 +172,10 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Logo
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryGold,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.diamond,
-                        size: 60,
-                        color: Colors.white,
-                      ),
+                    const VMuruganLogo(
+                      size: 80,
+                      primaryColor: AppColors.primaryGreen,
+                      textColor: AppColors.primaryGold,
                     ),
 
                     const SizedBox(height: 40),

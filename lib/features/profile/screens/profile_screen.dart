@@ -15,6 +15,7 @@ import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/language_service.dart';
 import '../../../core/services/translation_service.dart';
+import '../../../core/services/mock_data_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
 import 'change_mpin_screen.dart';
@@ -754,15 +755,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       () => _downloadStatement('all_transactions'),
                     ),
 
-                    const SizedBox(height: 12),
 
-                    // Custom Date Range
-                    _buildStatementOption(
-                      'Custom Date Range',
-                      'Select specific date range',
-                      Icons.date_range,
-                      () => _showCustomDateRange(),
-                    ),
                   ],
                 ),
               ),
@@ -914,26 +907,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Calculate date range based on period
       final dateRange = _getDateRangeForPeriod(period);
 
-      // Fetch transactions from API
-      final result = await ApiService.getTransactions(
-        startDate: dateRange['start'],
-        endDate: dateRange['end'],
-      );
+      List<Map<String, dynamic>> transactions;
+
+      // Use mock data for testing or fetch from API
+      if (MockDataService.shouldUseMockData()) {
+        print('📊 Profile: Using mock data for statement generation');
+
+        // Generate mock transactions for the specified period
+        transactions = MockDataService.generateMockTransactions(
+          startDate: dateRange['start'] ?? DateTime.now().subtract(const Duration(days: 30)),
+          endDate: dateRange['end'] ?? DateTime.now(),
+          count: _getMockTransactionCount(period),
+        );
+
+        // Simulate API delay
+        await Future.delayed(const Duration(seconds: 2));
+      } else {
+        // Fetch transactions from API
+        final result = await ApiService.getTransactions(
+          startDate: dateRange['start'],
+          endDate: dateRange['end'],
+        );
+
+        if (result['success']) {
+          transactions = result['transactions'] as List<Map<String, dynamic>>;
+        } else {
+          Navigator.pop(context); // Close loading dialog
+          _showErrorDialog('Failed to fetch transactions: ${result['message']}');
+          return;
+        }
+      }
 
       Navigator.pop(context); // Close loading dialog
 
-      if (result['success']) {
-        final transactions = result['transactions'] as List<Map<String, dynamic>>;
-
-        if (transactions.isEmpty) {
-          _showNoTransactionsDialog(period);
-        } else {
-          // Generate and download PDF
-          await _generatePDFStatement(transactions, period);
-          _showDownloadSuccessDialog(period);
-        }
+      if (transactions.isEmpty) {
+        _showNoTransactionsDialog(period);
       } else {
-        _showErrorDialog('Failed to fetch transactions: ${result['message']}');
+        // Generate and download PDF
+        await _generatePDFStatement(transactions, period);
+        _showDownloadSuccessDialog(period);
       }
     } catch (e) {
       Navigator.pop(context); // Close loading dialog
@@ -1043,7 +1055,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   pw.Text('Generated: ${DateTime.now().toString().split('.')[0]}'),
                 ],
               ),
-              pw.SizedBox(height: 16),
+              pw.SizedBox(height: 8),
+
+              // Mock data notice (if using mock data)
+              if (MockDataService.shouldUseMockData()) ...[
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(8),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.orange100,
+                    border: pw.Border.all(color: PdfColors.orange),
+                  ),
+                  child: pw.Text(
+                    '📊 DEMO DATA: This statement contains mock data for testing purposes.',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.orange800,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 16),
+              ] else ...[
+                pw.SizedBox(height: 16),
+              ],
 
               // Transactions Table
               pw.Table(
@@ -1154,13 +1188,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
-      // Save PDF to device
-      final directory = await getApplicationDocumentsDirectory();
-      final fileName = 'VMurugan_Statement_${period}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      // Save PDF to device Downloads folder
+      Directory? directory;
+      String fileName = 'VMurugan_Statement_${period}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+      try {
+        if (Platform.isAndroid) {
+          // Try multiple Android download locations
+          final downloadPaths = [
+            '/storage/emulated/0/Download',
+            '/storage/emulated/0/Downloads',
+            '/sdcard/Download',
+            '/sdcard/Downloads',
+          ];
+
+          for (final path in downloadPaths) {
+            directory = Directory(path);
+            if (await directory.exists()) {
+              print('✅ Found Downloads directory: $path');
+              break;
+            }
+          }
+
+          // If no Downloads folder found, use external storage
+          if (directory == null || !await directory.exists()) {
+            directory = await getExternalStorageDirectory();
+            print('📁 Using external storage: ${directory?.path}');
+          }
+        } else {
+          // For other platforms, use documents directory
+          directory = await getApplicationDocumentsDirectory();
+        }
+      } catch (e) {
+        print('❌ Error accessing storage: $e');
+        // Fallback to documents directory
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        throw Exception('Unable to access device storage');
+      }
+
       final file = File('${directory.path}/$fileName');
+
+      // Ensure directory exists
+      await directory.create(recursive: true);
+
+      // Write PDF file
       await file.writeAsBytes(await pdf.save());
 
-      print('PDF saved to: ${file.path}');
+      print('✅ PDF saved successfully to: ${file.path}');
+      print('📂 File size: ${await file.length()} bytes');
+
+      // Verify file was created
+      if (await file.exists()) {
+        print('✅ File verification successful');
+      } else {
+        throw Exception('File was not created successfully');
+      }
     } catch (e) {
       print('Error generating PDF: $e');
       // Fallback to clipboard
@@ -1209,33 +1294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
   }
 
-  void _showCustomDateRange() {
-    Navigator.pop(context); // Close current dialog
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Custom Date Range'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Custom date range selection will be available in the next update.'),
-            SizedBox(height: 16),
-            Text(
-              'For now, please use one of the predefined options or contact support for specific date ranges.',
-              style: TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showNoTransactionsDialog(String period) {
     showDialog(
@@ -1287,10 +1346,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 border: Border.all(color: Colors.blue[200]!),
               ),
               child: const Text(
-                '✅ PDF statement has been generated and saved to your device documents folder. You can find it in your file manager under Documents.',
+                '✅ PDF statement has been generated and saved successfully!\n\n'
+                '📂 Location: Downloads folder\n'
+                '📱 Access: Open your file manager → Downloads → Look for "VMurugan_Statement_..." file\n'
+                '📄 Format: PDF document ready for viewing',
                 style: TextStyle(fontSize: 13),
               ),
             ),
+            if (MockDataService.shouldUseMockData()) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: const Text(
+                  '📊 Demo Mode: This statement contains mock data for testing purposes. In production, real transaction data will be used.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -1495,7 +1572,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    _buildContactRow('+91 96779 44711', Icons.phone),
+                    _buildContactRow('+91 9677944711', Icons.phone),
                     _buildContactRow('+91 94449 92494', Icons.phone),
                     _buildContactRow('+91 94431 93476', Icons.phone),
 
@@ -1514,6 +1591,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    _buildContactRow('vmuruganjewellery@gmail.com', Icons.email),
                     const SizedBox(height: 6),
                     const Text(
                       'info@vmuruganjewellery.co.in',
@@ -1694,8 +1773,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildInfoRow('Business', 'V Murugan Jewellery'),
-                    _buildInfoRow('Email', 'info@vmuruganjewellery.com'),
-                    _buildInfoRow('Phone', '+91 9876543210'),
+                    _buildInfoRow('Email', 'vmuruganjewellery@gmail.com'),
+                    _buildInfoRow('Phone', '+91 9677944711'),
                     _buildInfoRow('Website', 'www.vmuruganjewellery.com'),
                   ],
                 ),
@@ -1786,5 +1865,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  /// Get mock transaction count based on period for testing
+  int _getMockTransactionCount(String period) {
+    switch (period) {
+      case 'current_month':
+        return 8; // Moderate number for current month
+      case 'last_3_months':
+        return 20; // More transactions for 3 months
+      case 'all_transactions':
+        return 35; // Many transactions for all time
+      default:
+        return 12; // Default count for custom periods
+    }
   }
 }

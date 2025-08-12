@@ -18,6 +18,7 @@ import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
 import '../../portfolio/models/portfolio_model.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/auto_logout_service.dart';
 import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/services/notification_service.dart';
@@ -36,6 +37,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   final PaymentVerificationService _verificationService = PaymentVerificationService();
   final PortfolioService _portfolioService = PortfolioService();
   final SchemeManagementService _schemeService = SchemeManagementService();
+  final AutoLogoutService _autoLogoutService = AutoLogoutService();
   final TextEditingController _amountController = TextEditingController();
   
   GoldPriceModel? _currentPrice;
@@ -573,6 +575,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     Navigator.pop(context); // Close payment dialog
 
     try {
+      // Set payment in progress to prevent auto logout
+      _autoLogoutService.setPaymentInProgress(true);
+
       // Create payment request with method-specific UPI ID
       final request = PaymentRequest(
         transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
@@ -653,11 +658,17 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           reason: response.errorMessage ?? 'Payment failed',
         );
         _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment was not completed'}');
+
+        // Payment process completed (failed), resume auto logout monitoring
+        _autoLogoutService.setPaymentInProgress(false);
       }
 
     } catch (e) {
       Navigator.pop(context); // Close any open dialog
       _showErrorDialog('Payment error: ${e.toString()}');
+
+      // Payment process completed (error), resume auto logout monitoring
+      _autoLogoutService.setPaymentInProgress(false);
     }
   }
 
@@ -918,6 +929,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       // Unknown status
       _showErrorDialog('Payment status unknown. Please check your bank statement and contact support if money was debited.');
     }
+
+    // Payment process completed, resume auto logout monitoring
+    _autoLogoutService.setPaymentInProgress(false);
   }
 
   Future<void> _saveTransaction(PaymentResponse response, String paymentMethod, double goldGrams, {String? schemeId}) async {

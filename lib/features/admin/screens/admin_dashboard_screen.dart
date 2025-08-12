@@ -3,6 +3,8 @@ import '../../../core/services/api_service.dart';
 import '../../../core/config/firebase_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../gold/services/gold_price_service.dart';
+import '../../silver/services/silver_price_service.dart';
 import 'firebase_status_screen.dart';
 import 'admin_customers_screen.dart';
 import 'admin_transactions_screen.dart';
@@ -21,10 +23,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoading = false;
   final TextEditingController _adminTokenController = TextEditingController();
 
+  // Price services for displaying current rates
+  final GoldPriceService _goldPriceService = GoldPriceService();
+  final SilverPriceService _silverPriceService = SilverPriceService();
+
   @override
   void initState() {
     super.initState();
+    _goldPriceService.initialize();
+    _silverPriceService.initialize();
     _loadDashboardData();
+  }
+
+  @override
+  void dispose() {
+    _goldPriceService.dispose();
+    _silverPriceService.dispose();
+    _adminTokenController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDashboardData() async {
@@ -217,7 +233,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'VMUrugan Admin',
+                  'VMurugan Admin',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -572,6 +588,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Current Prices Section
+          _buildCurrentPricesSection(),
+
+          const SizedBox(height: AppSpacing.xxl),
+
           // Stats Cards
           Row(
             children: [
@@ -733,6 +754,104 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentPricesSection() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Current Market Rates',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPriceCard(
+                  'Gold Rate (22K)',
+                  _goldPriceService.currentPrice?.pricePerGram.toStringAsFixed(0) ?? 'Loading...',
+                  '₹/gram',
+                  Icons.star,
+                  AppColors.primaryGold,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: _buildPriceCard(
+                  'Silver Rate',
+                  _silverPriceService.currentPrice?.pricePerGram.toStringAsFixed(0) ?? 'Loading...',
+                  '₹/gram',
+                  Icons.circle,
+                  Colors.grey[600]!,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceCard(String title, String price, String unit, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            price == 'Loading...' ? price : '₹$price',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            unit,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
           ),
         ],

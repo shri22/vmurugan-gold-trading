@@ -46,7 +46,7 @@ class SmsService {
   /// Send OTP via TextLocal (Popular in India)
   static Future<Map<String, dynamic>> _sendViaTextLocal(String phoneNumber, String otp) async {
     try {
-      final message = 'Your VMUrugan verification code is: $otp. Valid for 5 minutes. Do not share this code with anyone.';
+      final message = 'Your VMurugan verification code is: $otp. Valid for 5 minutes. Do not share this code with anyone.';
 
       final response = await http.post(
         Uri.parse(_textlocalBaseUrl),
@@ -84,7 +84,7 @@ class SmsService {
   /// Send OTP via Twilio (Global provider)
   static Future<Map<String, dynamic>> _sendViaTwilio(String phoneNumber, String otp) async {
     try {
-      final message = 'Your VMUrugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
+      final message = 'Your VMurugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
 
       final credentials = base64Encode(utf8.encode('${SmsConfig.twilioAccountSid}:${SmsConfig.twilioAuthToken}'));
 
@@ -155,7 +155,7 @@ class SmsService {
         print('📋 Using Template ID: ${SmsConfig.msg91TemplateId}');
       } else {
         // Fallback to direct SMS (for testing) - using different endpoint
-        final message = 'Your VMUrugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
+        final message = 'Your VMurugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
         endpoint = 'https://api.msg91.com/api/sendhttp.php';
         requestBody = {
           'authkey': SmsConfig.msg91ApiKey,
@@ -206,7 +206,7 @@ class SmsService {
   /// Send OTP via Fast2SMS (Indian provider)
   static Future<Map<String, dynamic>> _sendViaFast2SMS(String phoneNumber, String otp) async {
     try {
-      final message = 'Your VMUrugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
+      final message = 'Your VMurugan verification code is: $otp. Valid for 5 minutes. Do not share this code.';
 
       final response = await http.post(
         Uri.parse(_fast2smsBaseUrl),
