@@ -63,10 +63,12 @@ docs/
 | **IIS** | 10+ | Web Server (Optional) |
 
 ### **✅ Network Requirements:**
-- **Static IP Address** or **Domain Name**
+- **✅ Static IP Address** (Client already has this)
+- **Domain Name** (Optional but recommended)
 - **SSL Certificate** (Let's Encrypt or Commercial)
 - **Firewall Configuration** (Ports 80, 443, 1433, 3001)
 - **Internet Connectivity** for mobile app access
+- **Router/Firewall Port Forwarding** (If behind NAT)
 
 ---
 
@@ -102,14 +104,20 @@ npm --version   # Should show 9.x.x or 10.x.x
 # Used for database management and monitoring
 ```
 
-#### **1.4 Configure Windows Firewall**
+#### **1.4 Configure Windows Firewall for Global Access**
 ```bash
 # Open Windows Firewall with Advanced Security
-# Create Inbound Rules:
-- Port 1433 (SQL Server)
-- Port 3001 (Node.js API)
-- Port 80 (HTTP) - Optional
-- Port 443 (HTTPS) - Optional
+# Create Inbound Rules for GLOBAL ACCESS:
+- Port 1433 (SQL Server) - RESTRICT to local network only
+- Port 3001 (Node.js API) - ALLOW from anywhere (0.0.0.0/0)
+- Port 80 (HTTP) - ALLOW from anywhere (for SSL redirect)
+- Port 443 (HTTPS) - ALLOW from anywhere (for SSL access)
+
+# PowerShell commands to configure firewall:
+New-NetFirewallRule -DisplayName "VMurugan API Global" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow
+New-NetFirewallRule -DisplayName "HTTP Global" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+New-NetFirewallRule -DisplayName "HTTPS Global" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow
+New-NetFirewallRule -DisplayName "SQL Server Local Only" -Direction Inbound -Protocol TCP -LocalPort 1433 -Action Allow -RemoteAddress LocalSubnet
 ```
 
 ### **STEP 2: UPLOAD APPLICATION FILES**
@@ -437,9 +445,36 @@ svc.on('start', function(){
 svc.install();
 ```
 
-### **STEP 7: NETWORK AND SECURITY CONFIGURATION**
+### **STEP 7: GLOBAL ACCESS CONFIGURATION**
 
-#### **7.1 Configure IIS Reverse Proxy (Optional)**
+#### **7.1 Configure Public IP Access**
+```bash
+# STEP 7.1: Verify Public IP Configuration
+# Check your public IP address:
+curl ifconfig.me
+# OR visit: https://whatismyipaddress.com/
+
+# Note down your public IP (e.g., 203.0.113.10)
+# This will be used in mobile app configuration
+
+# Test external connectivity:
+# From another network, test: http://YOUR_PUBLIC_IP:3001/health
+```
+
+#### **7.2 Configure Router/Firewall Port Forwarding (If Behind NAT)**
+```bash
+# If server is behind router/firewall, configure port forwarding:
+# Router Admin Panel → Port Forwarding → Add Rules:
+
+External Port 80   → Internal IP 192.168.1.100:80   (HTTP)
+External Port 443  → Internal IP 192.168.1.100:443  (HTTPS)
+External Port 3001 → Internal IP 192.168.1.100:3001 (API Direct)
+
+# Find internal IP of server:
+ipconfig | findstr IPv4
+```
+
+#### **7.3 Configure IIS Reverse Proxy (Optional but Recommended)**
 ```xml
 <!-- web.config for IIS -->
 <?xml version="1.0" encoding="utf-8"?>
@@ -457,19 +492,58 @@ svc.install();
 </configuration>
 ```
 
-#### **7.2 SSL Certificate Configuration**
+#### **7.4 SSL Certificate Configuration for Global Access**
 ```bash
-# Option 1: Let's Encrypt (Free)
-# Install Certbot for Windows
-# Generate certificate for domain
+# OPTION 1: Self-Signed Certificate (Quick Setup for IP Access)
+# Generate self-signed certificate for IP address:
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=YOUR_PUBLIC_IP"
 
-# Option 2: Commercial Certificate
-# Purchase SSL certificate
+# OPTION 2: Let's Encrypt (Free - Requires Domain)
+# If you have a domain pointing to your IP:
+# Install Certbot for Windows
+# Generate certificate: certbot certonly --standalone -d yourdomain.com
+
+# OPTION 3: Commercial Certificate (Production Recommended)
+# Purchase SSL certificate for your domain
 # Install in IIS or configure in Node.js
 
-# Option 3: Self-signed (Testing only)
-# Generate self-signed certificate
-# Configure in application
+# For immediate testing with IP address, use Option 1
+```
+
+#### **7.5 Configure Node.js for HTTPS (Global Access)**
+```javascript
+// Update server.js for HTTPS support
+const https = require('https');
+const fs = require('fs');
+
+// SSL certificate configuration
+const sslOptions = {
+  key: fs.readFileSync('path/to/private-key.pem'),
+  cert: fs.readFileSync('path/to/certificate.pem')
+};
+
+// Create HTTPS server
+const httpsServer = https.createServer(sslOptions, app);
+httpsServer.listen(443, '0.0.0.0', () => {
+  console.log('🔒 HTTPS Server running on port 443 (Global Access)');
+  console.log('🌍 Accessible from: https://YOUR_PUBLIC_IP/');
+});
+
+// Also keep HTTP server for redirect
+const http = require('http');
+const httpServer = http.createServer((req, res) => {
+  res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url });
+  res.end();
+});
+httpServer.listen(80, '0.0.0.0', () => {
+  console.log('🔄 HTTP Server redirecting to HTTPS on port 80');
+});
+
+// Keep original server for direct API access
+app.listen(3001, '0.0.0.0', () => {
+  console.log('🚀 API Server running on port 3001 (Global Access)');
+  console.log('🌍 Direct API Access: http://YOUR_PUBLIC_IP:3001/api');
+});
 ```
 
 #### **7.3 Firewall Configuration**
@@ -486,35 +560,122 @@ svc.install();
 - Or restrict to specific ports if needed
 ```
 
-### **STEP 8: MOBILE APP CONFIGURATION**
+### **STEP 8: MOBILE APP GLOBAL ACCESS CONFIGURATION**
 
-#### **8.1 Update App Configuration**
+#### **8.1 Update App Configuration for Global Access**
 ```dart
-// lib/core/config/client_server_config.dart
-class ClientServerConfig {
-  // CLIENT'S ACTUAL SERVER CONFIGURATION
-  static const String serverDomain = 'client-domain.com'; // Replace with actual domain/IP
-  static const int serverPort = 3001; // Or 80/443 if using reverse proxy
-  static const String protocol = 'https'; // Use HTTPS for production
-  
-  // Automatically generated endpoints
-  static const String baseUrl = '$protocol://$serverDomain:$serverPort/api';
-  
-  // API endpoints
-  static const String userRegisterEndpoint = '$baseUrl/customers';
-  static const String userLoginEndpoint = '$baseUrl/login';
-  static const String portfolioGetEndpoint = '$baseUrl/portfolio';
-  static const String transactionCreateEndpoint = '$baseUrl/transactions';
-  static const String transactionHistoryEndpoint = '$baseUrl/transaction-history';
-  static const String transactionUpdateEndpoint = '$baseUrl/transaction-status';
-  static const String healthCheckEndpoint = '$protocol://$serverDomain:$serverPort/health';
+// lib/core/config/global_server_config.dart
+class GlobalServerConfig {
+  // CLIENT'S PUBLIC SERVER CONFIGURATION
+  // Replace with client's actual public IP address
+  static const String publicIP = '203.0.113.10'; // CLIENT'S ACTUAL PUBLIC IP
+  static const String serverDomain = ''; // Leave empty if no domain
+
+  // Protocol and port configuration
+  static const String protocol = 'https'; // Use HTTPS for security
+  static const int httpsPort = 443; // Standard HTTPS port
+  static const int apiPort = 3001; // Direct API access port
+
+  // Environment configuration
+  static const bool useDirectAPI = true; // true = use port 3001, false = use HTTPS
+  static const bool isDevelopment = false; // Set to false for production
+
+  // Automatically generated endpoints based on configuration
+  static String get serverAddress {
+    if (serverDomain.isNotEmpty) {
+      return serverDomain; // Use domain if available
+    } else {
+      return publicIP; // Use public IP
+    }
+  }
+
+  static String get baseUrl {
+    if (useDirectAPI) {
+      return 'http://$serverAddress:$apiPort/api'; // Direct API access
+    } else {
+      return '$protocol://$serverAddress/api'; // Through reverse proxy
+    }
+  }
+
+  // API endpoints for global access
+  static String get userRegisterEndpoint => '$baseUrl/customers';
+  static String get userLoginEndpoint => '$baseUrl/login';
+  static String get portfolioGetEndpoint => '$baseUrl/portfolio';
+  static String get transactionCreateEndpoint => '$baseUrl/transactions';
+  static String get transactionHistoryEndpoint => '$baseUrl/transaction-history';
+  static String get transactionUpdateEndpoint => '$baseUrl/transaction-status';
+  static String get healthCheckEndpoint => 'http://$serverAddress:$apiPort/health';
+
+  // Connection testing
+  static Map<String, String> get connectionInfo => {
+    'server_address': serverAddress,
+    'base_url': baseUrl,
+    'protocol': useDirectAPI ? 'HTTP' : protocol.toUpperCase(),
+    'port': useDirectAPI ? apiPort.toString() : httpsPort.toString(),
+    'environment': isDevelopment ? 'Development' : 'Production',
+    'access_type': 'Global Internet Access'
+  };
 }
 ```
 
-#### **8.2 Build Production APK**
+#### **8.2 Update Server Configuration in App**
+```dart
+// Update lib/core/config/server_config.dart
+class ServerConfig {
+  // PRODUCTION CONFIGURATION FOR GLOBAL ACCESS
+  static const String productionIP = '203.0.113.10'; // CLIENT'S PUBLIC IP
+  static const String localIP = 'localhost'; // Keep for local development
+
+  // Environment flag (set to false for global access)
+  static const bool isDevelopment = false; // IMPORTANT: Set to false
+
+  // Server ports
+  static const int httpsPort = 443;
+  static const int localPort = 3001;
+  static const int globalApiPort = 3001; // Direct API access globally
+
+  // Base URL for API calls
+  static String get baseUrl {
+    if (isDevelopment) {
+      // Development mode - use local server
+      return 'http://$localIP:$localPort/api';
+    } else {
+      // Production mode - use public IP for global access
+      return 'http://$productionIP:$globalApiPort/api';
+    }
+  }
+
+  // Headers for API requests
+  static Map<String, String> get headers => {
+    'Content-Type': 'application/json',
+    'admin-token': 'CLIENT_ADMIN_TOKEN_2025',
+    'X-Business-ID': 'VMURUGAN_001',
+    'User-Agent': 'VMurugan-Mobile/1.0.0',
+    'Accept': 'application/json',
+  };
+
+  // Connection status
+  static Map<String, dynamic> get status => {
+    'configured': true,
+    'environment': isDevelopment ? 'development' : 'production',
+    'base_url': baseUrl,
+    'server_ip': isDevelopment ? localIP : productionIP,
+    'port': isDevelopment ? localPort : globalApiPort,
+    'global_access': !isDevelopment,
+    'ssl_enabled': false, // Set to true when HTTPS is configured
+  };
+}
+```
+
+#### **8.3 Build Production APK for Global Access**
 ```bash
 # Navigate to Flutter project directory
 cd E:\Projects\vmurugan-gold-trading
+
+# IMPORTANT: Verify configuration before building
+# Check lib/core/config/server_config.dart:
+# - isDevelopment = false
+# - productionIP = 'CLIENT_ACTUAL_PUBLIC_IP'
 
 # Clean previous builds
 flutter clean
@@ -522,18 +683,29 @@ flutter clean
 # Get dependencies
 flutter pub get
 
-# Build release APK
-flutter build apk --release
+# Build release APK with global access configuration
+flutter build apk --release --target-platform android-arm64
 
 # APK location: build\app\outputs\flutter-apk\app-release.apk
+# This APK will connect to the public IP address globally
 ```
 
-#### **8.3 App Testing Checklist**
+#### **8.4 Global Access Testing Checklist**
 ```bash
-# Install APK on test device
-# Connect to client's network or internet
-# Test complete user flow:
+# CRITICAL: Test from DIFFERENT NETWORKS to verify global access
 
+# Test 1: Install APK on test device
+adb install build\app\outputs\flutter-apk\app-release.apk
+
+# Test 2: Connect to DIFFERENT WiFi networks and test:
+# - Home WiFi network
+# - Office WiFi network
+# - Mobile data (4G/5G)
+# - Public WiFi (coffee shop, etc.)
+# - Different ISP networks
+
+# Test 3: Complete user flow from each network:
+✅ Server connectivity (Health check)
 ✅ User Registration
 ✅ User Login with MPIN
 ✅ Portfolio View (empty initially)
@@ -541,7 +713,142 @@ flutter build apk --release
 ✅ Silver Purchase Flow (₹126.00/gram)
 ✅ Transaction History
 ✅ Portfolio Updates
-✅ Data Persistence
+✅ Data Persistence across networks
+
+# Test 4: International access (if applicable):
+✅ Test from different countries/regions
+✅ Verify latency is acceptable
+✅ Check for any geo-blocking issues
+
+# Test 5: Network troubleshooting:
+# If connection fails, check:
+# - Server is running: curl http://PUBLIC_IP:3001/health
+# - Firewall allows port 3001: telnet PUBLIC_IP 3001
+# - Router port forwarding configured
+# - ISP doesn't block the port
+```
+
+---
+
+## 🌍 **GLOBAL ACCESS VERIFICATION**
+
+### **✅ Step-by-Step Global Access Testing**
+
+#### **Step 1: Verify Server is Accessible Globally**
+```bash
+# From the server itself, test local access:
+curl http://localhost:3001/health
+# Expected: {"status":"OK","timestamp":"..."}
+
+# From the server, test public IP access:
+curl http://YOUR_PUBLIC_IP:3001/health
+# Expected: Same response as above
+
+# From external network, test global access:
+# Use online tools or different network:
+# - https://www.whatsmyip.org/port-scanner/
+# - Enter your public IP and port 3001
+# - Should show "Open" status
+```
+
+#### **Step 2: Test from Different Locations**
+```bash
+# Test from multiple external networks:
+
+# Method 1: Use online HTTP testing tools
+# - https://httpstatus.io/
+# - Enter: http://YOUR_PUBLIC_IP:3001/health
+# - Should return 200 OK
+
+# Method 2: Ask friends/colleagues to test
+# Send them: http://YOUR_PUBLIC_IP:3001/health
+# They should see the health check response
+
+# Method 3: Use mobile data
+# Disconnect from WiFi, use mobile data
+# Test the URL in mobile browser
+```
+
+#### **Step 3: Mobile App Global Testing**
+```bash
+# Install the production APK on test devices
+# Test from different networks:
+
+# Network 1: Home WiFi
+# Network 2: Office WiFi
+# Network 3: Mobile Data (4G/5G)
+# Network 4: Public WiFi
+# Network 5: Friend's network
+
+# For each network, verify:
+✅ App opens successfully
+✅ Registration works
+✅ Login works
+✅ API calls succeed
+✅ Data loads properly
+✅ Transactions process
+```
+
+#### **Step 4: Performance Testing**
+```bash
+# Test response times from different locations:
+# Acceptable response times:
+# - Local network: < 100ms
+# - Same country: < 500ms
+# - International: < 2000ms
+
+# Use tools like:
+# - ping YOUR_PUBLIC_IP
+# - curl -w "@curl-format.txt" http://YOUR_PUBLIC_IP:3001/health
+```
+
+### **✅ Common Global Access Issues and Solutions**
+
+#### **Issue 1: "Connection Refused" from External Networks**
+```bash
+# Cause: Firewall blocking external access
+# Solution:
+1. Check Windows Firewall rules
+2. Verify router port forwarding
+3. Check ISP firewall settings
+4. Test with firewall temporarily disabled
+
+# Verification:
+netstat -an | findstr :3001  # Should show 0.0.0.0:3001 LISTENING
+```
+
+#### **Issue 2: "Timeout" from Mobile App**
+```bash
+# Cause: Server not binding to all interfaces
+# Solution: Ensure server listens on 0.0.0.0, not localhost
+
+# In server.js, use:
+app.listen(3001, '0.0.0.0', () => {
+  console.log('Server listening on all interfaces');
+});
+
+# NOT:
+app.listen(3001, 'localhost', () => { ... }); // This only allows local access
+```
+
+#### **Issue 3: "SSL/Certificate Errors"**
+```bash
+# Cause: HTTPS configuration issues
+# Solution: For testing, use HTTP first, then add HTTPS
+
+# Quick test without SSL:
+# Update mobile app to use: http://YOUR_PUBLIC_IP:3001/api
+# Once working, then configure HTTPS
+```
+
+#### **Issue 4: "ISP Blocking Ports"**
+```bash
+# Cause: Some ISPs block non-standard ports
+# Solution: Use standard ports (80, 443) with reverse proxy
+
+# Test if port is blocked:
+telnet YOUR_PUBLIC_IP 3001  # From external network
+# If fails, try port 80 or 443
 ```
 
 ---

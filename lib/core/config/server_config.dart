@@ -6,13 +6,19 @@ class ServerConfig {
   // UPDATE THESE VALUES WITH YOUR TEAMMATE'S SERVER DETAILS
   // =============================================================================
   
-  // Your teammate's computer IP address
-  // To find IP address on Windows: ipconfig
-  // To find IP address on Mac/Linux: ifconfig
-  static const String teammateIP = 'YOUR_TEAMMATE_IP'; // Replace with actual IP
-  
-  // Server port (usually 3000)
-  static const int port = 3000;
+  // GLOBAL ACCESS CONFIGURATION
+  // Replace with client's actual public IP address
+  static const String publicIP = '203.0.113.10'; // CLIENT'S ACTUAL PUBLIC IP
+  static const String productionDomain = ''; // Leave empty if no domain
+  static const String localIP = 'YOUR_TEAMMATE_IP'; // Keep for local development
+
+  // Server ports
+  static const int httpsPort = 443;
+  static const int localPort = 3000;
+  static const int globalApiPort = 3001; // Direct API access globally
+
+  // Environment flag (set to false for global production access)
+  static const bool isDevelopment = false; // IMPORTANT: false for global access
   
   // Admin token (ask your teammate for this)
   static const String adminToken = 'VMURUGAN_ADMIN_2025';
@@ -21,20 +27,46 @@ class ServerConfig {
   // AUTOMATIC CONFIGURATION BASED ON PLATFORM
   // =============================================================================
   
-  // Base URL for API calls
+  // Base URL for API calls - GLOBAL ACCESS
   static String get baseUrl {
-    if (teammateIP == 'YOUR_TEAMMATE_IP') {
-      // Default to localhost for testing
-      return 'http://localhost:$port/api';
+    if (isDevelopment) {
+      // Development mode - use local server
+      if (localIP == 'YOUR_TEAMMATE_IP') {
+        return 'http://localhost:$localPort/api';
+      }
+      return 'http://$localIP:$localPort/api';
+    } else {
+      // Production mode - use public IP for global access
+      if (productionDomain.isNotEmpty) {
+        return 'https://$productionDomain/api'; // Use domain if available
+      } else {
+        return 'http://$publicIP:$globalApiPort/api'; // Use public IP directly
+      }
     }
-    return 'http://$teammateIP:$port/api';
+  }
+
+  // Health check endpoint for testing connectivity
+  static String get healthCheckUrl {
+    if (isDevelopment) {
+      return 'http://localhost:$localPort/health';
+    } else {
+      if (productionDomain.isNotEmpty) {
+        return 'https://$productionDomain/health';
+      } else {
+        return 'http://$publicIP:$globalApiPort/health';
+      }
+    }
   }
   
-  // Headers for API requests
+  // Headers for API requests - Enhanced for global access
   static Map<String, String> get headers => {
     'Content-Type': 'application/json',
     'admin-token': adminToken,
     'X-Business-ID': 'VMURUGAN_001',
+    'User-Agent': 'VMurugan-Mobile/1.0.0',
+    'Accept': 'application/json',
+    'X-Client-Type': 'mobile',
+    'X-Access-Type': isDevelopment ? 'local' : 'global',
   };
   
   // =============================================================================
@@ -54,15 +86,21 @@ class ServerConfig {
   // =============================================================================
   
   /// Check if server is configured
-  static bool get isConfigured => teammateIP != 'YOUR_TEAMMATE_IP';
+  static bool get isConfigured =>
+    isDevelopment ? (localIP != 'YOUR_TEAMMATE_IP') : productionDomain.isNotEmpty;
   
-  /// Get configuration status
+  /// Get configuration status - Enhanced for global access
   static Map<String, dynamic> get status => {
     'configured': isConfigured,
+    'environment': isDevelopment ? 'development' : 'production',
+    'access_type': isDevelopment ? 'local' : 'global',
     'base_url': baseUrl,
-    'teammate_ip': teammateIP,
-    'port': port,
+    'health_check_url': healthCheckUrl,
+    'server_address': isDevelopment ? localIP : (productionDomain.isNotEmpty ? productionDomain : publicIP),
+    'port': isDevelopment ? localPort : globalApiPort,
     'admin_token_set': adminToken.isNotEmpty,
+    'ssl_enabled': !isDevelopment && productionDomain.isNotEmpty,
+    'global_access_ready': !isDevelopment && publicIP != '203.0.113.10', // Check if real IP is set
   };
   
   /// Get setup instructions
