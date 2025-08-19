@@ -11,8 +11,11 @@ import '../services/gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
 // import '../../payment/screens/payment_screen.dart';
 import '../../payment/services/upi_payment_service.dart';
+import '../../payment/services/enhanced_payment_service.dart';
 import '../../payment/services/payment_verification_service.dart';
+import '../../payment/screens/enhanced_payment_screen.dart';
 import '../../payment/models/payment_model.dart';
+import '../../../core/config/server_config.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
@@ -34,6 +37,7 @@ class BuyGoldScreen extends StatefulWidget {
 class _BuyGoldScreenState extends State<BuyGoldScreen> {
   final GoldPriceService _priceService = GoldPriceService();
   final UpiPaymentService _paymentService = UpiPaymentService();
+  final EnhancedPaymentService _enhancedPaymentService = EnhancedPaymentService();
   final PaymentVerificationService _verificationService = PaymentVerificationService();
   final PortfolioService _portfolioService = PortfolioService();
   final SchemeManagementService _schemeService = SchemeManagementService();
@@ -42,6 +46,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   
   GoldPriceModel? _currentPrice;
   double _selectedAmount = 0.0;
+  String? _selectedSchemeId;
 
   @override
   void initState() {
@@ -493,7 +498,13 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   }
 
   Future<void> _navigateToPayment() async {
-    final goldGrams = _selectedAmount / (_currentPrice?.pricePerGram ?? 1);
+    // Check if price is available
+    if (_currentPrice == null) {
+      _showErrorDialog('Gold price not available. Please wait for price update or try again.');
+      return;
+    }
+
+    final goldGrams = _selectedAmount / _currentPrice!.pricePerGram;
 
     // Show payment options dialog for demo
     _showPaymentOptionsDialog(goldGrams);
@@ -519,7 +530,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                   const Text('Order Summary:', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text('Gold: ${goldGrams.toStringAsFixed(4)} grams (22K)'),
-                  Text('Price: ₹${_currentPrice?.pricePerGram.toStringAsFixed(2) ?? '0'}/gram'),
+                  Text('Price: ₹${_currentPrice?.pricePerGram.toStringAsFixed(2) ?? 'N/A'}/gram'),
                   Text('Total: ₹${_selectedAmount.toStringAsFixed(2)}',
                        style: const TextStyle(fontWeight: FontWeight.bold)),
                 ],
@@ -528,15 +539,47 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             const SizedBox(height: 20),
             const Text('Choose Payment Method:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            _buildPaymentOption('🟢 Google Pay', 'Pay with GPay', () => _processRealPayment(PaymentMethod.gpay, goldGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('🟣 PhonePe', 'Pay with PhonePe', () => _processRealPayment(PaymentMethod.phonepe, goldGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('💳 UPI Apps', 'Pay with any UPI app', () => _processRealPayment(PaymentMethod.upiIntent, goldGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('📱 QR Code', 'Scan QR to pay', () => _processRealPayment(PaymentMethod.qrCode, goldGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('💰 Manual UPI', 'Pay manually with UPI details', () => _showManualUpiPayment(goldGrams)),
+            // Primary Payment Method - Omniware Net Banking
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGold.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primaryGold, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.account_balance, size: 32, color: AppColors.primaryGold),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Net Banking',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const Text(
+                    'Secure payment via Omniware gateway',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'RECOMMENDED',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Or choose UPI payment:',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
@@ -1144,7 +1187,12 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   }
 
   void _showPaymentDialog() {
-    final goldGrams = _selectedAmount / (_currentPrice?.pricePerGram ?? 1);
+    if (_currentPrice == null) {
+      _showErrorDialog('Gold price not available. Please wait for price update or try again.');
+      return;
+    }
+
+    final goldGrams = _selectedAmount / _currentPrice!.pricePerGram;
 
     showDialog(
       context: context,
@@ -1174,17 +1222,401 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
+          // Primary Payment Button (Omniware Net Banking)
           ElevatedButton(
-            onPressed: () => _completePurchase(goldGrams),
+            onPressed: () => _showEnhancedPayment(goldGrams),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.primaryGold,
+              foregroundColor: Colors.black,
             ),
-            child: const Text('Complete Purchase'),
+            child: const Text('Pay with Net Banking'),
+          ),
+          // UPI Payment Options
+          TextButton(
+            onPressed: () => _showUpiPaymentOptions(goldGrams),
+            child: const Text('UPI Options'),
           ),
         ],
       ),
     );
+  }
+
+  /// Show enhanced payment screen with Omniware Net Banking
+  Future<void> _showEnhancedPayment(double goldGrams) async {
+    Navigator.pop(context); // Close confirmation dialog
+
+    try {
+      final result = await Navigator.push<PaymentResponse>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedPaymentScreen(
+            amount: _selectedAmount,
+            goldGrams: goldGrams,
+            description: 'Gold Purchase - ${goldGrams.toStringAsFixed(3)}g',
+            onPaymentComplete: (response) {
+              _handleEnhancedPaymentResponse(response, goldGrams);
+            },
+          ),
+        ),
+      );
+
+      if (result != null) {
+        await _handleEnhancedPaymentResponse(result, goldGrams);
+      }
+    } catch (e) {
+      print('❌ Enhanced payment error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Show UPI payment options dialog
+  Future<void> _showUpiPaymentOptions(double goldGrams) async {
+    Navigator.pop(context); // Close confirmation dialog
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('UPI Payment Options'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Choose your preferred UPI payment method:'),
+            const SizedBox(height: 20),
+            _buildPaymentOption('🟢 Google Pay', 'Pay with GPay', () => _processRealPayment(PaymentMethod.gpay, goldGrams)),
+            const SizedBox(height: 8),
+            _buildPaymentOption('🟣 PhonePe', 'Pay with PhonePe', () => _processRealPayment(PaymentMethod.phonepe, goldGrams)),
+            const SizedBox(height: 8),
+            _buildPaymentOption('💳 UPI Apps', 'Pay with any UPI app', () => _processRealPayment(PaymentMethod.upiIntent, goldGrams)),
+            const SizedBox(height: 8),
+            _buildPaymentOption('📱 QR Code', 'Scan QR to pay', () => _processRealPayment(PaymentMethod.qrCode, goldGrams)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Handle enhanced payment response
+  Future<void> _handleEnhancedPaymentResponse(PaymentResponse response, double goldGrams) async {
+    try {
+      print('🎯 Enhanced payment response: ${response.status}');
+
+      switch (response.status) {
+        case PaymentStatus.success:
+          await _processSuccessfulPayment(response, goldGrams);
+          break;
+        case PaymentStatus.pending:
+          await _processPendingPayment(response, goldGrams);
+          break;
+        case PaymentStatus.failed:
+          _showPaymentFailedDialog(response);
+          break;
+        case PaymentStatus.cancelled:
+          _showPaymentCancelledDialog();
+          break;
+        case PaymentStatus.timeout:
+          _showPaymentTimeoutDialog(response);
+          break;
+      }
+    } catch (e) {
+      print('❌ Error handling enhanced payment response: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error processing payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Process successful payment
+  Future<void> _processSuccessfulPayment(PaymentResponse response, double goldGrams) async {
+    try {
+      // Save transaction
+      await CustomerService.saveTransactionWithCustomerData(
+        transactionId: response.transactionId,
+        type: 'BUY',
+        amount: _selectedAmount,
+        goldGrams: goldGrams,
+        goldPricePerGram: _currentPrice?.pricePerGram ?? 0,
+        paymentMethod: response.additionalData?['method'] ?? 'Enhanced Payment',
+        status: 'SUCCESS',
+        gatewayTransactionId: response.gatewayTransactionId ?? '',
+      );
+
+      // Update scheme if applicable
+      if (_selectedSchemeId != null) {
+        await _updateSchemePayment(
+          _selectedSchemeId!,
+          _selectedAmount,
+          goldGrams,
+          response.additionalData?['method'] ?? 'Enhanced Payment',
+          response.transactionId,
+        );
+      }
+
+      // Show success dialog
+      if (mounted) {
+        _showPaymentSuccessDialog(response, goldGrams);
+      }
+
+    } catch (e) {
+      print('❌ Error processing successful payment: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving transaction: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Process pending payment
+  Future<void> _processPendingPayment(PaymentResponse response, double goldGrams) async {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.pending, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Payment Pending'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Your payment is being processed.'),
+              const SizedBox(height: 8),
+              Text('Transaction ID: ${response.transactionId}'),
+              if (response.additionalData?['message'] != null) ...[
+                const SizedBox(height: 8),
+                Text(response.additionalData!['message']),
+              ],
+              const SizedBox(height: 16),
+              const Text(
+                'You will receive a notification once the payment is confirmed.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Check payment status
+                final status = await _enhancedPaymentService.verifyPaymentStatus(
+                  response.transactionId,
+                  PaymentMethod.omniwareNetbanking, // Default for verification
+                );
+                await _handleEnhancedPaymentResponse(status, goldGrams);
+              },
+              child: const Text('Check Status'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// Show payment success dialog
+  void _showPaymentSuccessDialog(PaymentResponse response, double goldGrams) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            SizedBox(width: 12),
+            Text('Payment Successful!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your gold purchase has been completed successfully.',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Amount Paid: ₹${_selectedAmount.toStringAsFixed(2)}'),
+                  Text('Gold Purchased: ${goldGrams.toStringAsFixed(4)}g'),
+                  Text('Transaction ID: ${response.transactionId}'),
+                  if (response.gatewayTransactionId != null)
+                    Text('Gateway ID: ${response.gatewayTransactionId}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Your gold has been added to your portfolio.',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Optionally navigate to portfolio
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('View Portfolio'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Continue Shopping'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show payment failed dialog
+  void _showPaymentFailedDialog(PaymentResponse response) {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.error, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Payment Failed'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Your payment could not be processed.'),
+              if (response.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text('Reason: ${response.errorMessage}'),
+              ],
+              const SizedBox(height: 16),
+              const Text(
+                'Please try again or contact support if the issue persists.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showPaymentDialog(); // Show payment dialog again
+              },
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// Show payment cancelled dialog
+  void _showPaymentCancelledDialog() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment was cancelled'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  /// Show payment timeout dialog
+  void _showPaymentTimeoutDialog(PaymentResponse response) {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.access_time, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Payment Timeout'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Payment verification timed out.'),
+              const SizedBox(height: 8),
+              Text('Transaction ID: ${response.transactionId}'),
+              const SizedBox(height: 16),
+              const Text(
+                'Please check your bank account or payment app for transaction status.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Retry status check
+                final status = await _enhancedPaymentService.verifyPaymentStatus(
+                  response.transactionId,
+                  PaymentMethod.omniwareNetbanking,
+                );
+                final goldGrams = _selectedAmount / (_currentPrice?.pricePerGram ?? 1);
+                await _handleEnhancedPaymentResponse(status, goldGrams);
+              },
+              child: const Text('Check Again'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _completePurchase(double goldGrams) async {

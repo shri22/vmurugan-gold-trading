@@ -25,6 +25,7 @@ import 'core/services/customer_service.dart';
 import 'features/auth/screens/enhanced_app_wrapper.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/quick_mpin_login_screen.dart';
+import 'features/payment/screens/payment_gateway_config_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/auto_logout_service.dart';
 import 'core/config/firebase_init.dart';

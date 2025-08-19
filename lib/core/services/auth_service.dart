@@ -7,7 +7,7 @@ import 'customer_service.dart';
 import 'sms_service.dart';
 import 'firebase_phone_auth_service.dart';
 import 'encryption_service.dart';
-import '../config/sql_server_config.dart';
+import '../config/client_server_config.dart';
 import '../config/validation_config.dart';
 
 /// Enhanced Authentication service to handle the complete login flow
@@ -348,12 +348,18 @@ class AuthService {
   }
   
   /// Complete login process
-  static Future<void> completeLogin(String phone) async {
+  static Future<void> completeLogin(String phone, {int? userId}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_isLoggedInKey, true);
 
     // Save phone number for future quick login
     await savePhoneNumber(phone);
+
+    // Save user ID for server API calls
+    if (userId != null) {
+      await prefs.setInt('current_user_id', userId);
+      print('✅ AuthService: User ID saved: $userId');
+    }
 
     // Save login session with customer data
     await CustomerService.saveLoginSession(phone);
@@ -416,7 +422,7 @@ class AuthService {
   // =============================================================================
 
   // API base URL
-  static String get baseUrl => 'http://${SqlServerConfig.serverIP}:3001/api';
+  static String get baseUrl => ClientServerConfig.baseUrl;
 
   // Headers for API requests
   static Map<String, String> get headers => {
@@ -450,9 +456,9 @@ class AuthService {
         'encrypted_mpin': encryptedMpin,
       };
 
-      // Send to API
+      // Send to new server API
       final response = await http.post(
-        Uri.parse('$baseUrl/customers'),
+        Uri.parse('$baseUrl/user_register.php'),
         headers: headers,
         body: jsonEncode(customerData),
       ).timeout(const Duration(seconds: 30));
@@ -461,22 +467,19 @@ class AuthService {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
-          // Save login state
-          await _saveUserLoginState(phone, {
-            'phone': phone,
-            'name': name,
-            'email': email,
-          });
+          // Save login state with user ID
+          final userData = data['user'];
+          await _saveUserLoginState(phone, userData);
+
+          // Save user ID for server API calls
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('current_user_id', userData['id']);
 
           print('✅ AuthService: Registration successful for: $phone');
           return {
             'success': true,
             'message': 'Registration successful',
-            'user': {
-              'phone': phone,
-              'name': name,
-              'email': email,
-            }
+            'user': userData,
           };
         } else {
           return data;
@@ -514,9 +517,9 @@ class AuthService {
         'encrypted_mpin': encryptedMpin,
       };
 
-      // Send to API
+      // Send to new server API
       final response = await http.post(
-        Uri.parse('$baseUrl/login'),
+        Uri.parse('$baseUrl/user_login.php'),
         headers: headers,
         body: jsonEncode(loginData),
       ).timeout(const Duration(seconds: 30));
@@ -525,14 +528,19 @@ class AuthService {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
-          // Save login state
-          await _saveUserLoginState(phone, data['customer']);
+          // Save login state with user ID
+          final userData = data['user'];
+          await _saveUserLoginState(phone, userData);
+
+          // Save user ID for server API calls
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('current_user_id', userData['id']);
 
           print('✅ AuthService: Login successful for: $phone');
           return {
             'success': true,
             'message': 'Login successful',
-            'user': data['customer'],
+            'user': userData,
           };
         } else {
           return data;
@@ -587,11 +595,11 @@ class AuthService {
   static Future<bool> isServerReachable() async {
     try {
       final response = await http.get(
-        Uri.parse('http://${SqlServerConfig.serverIP}:3001/health'),
+        Uri.parse('${ClientServerConfig.baseUrl}/portfolio_get.php?user_id=1'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 5));
 
-      return response.statusCode == 200;
+      return response.statusCode == 200 || response.statusCode == 400; // 400 is OK (missing user)
     } catch (e) {
       print('❌ AuthService: Server not reachable: $e');
       return false;

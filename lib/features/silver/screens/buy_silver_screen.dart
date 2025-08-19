@@ -11,6 +11,8 @@ import '../services/silver_price_service.dart';
 import '../models/silver_price_model.dart';
 import '../../payment/services/upi_payment_service.dart';
 import '../../payment/services/payment_verification_service.dart';
+import '../../payment/services/enhanced_payment_service.dart';
+import '../../payment/screens/enhanced_payment_screen.dart';
 import '../../payment/models/payment_model.dart';
 import '../../../core/services/auto_logout_service.dart';
 import '../../schemes/services/scheme_management_service.dart';
@@ -34,6 +36,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   final SilverPriceService _priceService = SilverPriceService();
   final UpiPaymentService _paymentService = UpiPaymentService();
   final PaymentVerificationService _verificationService = PaymentVerificationService();
+  final EnhancedPaymentService _enhancedPaymentService = EnhancedPaymentService();
   final PortfolioService _portfolioService = PortfolioService();
   final SchemeManagementService _schemeService = SchemeManagementService();
   final AutoLogoutService _autoLogoutService = AutoLogoutService();
@@ -58,9 +61,12 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   void _initializeServices() {
     _priceService.initialize();
 
+
+
     // Listen to price updates
     _priceService.priceStream.listen((price) {
       if (mounted) {
+        print('🥈 BuySilverScreen: Received price update: ${price?.pricePerGram ?? 'null'}');
         setState(() {
           _currentPrice = price;
         });
@@ -70,6 +76,8 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
     // Load initial price
     _loadInitialPrice();
   }
+
+
 
   void _loadInitialPrice() async {
     final price = await _priceService.getCurrentPrice();
@@ -322,7 +330,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             _buildSummaryRow('Investment Amount', '₹${_selectedAmount.toStringAsFixed(2)}'),
-            _buildSummaryRow('Silver Rate', '₹${_currentPrice?.pricePerGram.toStringAsFixed(2) ?? '0.00'}/gram'),
+            _buildSummaryRow('Silver Rate', '₹${_currentPrice?.pricePerGram.toStringAsFixed(2) ?? 'N/A'}/gram'),
             _buildSummaryRow('Silver Quantity', '${silverQuantity.toStringAsFixed(3)} grams'),
             const Divider(height: AppSpacing.lg),
             _buildSummaryRow(
@@ -411,7 +419,13 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   }
 
   Future<void> _navigateToPayment() async {
-    final silverGrams = _selectedAmount / (_currentPrice?.pricePerGram ?? 1);
+    // Check if price is available
+    if (_currentPrice == null) {
+      _showErrorDialog('Silver price not available. Please wait for price update or try again.');
+      return;
+    }
+
+    final silverGrams = _selectedAmount / _currentPrice!.pricePerGram;
 
     // Show payment options dialog for demo
     _showPaymentOptionsDialog(silverGrams);
@@ -448,6 +462,132 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             const SizedBox(height: 20),
             const Text('Choose Payment Method:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
+            // Primary Payment Method - Omniware Net Banking
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGold.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primaryGold, width: 2),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.account_balance, size: 32, color: AppColors.primaryGold),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Net Banking',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const Text(
+                    'Secure payment via Omniware gateway',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'RECOMMENDED',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Or choose UPI payment:',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          // UPI Options Button
+          TextButton(
+            onPressed: () => _showUpiPaymentOptions(silverGrams),
+            child: const Text('UPI Options'),
+          ),
+          // Primary Payment Button (Omniware Net Banking)
+          ElevatedButton(
+            onPressed: () => _showEnhancedPayment(silverGrams),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Pay with Net Banking'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show enhanced payment screen with Omniware Net Banking
+  Future<void> _showEnhancedPayment(double silverGrams) async {
+    Navigator.pop(context); // Close confirmation dialog
+
+    try {
+      final result = await Navigator.push<PaymentResponse>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedPaymentScreen(
+            amount: _selectedAmount,
+            goldGrams: silverGrams, // Using goldGrams parameter for silver
+            description: 'Silver Purchase - ${silverGrams.toStringAsFixed(3)}g',
+            onPaymentComplete: (response) {
+              _handleEnhancedPaymentResponse(response, silverGrams);
+            },
+          ),
+        ),
+      );
+
+      if (result != null) {
+        await _handleEnhancedPaymentResponse(result, silverGrams);
+      }
+    } catch (e) {
+      print('❌ Enhanced payment error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Handle enhanced payment response
+  Future<void> _handleEnhancedPaymentResponse(PaymentResponse response, double silverGrams) async {
+    if (response.status == PaymentStatus.success) {
+      await _handleVerifiedPayment(response, 'Enhanced Payment', silverGrams);
+    } else if (response.status == PaymentStatus.pending) {
+      _showPendingPaymentDialog(response, silverGrams);
+    } else {
+      _showFailedPaymentDialog(response, silverGrams);
+    }
+  }
+
+  /// Show UPI payment options dialog
+  Future<void> _showUpiPaymentOptions(double silverGrams) async {
+    Navigator.pop(context); // Close confirmation dialog
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('UPI Payment Options'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Choose your preferred UPI payment method:'),
+            const SizedBox(height: 20),
             _buildPaymentOption('🟢 Google Pay', 'Pay with GPay', () => _processRealPayment(PaymentMethod.gpay, silverGrams)),
             const SizedBox(height: 8),
             _buildPaymentOption('🟣 PhonePe', 'Pay with PhonePe', () => _processRealPayment(PaymentMethod.phonepe, silverGrams)),
@@ -466,6 +606,84 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       ),
     );
   }
+
+  /// Show pending payment dialog
+  void _showPendingPaymentDialog(PaymentResponse response, double silverGrams) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Payment Pending'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pending, size: 48, color: Colors.orange),
+            const SizedBox(height: 16),
+            Text('Payment is being processed...'),
+            const SizedBox(height: 8),
+            Text('Transaction ID: ${response.transactionId}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Check payment status
+              final status = await _enhancedPaymentService.verifyPaymentStatus(
+                response.transactionId,
+                PaymentMethod.omniwareNetbanking,
+              );
+              await _handleEnhancedPaymentResponse(status, silverGrams);
+            },
+            child: const Text('Check Status'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show failed payment dialog
+  void _showFailedPaymentDialog(PaymentResponse response, double silverGrams) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Payment Failed'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(response.errorMessage ?? 'Payment could not be completed'),
+            const SizedBox(height: 8),
+            Text('Transaction ID: ${response.transactionId}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              // Retry status check
+              final status = await _enhancedPaymentService.verifyPaymentStatus(
+                response.transactionId,
+                PaymentMethod.omniwareNetbanking,
+              );
+              await _handleEnhancedPaymentResponse(status, silverGrams);
+            },
+            child: const Text('Check Again'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaymentOption(String icon, String title, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -640,7 +858,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         type: TransactionType.BUY,
         amount: _selectedAmount,
         metalGrams: silverGrams,
-        metalPricePerGram: _currentPrice?.pricePerGram ?? 0,
+        metalPricePerGram: _currentPrice!.pricePerGram,
         metalType: MetalType.silver,
         paymentMethod: paymentMethod,
         status: TransactionStatus.SUCCESS,
@@ -653,7 +871,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         type: 'BUY',
         amount: _selectedAmount,
         goldGrams: silverGrams, // Using goldGrams field for metal grams (backward compatibility)
-        goldPricePerGram: _currentPrice?.pricePerGram ?? 0, // Using goldPricePerGram for metal price
+        goldPricePerGram: _currentPrice!.pricePerGram, // Using goldPricePerGram for metal price
         paymentMethod: paymentMethod,
         status: 'SUCCESS',
         gatewayTransactionId: response.gatewayTransactionId ?? '',
@@ -665,7 +883,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         'amount': _selectedAmount,
         'silver_grams': silverGrams,
         'payment_method': paymentMethod,
-        'silver_price_per_gram': _currentPrice?.pricePerGram ?? 0,
+        'silver_price_per_gram': _currentPrice!.pricePerGram,
       });
 
       // Create success notification (using goldGrams as 0 for silver)
@@ -890,7 +1108,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       print('💰 Recording payment for scheme $schemeId: ₹$amount for ${silverGrams}g silver');
 
       // Get the current silver price per gram
-      final silverPricePerGram = _currentPrice?.pricePerGram ?? 0.0;
+      final silverPricePerGram = _currentPrice?.pricePerGram ?? 0.0; // Keep fallback for scheme calculations
 
       // Find the next pending installment for this scheme
       // For now, we'll create a dummy installment ID - in production this would be retrieved from database

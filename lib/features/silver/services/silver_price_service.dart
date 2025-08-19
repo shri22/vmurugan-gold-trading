@@ -56,17 +56,18 @@ class SilverPriceService {
   // Load initial price from MJDTA only
   Future<void> _loadInitialPrice() async {
     try {
-      print('SilverPriceService: Loading initial price from MJDTA...');
+      print('🥈 SilverPriceService: Loading initial price from MJDTA...');
 
       final silverPrice = await _mjdtaService.fetchSilverPrice();
       if (silverPrice != null) {
-        print('SilverPriceService: Successfully loaded price from MJDTA: ${silverPrice.formattedPrice}');
+        print('🥈 SilverPriceService: ✅ Successfully loaded price from MJDTA: ${silverPrice.formattedPrice}');
+        print('🥈 SilverPriceService: Raw price value: ${silverPrice.pricePerGram}');
         _currentPrice = silverPrice;
         _isMjdtaAvailable = true;
         _lastMjdtaCheck = DateTime.now();
         _priceController.add(_currentPrice);
       } else {
-        print('SilverPriceService: MJDTA unavailable - no price data available');
+        print('🥈 SilverPriceService: ❌ MJDTA unavailable - no price data available');
         _currentPrice = null;
         _isMjdtaAvailable = false;
         _lastMjdtaCheck = DateTime.now();
@@ -93,13 +94,14 @@ class SilverPriceService {
 
         final silverPrice = await _mjdtaService.fetchSilverPrice();
         if (silverPrice != null) {
-          print('SilverPriceService: Successfully updated price from MJDTA: ${silverPrice.formattedPrice}');
+          print('🥈 SilverPriceService: ✅ Successfully updated price from MJDTA: ${silverPrice.formattedPrice}');
+          print('🥈 SilverPriceService: Updated raw price value: ${silverPrice.pricePerGram}');
           _currentPrice = silverPrice;
           _isMjdtaAvailable = true;
           _lastMjdtaCheck = DateTime.now();
           _priceController.add(_currentPrice);
         } else {
-          print('SilverPriceService: MJDTA still unavailable');
+          print('🥈 SilverPriceService: ❌ MJDTA still unavailable');
           _currentPrice = null;
           _isMjdtaAvailable = false;
           _lastMjdtaCheck = DateTime.now();
@@ -137,6 +139,20 @@ class SilverPriceService {
   Future<void> retryMjdtaConnection() async {
     await _updatePrice();
   }
+
+  // Test method to directly fetch and log silver price
+  Future<SilverPriceModel?> testFetchSilverPrice() async {
+    print('🥈 SilverPriceService: TEST - Direct silver price fetch...');
+    final result = await _mjdtaService.fetchSilverPrice();
+    if (result != null) {
+      print('🥈 SilverPriceService: TEST - ✅ Success: ${result.pricePerGram} (${result.formattedPrice})');
+    } else {
+      print('🥈 SilverPriceService: TEST - ❌ Failed to fetch silver price');
+    }
+    return result;
+  }
+
+
 
   // Check if purchases are allowed (only when MJDTA is available)
   bool get canPurchase => _isMjdtaAvailable && _currentPrice != null;

@@ -8,7 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
-import '../../../core/config/sql_server_config.dart';
+import '../../../core/config/client_server_config.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/encryption_service.dart';
@@ -77,9 +77,9 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
       final encryptedMpin = EncryptionService.encryptMPIN(mpin);
       print('🔐 Encrypted MPIN: $encryptedMpin');
 
-      // Use API-based login with encrypted MPIN
+      // Use client's server API for login
       final response = await http.post(
-        Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/login'),
+        Uri.parse('${ClientServerConfig.baseUrl}/user_login.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'phone': widget.phoneNumber,
@@ -94,20 +94,21 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
-          // Save login state
+          // Save login state with user ID
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('is_logged_in', true);
           await prefs.setString('user_phone', widget.phoneNumber);
-          await prefs.setString('user_data', jsonEncode(data['customer']));
+          await prefs.setString('user_data', jsonEncode(data['user']));
 
-          // IMPORTANT: Mark customer as registered
+          // IMPORTANT: Save user ID for server API calls
+          await prefs.setInt('current_user_id', data['user']['id']);
           await prefs.setBool('customer_registered', true);
 
           // Also save to CustomerService for backward compatibility
           await CustomerService.saveLoginSession(widget.phoneNumber);
 
           print('✅ MPIN Login successful for ${widget.phoneNumber}');
-          print('✅ Customer marked as registered');
+          print('✅ User ID saved: ${data['user']['id']}');
 
           if (mounted) {
             // Navigate to main app

@@ -775,6 +775,215 @@ app.get('/api/admin/dashboard', authenticateAdmin, async (req, res) => {
   }
 });
 
+// ============================================================================
+// NEW PORTFOLIO MANAGEMENT APIs - ADDED FOR MOBILE APP
+// ============================================================================
+
+// Get user portfolio
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    const { user_id, phone } = req.query;
+
+    if (!user_id && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID or phone number required'
+      });
+    }
+
+    // Get user's total holdings from transactions
+    let query = `
+      SELECT
+        c.id as user_id,
+        c.phone,
+        c.name,
+        c.email,
+        ISNULL(SUM(CASE WHEN t.status = 'SUCCESS' AND t.transaction_type = 'BUY' THEN t.gold_grams ELSE 0 END), 0) as total_gold_grams,
+        ISNULL(SUM(CASE WHEN t.status = 'SUCCESS' AND t.transaction_type = 'BUY' THEN t.silver_grams ELSE 0 END), 0) as total_silver_grams,
+        ISNULL(SUM(CASE WHEN t.status = 'SUCCESS' AND t.transaction_type = 'BUY' THEN t.amount ELSE 0 END), 0) as total_invested,
+        COUNT(CASE WHEN t.status = 'SUCCESS' THEN 1 END) as total_transactions
+      FROM customers c
+      LEFT JOIN transactions t ON c.phone = t.customer_phone
+      WHERE 1=1
+    `;
+
+    const request = pool.request();
+
+    if (user_id) {
+      query += ' AND c.id = @user_id';
+      request.input('user_id', sql.Int, parseInt(user_id));
+    } else {
+      query += ' AND c.phone = @phone';
+      request.input('phone', sql.NVarChar, phone);
+    }
+
+    query += ' GROUP BY c.id, c.phone, c.name, c.email';
+
+    const result = await request.query(query);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const portfolio = result.recordset[0];
+
+    // Calculate current value (you can update this with real-time prices)
+    const currentGoldPrice = 6500; // ₹6500 per gram (update with real price)
+    const currentSilverPrice = 126; // ₹126 per gram (from MJDTA)
+
+    const currentValue = (portfolio.total_gold_grams * currentGoldPrice) +
+                        (portfolio.total_silver_grams * currentSilverPrice);
+    const profitLoss = currentValue - portfolio.total_invested;
+    const profitLossPercentage = portfolio.total_invested > 0 ?
+                                (profitLoss / portfolio.total_invested) * 100 : 0;
+
+    res.json({
+      success: true,
+      portfolio: {
+        total_gold_grams: parseFloat(portfolio.total_gold_grams),
+        total_silver_grams: parseFloat(portfolio.total_silver_grams),
+        total_invested: parseFloat(portfolio.total_invested),
+        current_value: parseFloat(currentValue.toFixed(2)),
+        profit_loss: parseFloat(profitLoss.toFixed(2)),
+        profit_loss_percentage: parseFloat(profitLossPercentage.toFixed(2)),
+        last_updated: new Date().toISOString()
+      },
+      user: {
+        id: portfolio.user_id,
+        name: portfolio.name,
+        phone: portfolio.phone,
+        email: portfolio.email
+      }
+    });
+
+  } catch (error) {
+    console.error('Portfolio get error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch portfolio',
+      error: error.message
+    });
+  }
+});
+
+// Get transaction history for user
+app.get('/api/transaction-history', async (req, res) => {
+  try {
+    const { user_id, phone, limit = 50, offset = 0 } = req.query;
+
+    if (!user_id && !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID or phone number required'
+      });
+    }
+
+    let query = `
+      SELECT
+        t.*,
+        c.name as customer_name,
+        c.email as customer_email
+      FROM transactions t
+      LEFT JOIN customers c ON t.customer_phone = c.phone
+      WHERE 1=1
+    `;
+
+    const request = pool.request();
+
+    if (user_id) {
+      query += ' AND c.id = @user_id';
+      request.input('user_id', sql.Int, parseInt(user_id));
+    } else {
+      query += ' AND t.customer_phone = @phone';
+      request.input('phone', sql.NVarChar, phone);
+    }
+
+    query += ` ORDER BY t.timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
+
+    request.input('limit', sql.Int, parseInt(limit));
+    request.input('offset', sql.Int, parseInt(offset));
+
+    const result = await request.query(query);
+
+    res.json({
+      success: true,
+      transactions: result.recordset,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        has_more: result.recordset.length === parseInt(limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Transaction history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transaction history',
+      error: error.message
+    });
+  }
+});
+
+// Update transaction status
+app.post('/api/transaction-status', [
+  body('transaction_id').notEmpty().withMessage('Transaction ID required'),
+  body('status').isIn(['PENDING', 'SUCCESS', 'FAILED', 'CANCELLED']).withMessage('Invalid status')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { transaction_id, status, gateway_transaction_id, callback_data } = req.body;
+
+    const result = await pool.request()
+      .input('transaction_id', sql.NVarChar, transaction_id)
+      .input('status', sql.NVarChar, status)
+      .input('gateway_transaction_id', sql.NVarChar, gateway_transaction_id || null)
+      .input('callback_data', sql.NVarChar, callback_data ? JSON.stringify(callback_data) : null)
+      .input('updated_at', sql.DateTime, new Date())
+      .query(`
+        UPDATE transactions
+        SET status = @status,
+            gateway_transaction_id = @gateway_transaction_id,
+            callback_data = @callback_data,
+            updated_at = @updated_at
+        WHERE transaction_id = @transaction_id
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Transaction status updated successfully',
+      transaction_id: transaction_id,
+      new_status: status
+    });
+
+  } catch (error) {
+    console.error('Transaction status update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update transaction status',
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
