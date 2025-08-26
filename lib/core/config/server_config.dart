@@ -10,7 +10,7 @@ class ServerConfig {
   // Replace with client's actual public IP address
   static const String publicIP = '203.0.113.10'; // CLIENT'S ACTUAL PUBLIC IP
   static const String productionDomain = ''; // Leave empty if no domain
-  static const String localIP = 'YOUR_TEAMMATE_IP'; // Keep for local development
+  static const String localIP = 'YOUR_WINDOWS_SERVER_PUBLIC_IP'; // Windows Server Public IP
 
   // Server ports
   static const int httpsPort = 443;
@@ -18,7 +18,7 @@ class ServerConfig {
   static const int globalApiPort = 3001; // Direct API access globally
 
   // Environment flag (set to false for global production access)
-  static const bool isDevelopment = false; // IMPORTANT: false for global access
+  static const bool isDevelopment = true; // IMPORTANT: true for local development
   
   // Admin token (ask your teammate for this)
   static const String adminToken = 'VMURUGAN_ADMIN_2025';

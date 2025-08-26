@@ -6,10 +6,12 @@ class ClientServerConfig {
   // CLIENT'S SERVER DETAILS - UPDATE THESE VALUES
   // =============================================================================
   
-  // BACK TO YOUR ORIGINAL NODE.JS SETUP
-  // FOR LOCAL TESTING: Use 'localhost' for emulator or your computer's IP for real device
-  // FOR PRODUCTION: Replace with client's actual domain/IP
-  static const String serverDomain = 'localhost'; // Change to your computer's IP for real device testing
+  // PRODUCTION DEPLOYMENT ON WINDOWS SERVER
+  // UPDATE THIS WITH YOUR WINDOWS SERVER'S PUBLIC IP AFTER DEPLOYMENT
+  static const String serverDomain = 'YOUR_WINDOWS_SERVER_PUBLIC_IP'; // Replace with actual public IP
+
+  // For local testing, you can temporarily use:
+  // static const String serverDomain = '192.168.1.18'; // Local network IP
 
   // API port (your Node.js server runs on port 3001)
   static const int serverPort = 3001;

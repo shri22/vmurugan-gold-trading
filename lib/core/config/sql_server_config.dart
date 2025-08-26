@@ -6,9 +6,12 @@ class SqlServerConfig {
   // UPDATE THESE VALUES WITH YOUR SQL SERVER DETAILS
   // =============================================================================
   
-  // Your computer's IP address where SQL Server is running
-  // ✅ CONFIGURED WITH YOUR SQL SERVER DETAILS
-  static const String serverIP = '192.168.29.139'; // Your SQL Server IP
+  // Your Windows Server public IP address where APIs are deployed
+  // ✅ UPDATE THIS WITH YOUR ACTUAL PUBLIC IP AFTER DEPLOYMENT
+  static const String serverIP = 'YOUR_WINDOWS_SERVER_PUBLIC_IP'; // Replace with your actual public IP
+
+  // For development/testing, you can temporarily use:
+  // static const String serverIP = '192.168.1.18'; // Local network IP
 
   // SQL Server port (default is 1433)
   static const int port = 1433;
