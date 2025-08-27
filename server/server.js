@@ -425,6 +425,196 @@ app.use((error, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
+// =============================================================================
+// PAYMENT GATEWAY ENDPOINTS (OMNIWARE INTEGRATION)
+// =============================================================================
+
+// Payment initiation endpoint
+app.post('/api/payment/initiate', [
+  body('amount').isNumeric().withMessage('Amount must be numeric'),
+  body('user_id').notEmpty().withMessage('User ID is required'),
+  body('transaction_id').notEmpty().withMessage('Transaction ID is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { amount, user_id, transaction_id, description = 'Gold Purchase' } = req.body;
+
+    // Omniware configuration
+    const merchantId = process.env.OMNIWARE_MERCHANT_ID || 'TEST_MERCHANT_ID';
+    const secretKey = process.env.OMNIWARE_SECRET_KEY || 'TEST_SECRET_KEY';
+    const environment = process.env.OMNIWARE_ENVIRONMENT || 'test';
+
+    // Generate order ID
+    const orderId = `GOLD_${Date.now()}_${user_id}`;
+
+    // Generate hash for security
+    const hashString = `${merchantId}|${orderId}|${amount}|${secretKey}`;
+    const hash = require('crypto').createHash('sha256').update(hashString).digest('hex');
+
+    // Prepare URLs
+    const baseUrl = `http://${req.get('host')}`;
+    const successUrl = `${baseUrl}/payment/success`;
+    const failureUrl = `${baseUrl}/payment/failure`;
+    const callbackUrl = `${baseUrl}/api/payment/callback`;
+
+    // Payment gateway URL
+    const paymentUrl = environment === 'live'
+      ? 'https://api.omniware.in/payment/initiate'
+      : 'https://sandbox.omniware.in/payment/initiate';
+
+    // Store transaction in database
+    const query = `
+      INSERT INTO transactions (
+        transaction_id, customer_phone, amount, status,
+        payment_method, created_at, business_id
+      ) VALUES (?, ?, ?, 'PENDING', 'GATEWAY', NOW(), ?)
+    `;
+
+    await pool.execute(query, [
+      transaction_id, user_id, amount, 'DIGI_GOLD_001'
+    ]);
+
+    res.json({
+      success: true,
+      order_id: orderId,
+      amount: amount,
+      payment_url: paymentUrl,
+      merchant_id: merchantId,
+      hash: hash,
+      success_url: successUrl,
+      failure_url: failureUrl,
+      callback_url: callbackUrl
+    });
+
+  } catch (error) {
+    console.error('Payment initiation error:', error);
+    res.status(500).json({ success: false, message: 'Payment initiation failed' });
+  }
+});
+
+// Payment callback/webhook endpoint
+app.post('/api/payment/callback', async (req, res) => {
+  try {
+    console.log('📞 Payment callback received:', req.body);
+
+    const {
+      orderId,
+      status,
+      transactionId,
+      amount,
+      hash: receivedHash
+    } = req.body;
+
+    // Verify hash if provided
+    const secretKey = process.env.OMNIWARE_SECRET_KEY || 'TEST_SECRET_KEY';
+    if (receivedHash) {
+      const calculatedHash = require('crypto')
+        .createHash('sha256')
+        .update(`${orderId}|${status}|${amount}|${secretKey}`)
+        .digest('hex');
+
+      if (receivedHash !== calculatedHash) {
+        console.error('❌ Hash verification failed');
+        return res.status(400).json({ error: 'Invalid hash verification' });
+      }
+    }
+
+    // Update transaction status
+    const updateQuery = `
+      UPDATE transactions
+      SET status = ?, gateway_transaction_id = ?, updated_at = NOW()
+      WHERE transaction_id = ?
+    `;
+
+    await pool.execute(updateQuery, [
+      status.toUpperCase(), transactionId, orderId
+    ]);
+
+    console.log(`✅ Transaction ${orderId} updated to ${status}`);
+
+    res.json({ success: true, message: 'Callback processed successfully' });
+
+  } catch (error) {
+    console.error('❌ Payment callback error:', error);
+    res.status(500).json({ error: 'Callback processing failed' });
+  }
+});
+
+// Payment status check endpoint
+app.get('/api/payment/status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const query = 'SELECT * FROM transactions WHERE transaction_id = ?';
+    const [rows] = await pool.execute(query, [orderId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const transaction = rows[0];
+    res.json({
+      success: true,
+      order_id: orderId,
+      status: transaction.status,
+      amount: transaction.amount,
+      gateway_transaction_id: transaction.gateway_transaction_id,
+      created_at: transaction.created_at,
+      updated_at: transaction.updated_at
+    });
+
+  } catch (error) {
+    console.error('Payment status check error:', error);
+    res.status(500).json({ success: false, message: 'Status check failed' });
+  }
+});
+
+// Payment success page
+app.get('/payment/success', (req, res) => {
+  res.send(`
+    <html>
+      <head><title>Payment Successful</title></head>
+      <body style="font-family: Arial; text-align: center; padding: 50px;">
+        <h1 style="color: green;">✅ Payment Successful!</h1>
+        <p>Your gold purchase has been completed successfully.</p>
+        <p>You can now close this window and return to the app.</p>
+      </body>
+    </html>
+  `);
+});
+
+// Payment failure page
+app.get('/payment/failure', (req, res) => {
+  res.send(`
+    <html>
+      <head><title>Payment Failed</title></head>
+      <body style="font-family: Arial; text-align: center; padding: 50px;">
+        <h1 style="color: red;">❌ Payment Failed!</h1>
+        <p>Your payment could not be processed. Please try again.</p>
+        <p>You can now close this window and return to the app.</p>
+      </body>
+    </html>
+  `);
+});
+
+// Payment cancel page
+app.get('/payment/cancel', (req, res) => {
+  res.send(`
+    <html>
+      <head><title>Payment Cancelled</title></head>
+      <body style="font-family: Arial; text-align: center; padding: 50px;">
+        <h1 style="color: orange;">⚠️ Payment Cancelled!</h1>
+        <p>You have cancelled the payment process.</p>
+        <p>You can now close this window and return to the app.</p>
+      </body>
+    </html>
+  `);
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ success: false, message: 'Endpoint not found' });
@@ -435,6 +625,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Digi Gold Business Server running on port ${PORT}`);
   console.log(`📊 Admin Dashboard: http://localhost:${PORT}/api/admin/dashboard`);
   console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+  console.log(`💳 Payment endpoints ready for bank integration`);
 });
 
 module.exports = app;

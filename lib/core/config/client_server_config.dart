@@ -7,14 +7,14 @@ class ClientServerConfig {
   // =============================================================================
   
   // PRODUCTION DEPLOYMENT ON WINDOWS SERVER
-  // UPDATE THIS WITH YOUR WINDOWS SERVER'S PUBLIC IP AFTER DEPLOYMENT
-  static const String serverDomain = 'YOUR_WINDOWS_SERVER_PUBLIC_IP'; // Replace with actual public IP
+  // ✅ CONFIGURED WITH ACTUAL PUBLIC IP
+  static const String serverDomain = '103.124.152.220'; // Your actual public IP
 
   // For local testing, you can temporarily use:
   // static const String serverDomain = '192.168.1.18'; // Local network IP
 
-  // API port (your Node.js server runs on port 3001)
-  static const int serverPort = 3001;
+  // API port (your Node.js server runs on port 3000 by default, or 3001 if configured)
+  static const int serverPort = 3000;
 
   // Protocol (use HTTP for local testing, HTTPS for production)
   static const String protocol = 'http';
@@ -23,27 +23,26 @@ class ClientServerConfig {
   // AUTOMATIC API ENDPOINT GENERATION
   // =============================================================================
   
-  // Base URL for all APIs (your original Node.js server)
+  // Base URL for all APIs (your Node.js server)
   static const String baseUrl = '$protocol://$serverDomain:$serverPort/api';
 
-  // User Management APIs (your existing endpoints)
+  // User Management APIs (your Node.js endpoints)
   static const String userRegisterEndpoint = '$baseUrl/customers';
   static const String userLoginEndpoint = '$baseUrl/login';
+  static const String sendOtpEndpoint = '$baseUrl/auth/send-otp';
+  static const String verifyOtpEndpoint = '$baseUrl/auth/verify-otp';
 
-  // Portfolio Management APIs (newly added to your server)
-  static const String portfolioGetEndpoint = '$baseUrl/portfolio';
-  static const String portfolioUpdateEndpoint = '$baseUrl/portfolio'; // Same endpoint, different method
-
-  // Transaction Management APIs (your existing + new endpoints)
+  // Transaction Management APIs (your Node.js endpoints)
   static const String transactionCreateEndpoint = '$baseUrl/transactions';
   static const String transactionUpdateEndpoint = '$baseUrl/transaction-status';
   static const String transactionHistoryEndpoint = '$baseUrl/transaction-history';
 
-  // Payment APIs (you can add these later if needed)
-  static const String paymentInitiateEndpoint = '$baseUrl/payment/initiate';
-  static const String paymentCallbackEndpoint = '$baseUrl/payment/callback';
+  // Admin APIs (your Node.js endpoints)
+  static const String adminCustomersEndpoint = '$baseUrl/admin/customers';
+  static const String adminTransactionsEndpoint = '$baseUrl/admin/transactions';
+  static const String adminStatsEndpoint = '$baseUrl/admin/stats';
 
-  // Health check (your existing endpoint)
+  // Health check (your Node.js endpoint)
   static const String healthCheckEndpoint = '$protocol://$serverDomain:$serverPort/health';
   
   // =============================================================================

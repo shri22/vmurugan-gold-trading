@@ -7,8 +7,8 @@ class SqlServerConfig {
   // =============================================================================
   
   // Your Windows Server public IP address where APIs are deployed
-  // ✅ UPDATE THIS WITH YOUR ACTUAL PUBLIC IP AFTER DEPLOYMENT
-  static const String serverIP = 'YOUR_WINDOWS_SERVER_PUBLIC_IP'; // Replace with your actual public IP
+  // ✅ CONFIGURED WITH ACTUAL PUBLIC IP
+  static const String serverIP = '103.124.152.220'; // Your actual public IP
 
   // For development/testing, you can temporarily use:
   // static const String serverIP = '192.168.1.18'; // Local network IP
