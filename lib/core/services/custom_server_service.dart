@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'secure_http_client.dart';
 
 class CustomServerService {
-  static const String baseUrl = 'https://103.124.152.220:3001';
+  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001';
 
   static Future<Map<String, dynamic>> saveTransaction(Map<String, dynamic> transaction) async {
     try {
-      final response = await http.post(
+      final response = await SecureHttpClient.post(
         Uri.parse('$baseUrl/api/transaction/create'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(transaction),
@@ -24,7 +25,7 @@ class CustomServerService {
 
   static Future<Map<String, dynamic>> saveCustomer(Map<String, dynamic> customer) async {
     try {
-      final response = await http.post(
+      final response = await SecureHttpClient.post(
         Uri.parse('$baseUrl/api/user/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(customer),
@@ -42,7 +43,7 @@ class CustomServerService {
 
   static Future<void> logAnalytics({required String event, Map<String, dynamic>? data}) async {
     try {
-      await http.post(
+      await SecureHttpClient.post(
         Uri.parse('$baseUrl/api/analytics'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'event': event, 'data': data}),
@@ -54,7 +55,7 @@ class CustomServerService {
 
   static Future<Map<String, dynamic>> getDashboardData({required String adminToken}) async {
     try {
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/api/admin/dashboard'),
         headers: {
           'Content-Type': 'application/json',

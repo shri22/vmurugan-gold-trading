@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/server_config.dart';
 import '../services/api_service.dart';
+import '../services/secure_http_client.dart';
 
 class ServerTestWidget extends StatefulWidget {
   const ServerTestWidget({Key? key}) : super(key: key);
@@ -163,9 +164,9 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
     });
 
     try {
-      // Test health endpoint
+      // Test health endpoint using secure HTTP client
       final healthUrl = ServerConfig.baseUrl.replaceAll('/api', '/health');
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse(healthUrl),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));

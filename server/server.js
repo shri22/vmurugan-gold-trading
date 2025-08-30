@@ -211,7 +211,7 @@ app.post('/api/auth/verify-otp', [
 // Login endpoint
 app.post('/api/login', [
   body('phone').isMobilePhone('en-IN').withMessage('Invalid phone number'),
-  body('encrypted_mpin').isLength({ min: 4, max: 4 }).withMessage('MPIN must be 4 digits')
+  body('encrypted_mpin').isLength({ min: 32 }).withMessage('Invalid encrypted MPIN format')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -425,12 +425,58 @@ app.get('/api/customers/:phone', async (req, res) => {
         id: customer.id,
         phone: customer.phone,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        has_mpin: customer.mpin ? true : false,
+        mpin_length: customer.mpin ? customer.mpin.length : 0
       }
     });
 
   } catch (error) {
     console.error('Error getting customer:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Set MPIN for existing customer (for customers who registered without MPIN)
+app.post('/api/customers/:phone/set-mpin', [
+  body('encrypted_mpin').isLength({ min: 32 }).withMessage('Invalid encrypted MPIN format')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { phone } = req.params;
+    const { encrypted_mpin } = req.body;
+
+    console.log(`🔧 Setting MPIN for existing customer: ${phone}`);
+
+    // Check if customer exists
+    const [rows] = await pool.execute(
+      'SELECT * FROM customers WHERE phone = ? AND business_id = ?',
+      [phone, 'DIGI_GOLD_001']
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    // Update customer with MPIN
+    await pool.execute(
+      'UPDATE customers SET mpin = ? WHERE phone = ? AND business_id = ?',
+      [encrypted_mpin, phone, 'DIGI_GOLD_001']
+    );
+
+    console.log(`✅ MPIN set successfully for customer: ${phone}`);
+
+    res.json({
+      success: true,
+      message: 'MPIN set successfully'
+    });
+
+  } catch (error) {
+    console.error('Error setting MPIN:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

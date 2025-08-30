@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/secure_http_client.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
@@ -77,8 +78,8 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
       final encryptedMpin = EncryptionService.encryptMPIN(mpin);
       print('🔐 Encrypted MPIN: $encryptedMpin');
 
-      // Use client's server API for login
-      final response = await http.post(
+      // Use client's server API for login with secure HTTP client
+      final response = await SecureHttpClient.post(
         Uri.parse('${ClientServerConfig.userLoginEndpoint}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({

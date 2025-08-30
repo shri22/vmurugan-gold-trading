@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/sql_server_config.dart';
+import 'secure_http_client.dart';
 
 /// SQL Server Database Service
 /// Connects to local SQL Server (SSMS) database via HTTP API
 class SqlServerService {
   // Base URL for the SQL Server API bridge
-  static String get baseUrl => 'http://${SqlServerConfig.serverIP}:3001/api';
+  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001/api';
   
   // Headers for API requests
   static Map<String, String> get headers => {
@@ -21,7 +22,7 @@ class SqlServerService {
   /// Test database connection
   static Future<Map<String, dynamic>> testConnection() async {
     try {
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/test-connection'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
@@ -88,7 +89,7 @@ class SqlServerService {
         'device_id': deviceId,
       };
 
-      final response = await http.post(
+      final response = await SecureHttpClient.post(
         Uri.parse('$baseUrl/customers'),
         headers: headers,
         body: jsonEncode(customerData),
@@ -117,7 +118,7 @@ class SqlServerService {
   /// Get customer by phone
   static Future<Map<String, dynamic>> getCustomerByPhone(String phone) async {
     try {
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/customers/$phone'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
@@ -151,7 +152,7 @@ class SqlServerService {
   /// Get all customers
   static Future<List<Map<String, dynamic>>> getAllCustomers() async {
     try {
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/customers'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
@@ -204,7 +205,7 @@ class SqlServerService {
         'location': location,
       };
 
-      final response = await http.post(
+      final response = await SecureHttpClient.post(
         Uri.parse('$baseUrl/transactions'),
         headers: headers,
         body: jsonEncode(transactionData),
@@ -249,7 +250,7 @@ class SqlServerService {
         queryParams += '&status=$status';
       }
 
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/transactions$queryParams'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
@@ -336,7 +337,7 @@ class SqlServerService {
   /// Get dashboard data
   static Future<Map<String, dynamic>> getDashboardData() async {
     try {
-      final response = await http.get(
+      final response = await SecureHttpClient.get(
         Uri.parse('$baseUrl/admin/dashboard'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));

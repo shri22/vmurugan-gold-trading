@@ -136,9 +136,9 @@ gold trading, digital gold, gold investment, portfolio management, secure tradin
 **Developer Name:** V Murugan Gold Trading
 **Email:** developer@vmurugan.com
 **Support Email:** support@vmurugan.com
-**Website:** http://103.124.152.220
-**Privacy Policy:** http://103.124.152.220/privacy
-**Terms of Service:** http://103.124.152.220/terms
+**Website:** https://api.vmuruganjewellery.co.in
+**Privacy Policy:** https://api.vmuruganjewellery.co.in/privacy
+**Terms of Service:** https://api.vmuruganjewellery.co.in/terms
 
 ---
 

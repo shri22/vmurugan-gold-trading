@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'sql_server_service.dart';
 import '../config/sql_server_config.dart';
+import 'secure_http_client.dart';
 
 /// SQL Server API Service
 /// This service provides the same interface as other API services
@@ -9,7 +10,7 @@ import '../config/sql_server_config.dart';
 class SqlServerApiService {
 
   // Base URL for API calls
-  static String get baseUrl => 'http://${SqlServerConfig.serverIP}:3001';
+  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001';
 
   // Headers for API calls
   static Map<String, String> get headers => {

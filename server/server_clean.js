@@ -88,7 +88,7 @@ app.get('/admin', (req, res) => {
                     <p><strong>SQL Server API:</strong> ${SQL_API_URL}</p>
                     <p><strong>Database:</strong> SQL Server (MSSQLSERVER)</p>
                     <p><strong>Network IP:</strong> 192.168.1.200</p>
-                    <p><strong>Public IP:</strong> 103.124.152.220</p>
+                    <p><strong>Domain:</strong> api.vmuruganjewellery.co.in</p>
                 </div>
                 
                 <div class="status info">
@@ -101,7 +101,7 @@ app.get('/admin', (req, res) => {
                 <div class="status info">
                     <h3>📱 Flutter App Configuration</h3>
                     <p><strong>Local Testing:</strong> http://192.168.1.200:${PORT}</p>
-                    <p><strong>Production:</strong> http://103.124.152.220:${PORT}</p>
+                    <p><strong>Production:</strong> https://api.vmuruganjewellery.co.in:${PORT}</p>
                 </div>
                 
                 <h3>🧪 Quick Tests</h3>
@@ -169,7 +169,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('🎉 VMurugan Client Server Running!');
     console.log(`🌐 Local: http://localhost:${PORT}`);
     console.log(`🌐 Network: http://192.168.1.200:${PORT}`);
-    console.log(`🌐 Public: http://103.124.152.220:${PORT}`);
+    console.log(`🌐 Public: https://api.vmuruganjewellery.co.in:${PORT}`);
     console.log(`👨‍💼 Admin: http://localhost:${PORT}/admin`);
     console.log('✅ Ready!');
 });

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/secure_http_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/config/sql_server_config.dart';
 import 'otp_verification_screen.dart';

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'firebase_service.dart';
 import 'customer_service.dart';
+import 'secure_http_client.dart';
 import 'sms_service.dart';
 import 'firebase_phone_auth_service.dart';
 import 'encryption_service.dart';
@@ -456,9 +457,9 @@ class AuthService {
         'encrypted_mpin': encryptedMpin,
       };
 
-      // Send to new server API
-      final response = await http.post(
-        Uri.parse('$baseUrl/user_register.php'),
+      // Send to new server API using secure HTTP client
+      final response = await SecureHttpClient.post(
+        Uri.parse('$baseUrl/customers'),
         headers: headers,
         body: jsonEncode(customerData),
       ).timeout(const Duration(seconds: 30));
@@ -517,9 +518,9 @@ class AuthService {
         'encrypted_mpin': encryptedMpin,
       };
 
-      // Send to new server API
-      final response = await http.post(
-        Uri.parse('$baseUrl/user_login.php'),
+      // Send to new server API using secure HTTP client
+      final response = await SecureHttpClient.post(
+        Uri.parse('$baseUrl/login'),
         headers: headers,
         body: jsonEncode(loginData),
       ).timeout(const Duration(seconds: 30));
@@ -594,8 +595,8 @@ class AuthService {
   /// Check if server is reachable
   static Future<bool> isServerReachable() async {
     try {
-      final response = await http.get(
-        Uri.parse('${ClientServerConfig.baseUrl}/portfolio_get.php?user_id=1'),
+      final response = await SecureHttpClient.get(
+        Uri.parse('${ClientServerConfig.healthCheckEndpoint}'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 5));
 
@@ -641,7 +642,7 @@ class AuthService {
     try {
       final url = '${ClientServerConfig.baseUrl}$endpoint';
       final requestBody = body ?? data;
-      final response = await http.post(
+      final response = await SecureHttpClient.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: requestBody != null ? jsonEncode(requestBody) : null,

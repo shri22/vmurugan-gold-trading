@@ -1,15 +1,28 @@
-# V Murugan Gold Trading - Server APIs Documentation
+# V Murugan Gold Trading - API Documentation
 
-## Overview
-Complete server-side APIs for the V Murugan Gold Trading mobile application with secure data storage and Omniware payment integration.
+## ⚠️ **DEPRECATED - PHP APIs REMOVED**
 
-## Base URL
-```
-https://yourdomain.com/api/
-```
+**This documentation is for the old PHP-based APIs that have been removed from the project.**
 
-## Authentication
-All APIs use user_id for authentication. In production, implement JWT tokens or session-based authentication.
+**✅ Current Implementation: Node.js Server**
+- **Server File**: `server/server.js`
+- **Base URL**: `https://api.vmuruganjewellery.co.in:3001/api`
+- **Protocol**: HTTPS only
+- **Authentication**: MPIN-based authentication
+
+## 🔄 **Migration Status**
+All PHP APIs have been replaced with Node.js endpoints:
+
+### **Removed PHP Files:**
+- ❌ `user_register.php` → ✅ `POST /api/customers`
+- ❌ `user_login.php` → ✅ `POST /api/login`
+- ❌ `portfolio_get.php` → ✅ `GET /api/portfolio`
+- ❌ `transaction_create.php` → ✅ `POST /api/transactions`
+- ❌ `payment_initiate.php` → ✅ `POST /api/payment/initiate`
+- ❌ All other PHP files → ✅ Node.js equivalents
+
+## 📚 **Current API Documentation**
+For current API endpoints, refer to the Node.js server implementation in `server/server.js`
 
 ---
 

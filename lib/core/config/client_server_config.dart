@@ -7,8 +7,8 @@ class ClientServerConfig {
   // =============================================================================
   
   // PRODUCTION DEPLOYMENT ON WINDOWS SERVER
-  // ✅ CONFIGURED WITH ACTUAL PUBLIC IP
-  static const String serverDomain = '103.124.152.220'; // Your actual public IP
+  // ✅ CONFIGURED WITH ACTUAL DOMAIN
+  static const String serverDomain = 'api.vmuruganjewellery.co.in'; // Your actual domain
 
   // For local testing, you can temporarily use:
   // static const String serverDomain = 'localhost'; // Local testing
