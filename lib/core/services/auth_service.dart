@@ -618,6 +618,44 @@ class AuthService {
       print('❌ AuthService: Error during logout: $e');
     }
   }
+
+  // Additional methods for compatibility
+  static Future<bool> validateMpin(String mpin) async {
+    try {
+      // Simple MPIN validation for production
+      final prefs = await SharedPreferences.getInstance();
+      final storedMpin = prefs.getString('user_mpin');
+      return storedMpin == mpin;
+    } catch (e) {
+      print('❌ AuthService: MPIN validation error: $e');
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> makeSecureRequest(
+    String endpoint, {
+    Map<String, dynamic>? data,
+    Map<String, dynamic>? body,
+    String method = 'POST',
+  }) async {
+    try {
+      final url = '${ClientServerConfig.baseUrl}$endpoint';
+      final requestBody = body ?? data;
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody != null ? jsonEncode(requestBody) : null,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Request failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Secure request error: $e');
+    }
+  }
 }
 
 /// Authentication states

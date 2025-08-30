@@ -14,7 +14,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/language_service.dart';
-import '../../../core/services/translation_service.dart';
+import '../../../core/services/translation_service.dart' as TranslationService;
 import '../../../core/services/mock_data_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
@@ -563,8 +563,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadLanguagePreference() async {
     try {
-      final language = await LanguageService.getCurrentLanguage();
-      final languageDisplay = await LanguageService.getCurrentLanguageDisplay();
+      final language = await TranslationService.LanguageService.getCurrentLanguage();
+      final languageDisplay = await TranslationService.LanguageService.getCurrentLanguageDisplay();
 
       if (mounted) {
         setState(() {
@@ -626,7 +626,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _changeLanguage(String languageCode) async {
     try {
-      await LanguageService.setLanguage(languageCode);
+      await TranslationService.LanguageService.setLanguage(languageCode);
       await _loadLanguagePreference();
 
       Navigator.of(context).pop(); // Close dialog
@@ -915,8 +915,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         // Generate mock transactions for the specified period
         transactions = MockDataService.generateMockTransactions(
-          startDate: dateRange['start'] ?? DateTime.now().subtract(const Duration(days: 30)),
-          endDate: dateRange['end'] ?? DateTime.now(),
+          period: period,
           count: _getMockTransactionCount(period),
         );
 

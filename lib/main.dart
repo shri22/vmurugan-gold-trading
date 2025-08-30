@@ -2,33 +2,25 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/utils/responsive.dart';
-import 'features/onboarding/screens/onboarding_screen.dart';
 import 'features/auth/screens/phone_entry_screen.dart';
 import 'features/portfolio/screens/portfolio_screen.dart';
-import 'features/gold/screens/schemes_screen.dart';
-import 'features/gold/screens/transaction_history_screen.dart';
 import 'features/gold/screens/buy_gold_screen.dart';
 import 'features/gold/services/gold_price_service.dart';
 import 'features/gold/models/gold_price_model.dart';
 import 'features/silver/services/silver_price_service.dart';
 import 'features/silver/models/silver_price_model.dart';
 import 'features/silver/screens/buy_silver_screen.dart';
-import 'features/schemes/services/scheme_management_service.dart';
-import 'features/schemes/models/scheme_installment_model.dart';
 import 'core/widgets/vmurugan_logo.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/notifications/screens/notifications_screen.dart';
-import 'features/notifications/services/notification_service.dart';
-import 'features/notifications/models/notification_model.dart';
-import 'core/services/customer_service.dart';
-
-import 'features/auth/screens/enhanced_app_wrapper.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/auth/screens/quick_mpin_login_screen.dart';
-import 'features/payment/screens/payment_gateway_config_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/auto_logout_service.dart';
 import 'core/config/firebase_init.dart';
+import 'features/auth/screens/quick_mpin_login_screen.dart';
+import 'features/transaction/screens/transaction_history_screen.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/scheme_management_service.dart';
+import 'core/services/customer_service.dart';
 
 void main() async {
   // Ensure Flutter binding is initialized
@@ -991,8 +983,8 @@ class _HomePageState extends State<HomePage> {
   void _createTestNotification() async {
     // Create a test notification to demonstrate the system
     await NotificationTemplates.adminMessage(
-      title: 'Welcome to VMurugan Gold Trading! 🎉',
-      message: 'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
+      'Welcome to VMurugan Gold Trading! 🎉',
+      'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
       priority: NotificationPriority.normal,
     );
 

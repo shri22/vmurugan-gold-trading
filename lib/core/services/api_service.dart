@@ -62,35 +62,35 @@ class ApiService {
           location: location,
         );
       case 'server':
-        return await CustomServerService.saveTransaction(
-          transactionId: transactionId,
-          customerPhone: customerPhone,
-          customerName: customerName,
-          type: type,
-          amount: amount,
-          goldGrams: goldGrams,
-          goldPricePerGram: goldPricePerGram,
-          paymentMethod: paymentMethod,
-          status: status,
-          gatewayTransactionId: gatewayTransactionId,
-          deviceInfo: deviceInfo,
-          location: location,
-        );
+        return await CustomServerService.saveTransaction({
+          'transaction_id': transactionId,
+          'customer_phone': customerPhone,
+          'customer_name': customerName,
+          'type': type,
+          'amount': amount,
+          'gold_grams': goldGrams,
+          'gold_price_per_gram': goldPricePerGram,
+          'payment_method': paymentMethod,
+          'status': status,
+          'gateway_transaction_id': gatewayTransactionId,
+          'device_info': deviceInfo,
+          'location': location,
+        });
       case 'local':
-        return await LocalApiService.saveTransaction(
-          transactionId: transactionId,
-          customerPhone: customerPhone,
-          customerName: customerName,
-          type: type,
-          amount: amount,
-          goldGrams: goldGrams,
-          goldPricePerGram: goldPricePerGram,
-          paymentMethod: paymentMethod,
-          status: status,
-          gatewayTransactionId: gatewayTransactionId,
-          deviceInfo: deviceInfo,
-          location: location,
-        );
+        return await LocalApiService.saveTransaction({
+          'transaction_id': transactionId,
+          'customer_phone': customerPhone,
+          'customer_name': customerName,
+          'type': type,
+          'amount': amount,
+          'gold_grams': goldGrams,
+          'gold_price_per_gram': goldPricePerGram,
+          'payment_method': paymentMethod,
+          'status': status,
+          'gateway_transaction_id': gatewayTransactionId,
+          'device_info': deviceInfo,
+          'location': location,
+        });
       case 'sqlserver':
         return await SqlServerApiService.saveTransaction(
           transactionId: transactionId,
@@ -162,23 +162,23 @@ class ApiService {
           deviceId: deviceId,
         );
       case 'server':
-        return await CustomServerService.saveCustomer(
-          phone: phone,
-          name: name,
-          email: email,
-          address: address,
-          panCard: panCard,
-          deviceId: deviceId,
-        );
+        return await CustomServerService.saveCustomer({
+          'phone': phone,
+          'name': name,
+          'email': email,
+          'address': address,
+          'pan_card': panCard,
+          'device_id': deviceId,
+        });
       case 'local':
-        return await LocalApiService.saveCustomerInfo(
-          phone: phone,
-          name: name,
-          email: email,
-          address: address,
-          panCard: panCard,
-          deviceId: deviceId,
-        );
+        return await LocalApiService.saveCustomerInfo({
+          'phone': phone,
+          'name': name,
+          'email': email,
+          'address': address,
+          'pan_card': panCard,
+          'device_id': deviceId,
+        });
       case 'sqlserver':
         return await SqlServerApiService.saveCustomerInfo(
           phone: phone,

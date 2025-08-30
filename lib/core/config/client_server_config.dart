@@ -11,19 +11,19 @@ class ClientServerConfig {
   static const String serverDomain = '103.124.152.220'; // Your actual public IP
 
   // For local testing, you can temporarily use:
-  // static const String serverDomain = '192.168.1.18'; // Local network IP
+  // static const String serverDomain = 'localhost'; // Local testing
 
-  // API port (your Node.js server runs on port 3000 by default, or 3001 if configured)
-  static const int serverPort = 3000;
+  // API port (HTTPS server runs on port 3001 for secure API endpoints)
+  static const int serverPort = 3001;
 
-  // Protocol (use HTTP for local testing, HTTPS for production)
-  static const String protocol = 'http';
-  
+  // Protocol (HTTPS ONLY for secure production)
+  static const String protocol = 'https';
+
   // =============================================================================
   // AUTOMATIC API ENDPOINT GENERATION
   // =============================================================================
-  
-  // Base URL for all APIs (your Node.js server)
+
+  // Base URL for all APIs (your Node.js server) - HTTPS ONLY
   static const String baseUrl = '$protocol://$serverDomain:$serverPort/api';
 
   // User Management APIs (your Node.js endpoints)
@@ -36,6 +36,10 @@ class ClientServerConfig {
   static const String transactionCreateEndpoint = '$baseUrl/transactions';
   static const String transactionUpdateEndpoint = '$baseUrl/transaction-status';
   static const String transactionHistoryEndpoint = '$baseUrl/transaction-history';
+
+  // Portfolio Management APIs (your Node.js endpoints)
+  static const String portfolioGetEndpoint = '$baseUrl/portfolio';
+  static const String portfolioUpdateEndpoint = '$baseUrl/portfolio-update';
 
   // Admin APIs (your Node.js endpoints)
   static const String adminCustomersEndpoint = '$baseUrl/admin/customers';
@@ -65,7 +69,8 @@ class ClientServerConfig {
       'server_port': serverPort,
       'protocol': protocol,
       'base_url': baseUrl,
-      'ssl_enabled': protocol == 'https',
+      'ssl_enabled': true, // HTTPS ONLY
+      'https_only': true,
     };
   }
   

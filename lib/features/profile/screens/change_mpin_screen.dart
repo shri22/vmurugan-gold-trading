@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/services/encryption_service.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/config/sql_server_config.dart';
 
 class ChangeMpinScreen extends StatefulWidget {
@@ -176,23 +177,22 @@ class _ChangeMpinScreenState extends State<ChangeMpinScreen> {
 
       print('🔐 ChangeMpinScreen: Changing MPIN for user: $userPhone');
 
-      // Call API to change MPIN
-      final response = await http.post(
-        Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/change-mpin'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'phone': userPhone,
-          'current_encrypted_mpin': encryptedCurrentMpin,
-          'new_encrypted_mpin': encryptedNewMpin,
-        }),
+      // Call API to change MPIN via HTTPS
+      final response = await AuthService.makeSecureRequest(
+        '/customers/$userPhone/update-mpin',
+        method: 'POST',
+        body: {
+          'current_mpin': currentMpin,
+          'new_mpin': newMpin,
+        },
       );
 
       setState(() {
         _isLoading = false;
       });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response['success'] == true) {
+        final data = response;
         
         if (data['success'] == true) {
           print('✅ ChangeMpinScreen: MPIN changed successfully');
@@ -201,7 +201,7 @@ class _ChangeMpinScreenState extends State<ChangeMpinScreen> {
           _showError(data['message'] ?? 'Failed to change MPIN');
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        final errorData = response;
         _showError(errorData['message'] ?? 'Failed to change MPIN');
       }
     } catch (e) {

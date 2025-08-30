@@ -298,22 +298,22 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     });
 
     try {
-      // Use new API-based OTP verification
-      final response = await http.post(
-        Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/auth/verify-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      // Use HTTPS API-based OTP verification
+      final response = await AuthService.makeSecureRequest(
+        '/auth/verify-otp',
+        method: 'POST',
+        body: {
           'phone': widget.phoneNumber,
           'otp': otpCode,
-        }),
+        },
       );
 
       setState(() {
         _isLoading = false;
       });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      if (response['success'] == true) {
+        final data = response;
 
         if (data['success'] == true) {
           // Save login state using AuthService
@@ -368,7 +368,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           _clearOTP();
         }
       } else {
-        final errorData = jsonDecode(response.body);
+        final errorData = response;
         _showSnackBar(errorData['message'] ?? 'Verification failed. Please try again.', AppColors.error);
         _clearOTP();
       }

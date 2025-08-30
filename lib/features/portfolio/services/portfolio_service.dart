@@ -236,7 +236,7 @@ class PortfolioService {
       print('📊 PortfolioService: Saving transaction to server');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/transaction_create.php'),
+        Uri.parse('${ClientServerConfig.transactionCreateEndpoint}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'user_id': userId,
@@ -436,7 +436,7 @@ class PortfolioService {
   // Get price history
   Future<List<PriceHistory>> getPriceHistory({int? limit}) async {
     try {
-      final priceData = await _db.getPriceHistory(limit: limit);
+      final priceData = await _db.getPriceHistory(limit: limit ?? 100);
       return priceData.map((data) => PriceHistory.fromMap(data)).toList();
     } catch (e) {
       print('Error getting price history: $e');

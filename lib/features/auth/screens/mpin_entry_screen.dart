@@ -79,7 +79,7 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
 
       // Use client's server API for login
       final response = await http.post(
-        Uri.parse('${ClientServerConfig.baseUrl}/user_login.php'),
+        Uri.parse('${ClientServerConfig.userLoginEndpoint}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'phone': widget.phoneNumber,

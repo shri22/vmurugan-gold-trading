@@ -2,7 +2,7 @@
 // Complete server implementation ready for deployment
 
 const express = require('express');
-const mysql = require('mysql2/promise');
+const mysql = require('mysql2'); // FIXED: Remove /promise to avoid dependency issues
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -10,7 +10,7 @@ const { body, validationResult } = require('express-validator');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Security middleware
 app.use(helmet());
@@ -39,7 +39,7 @@ const dbConfig = {
   queueLimit: 0
 };
 
-const pool = mysql.createPool(dbConfig);
+const pool = mysql.createPool(dbConfig).promise(); // FIXED: Add .promise() for async/await support
 
 // Admin authentication middleware
 const authenticateAdmin = (req, res, next) => {
@@ -52,12 +52,16 @@ const authenticateAdmin = (req, res, next) => {
   next();
 };
 
-// Health check
+// Health check - FIXED: Match production server format
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'Digi Gold Business API'
+    service: 'VMurugan SQL Server API',
+    database: 'VMuruganGoldTrading',
+    server: 'DESKTOP-3QPE6QQ',
+    port: PORT,
+    uptime: process.uptime()
   });
 });
 
@@ -74,9 +78,24 @@ app.post('/api/customers', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
+    console.log('📝 Registration request received:', req.body);
+
     const {
-      phone, name, email, address, pan_card, device_id, mpin, business_id = 'DIGI_GOLD_001'
+      phone, name, email, address, pan_card, device_id, encrypted_mpin, business_id = 'DIGI_GOLD_001'
     } = req.body;
+
+    console.log('📋 Extracted data:', { phone, name, email, address, pan_card, device_id, encrypted_mpin, business_id });
+
+    // Use encrypted_mpin as mpin for storage
+    const mpin = encrypted_mpin;
+
+    if (!mpin) {
+      console.error('❌ No encrypted_mpin provided');
+      return res.status(400).json({
+        success: false,
+        message: 'MPIN is required'
+      });
+    }
 
     const query = `
       INSERT INTO customers (phone, name, email, address, pan_card, device_id, mpin, business_id)
@@ -85,12 +104,38 @@ app.post('/api/customers', [
       name = VALUES(name), email = VALUES(email), address = VALUES(address), mpin = VALUES(mpin)
     `;
 
-    await pool.execute(query, [phone, name, email, address, pan_card, device_id, mpin, business_id]);
+    console.log('💾 Executing database query with params:', [phone, name, email, address, pan_card, device_id, mpin, business_id]);
+    const [result] = await pool.execute(query, [phone, name, email, address, pan_card, device_id, mpin, business_id]);
+    console.log('✅ Database insertion result:', result);
+
+    // Get the customer data to return
+    const [customerRows] = await pool.execute(
+      'SELECT id, phone, name, email FROM customers WHERE phone = ? AND business_id = ?',
+      [phone, business_id]
+    );
+
+    console.log('📊 Customer query result:', customerRows);
+    const customer = customerRows[0];
+
+    if (!customer) {
+      console.error('❌ No customer found after insertion for phone:', phone);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve customer data after registration'
+      });
+    }
+
+    console.log('✅ Customer found:', customer);
 
     res.json({
       success: true,
-      message: 'Customer saved successfully',
-      customer_id: phone
+      message: 'Customer registered successfully',
+      user: {
+        id: customer.id,
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email
+      }
     });
 
   } catch (error) {
@@ -207,21 +252,15 @@ app.post('/api/login', [
       });
     }
 
-    // Login successful
+    // Login successful - FIXED: Return 'user' object instead of 'customer'
     res.json({
       success: true,
       message: 'Login successful',
-      customer: {
+      user: {
         id: customer.id,
         phone: customer.phone,
         name: customer.name,
-        email: customer.email,
-        address: customer.address,
-        pan_card: customer.pan_card,
-        registration_date: customer.registration_date,
-        total_invested: customer.total_invested || 0,
-        total_gold: customer.total_gold || 0,
-        transaction_count: customer.transaction_count || 0
+        email: customer.email
       }
     });
 
@@ -377,10 +416,169 @@ app.get('/api/customers/:phone', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Customer not found' });
     }
 
-    res.json({ success: true, data: rows[0] });
+    const customer = rows[0];
+
+    // FIXED: Return 'user' object instead of 'data'
+    res.json({
+      success: true,
+      user: {
+        id: customer.id,
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email
+      }
+    });
 
   } catch (error) {
     console.error('Error getting customer:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get portfolio data
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    const { user_id, phone } = req.query;
+
+    if (!user_id && !phone) {
+      return res.status(400).json({ success: false, message: 'User ID or phone is required' });
+    }
+
+    // Get customer data
+    let customer;
+    if (phone) {
+      const [customerRows] = await pool.execute(
+        'SELECT * FROM customers WHERE phone = ? AND business_id = ?',
+        [phone, 'DIGI_GOLD_001']
+      );
+      customer = customerRows[0];
+    } else {
+      const [customerRows] = await pool.execute(
+        'SELECT * FROM customers WHERE id = ? AND business_id = ?',
+        [user_id, 'DIGI_GOLD_001']
+      );
+      customer = customerRows[0];
+    }
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    // Calculate portfolio from transactions
+    const [transactionRows] = await pool.execute(`
+      SELECT
+        SUM(CASE WHEN type = 'BUY' AND status = 'SUCCESS' THEN gold_grams ELSE 0 END) as total_gold_grams,
+        SUM(CASE WHEN type = 'BUY' AND status = 'SUCCESS' THEN amount ELSE 0 END) as total_invested,
+        COUNT(*) as transaction_count
+      FROM transactions
+      WHERE customer_phone = ? AND business_id = ?
+    `, [customer.phone, 'DIGI_GOLD_001']);
+
+    const portfolioData = transactionRows[0];
+    const totalGoldGrams = parseFloat(portfolioData.total_gold_grams) || 0;
+    const totalInvested = parseFloat(portfolioData.total_invested) || 0;
+
+    // Calculate current value (assuming current gold price of ₹7000 per gram)
+    const currentGoldPrice = 7000; // This should come from a price API
+    const currentValue = totalGoldGrams * currentGoldPrice;
+    const profitLoss = currentValue - totalInvested;
+    const profitLossPercentage = totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
+
+    // Get recent transactions
+    const [recentTransactions] = await pool.execute(`
+      SELECT
+        transaction_id,
+        type,
+        amount,
+        gold_grams,
+        gold_price_per_gram,
+        status,
+        timestamp as created_at
+      FROM transactions
+      WHERE customer_phone = ? AND business_id = ?
+      ORDER BY timestamp DESC
+      LIMIT 10
+    `, [customer.phone, 'DIGI_GOLD_001']);
+
+    res.json({
+      success: true,
+      portfolio: {
+        total_gold_grams: totalGoldGrams,
+        total_silver_grams: 0, // Not implemented yet
+        total_invested: totalInvested,
+        current_value: currentValue,
+        profit_loss: profitLoss,
+        profit_loss_percentage: Math.round(profitLossPercentage * 100) / 100,
+        last_updated: new Date().toISOString()
+      },
+      user: {
+        name: customer.name,
+        phone: customer.phone
+      },
+      recent_transactions: recentTransactions
+    });
+
+  } catch (error) {
+    console.error('Error getting portfolio:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get transaction history
+app.get('/api/transaction-history', async (req, res) => {
+  try {
+    const { phone, user_id, limit = 50, offset = 0 } = req.query;
+
+    if (!phone && !user_id) {
+      return res.status(400).json({ success: false, message: 'Phone or user_id is required' });
+    }
+
+    let customerPhone = phone;
+    if (!customerPhone && user_id) {
+      // Get phone from user_id
+      const [customerRows] = await pool.execute(
+        'SELECT phone FROM customers WHERE id = ? AND business_id = ?',
+        [user_id, 'DIGI_GOLD_001']
+      );
+      if (customerRows.length > 0) {
+        customerPhone = customerRows[0].phone;
+      }
+    }
+
+    if (!customerPhone) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const [rows] = await pool.execute(`
+      SELECT
+        transaction_id,
+        customer_phone,
+        customer_name,
+        type,
+        amount,
+        gold_grams,
+        gold_price_per_gram,
+        payment_method,
+        status,
+        gateway_transaction_id,
+        timestamp as created_at,
+        updated_at
+      FROM transactions
+      WHERE customer_phone = ? AND business_id = ?
+      ORDER BY timestamp DESC
+      LIMIT ? OFFSET ?
+    `, [customerPhone, 'DIGI_GOLD_001', parseInt(limit), parseInt(offset)]);
+
+    res.json({
+      success: true,
+      transactions: rows,
+      total_count: rows.length,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (error) {
+    console.error('Error getting transaction history:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
