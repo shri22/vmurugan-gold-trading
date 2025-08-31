@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_typography.dart';
+import '../theme/app_colors.dart';
 
 class VMuruganLogo extends StatelessWidget {
   final double size;
@@ -255,10 +257,9 @@ class VMuruganAppBarLogo extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           'VMurugan Jewellery',
-          style: TextStyle(
+          style: AppTypography.appBarTitle.copyWith(
             fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+            color: AppColors.primaryGold, // Always use gold for premium look
           ),
         ),
       ],

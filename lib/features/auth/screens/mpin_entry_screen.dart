@@ -13,6 +13,7 @@ import '../../../core/config/client_server_config.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/encryption_service.dart';
+import '../../../core/services/auto_logout_service.dart';
 import '../../../main.dart';
 import 'phone_entry_screen.dart';
 import 'customer_registration_screen.dart';
@@ -110,6 +111,10 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
 
           print('✅ MPIN Login successful for ${widget.phoneNumber}');
           print('✅ User ID saved: ${data['user']['id']}');
+
+          // Start auto-logout monitoring for logged-in user
+          AutoLogoutService().startMonitoring();
+          print('⏰ Auto-logout monitoring started');
 
           if (mounted) {
             // Navigate to main app

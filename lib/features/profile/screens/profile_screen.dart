@@ -79,16 +79,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         }
 
+        // Determine KYC status based on actual data
+        String kycStatus = 'Pending';
+        if (userData['address'] != null && userData['address'].toString().isNotEmpty &&
+            userData['address'] != 'Not Available' &&
+            userData['pan_card'] != null && userData['pan_card'].toString().isNotEmpty &&
+            userData['pan_card'] != 'Not Available') {
+          kycStatus = 'Verified';
+        }
+
+        // Use business_id as Customer ID if available, otherwise use customer_id or id
+        String customerId = userData['business_id']?.toString() ??
+                           userData['customer_id']?.toString() ??
+                           userData['id']?.toString() ??
+                           'CUST${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
         setState(() {
           _userProfile = {
             'name': userData!['name'] ?? 'User',
             'phone': userPhone,
             'email': userData['email'] ?? 'Not Available',
-            'customer_id': userData['customer_id']?.toString() ?? 'Not Available',
+            'customer_id': customerId,
             'address': userData['address'] ?? 'Not Available',
             'pan': userData['pan_card'] ?? 'Not Available',
             'joinDate': formattedJoinDate,
-            'kycStatus': 'Verified', // Since they can login, they're verified
+            'kycStatus': kycStatus,
           };
           _isLoading = false;
         });
@@ -110,17 +125,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         }
 
+        // Determine KYC status based on actual data
+        String kycStatus = 'Pending';
+        if (customerInfo['address'] != null && customerInfo['address'].toString().isNotEmpty &&
+            customerInfo['address'] != 'Not Available' &&
+            customerInfo['pan_card'] != null && customerInfo['pan_card'].toString().isNotEmpty &&
+            customerInfo['pan_card'] != 'Not Available') {
+          kycStatus = 'Verified';
+        }
+
+        // Use business_id as Customer ID if available
+        String customerId = customerInfo['business_id']?.toString() ??
+                           customerInfo['customer_id']?.toString() ??
+                           'CUST${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
         // Format the data for display
         setState(() {
           _userProfile = {
             'name': customerInfo['name'] ?? 'Not Available',
             'phone': customerInfo['phone'] ?? 'Not Available',
             'email': customerInfo['email'] ?? 'Not Available',
-            'customer_id': customerInfo['customer_id'] ?? 'Not Available',
+            'customer_id': customerId,
             'address': customerInfo['address'] ?? 'Not Available',
             'pan': customerInfo['pan_card'] ?? 'Not Available',
             'joinDate': formattedJoinDate,
-            'kycStatus': 'Verified', // Since they can login, they're verified
+            'kycStatus': kycStatus,
           };
           _isLoading = false;
         });
@@ -1591,10 +1620,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    _buildContactRow('vmuruganjewellery@gmail.com', Icons.email),
+                    _buildContactRow('vmuruganjewellers@gmail.com', Icons.email),
                     const SizedBox(height: 6),
                     const Text(
-                      'info@vmuruganjewellery.co.in',
+                      'Email us at vmuruganjewellers@gmail.com',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.black87,
@@ -1772,9 +1801,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildInfoRow('Business', 'V Murugan Jewellery'),
-                    _buildInfoRow('Email', 'vmuruganjewellery@gmail.com'),
+                    _buildInfoRow('Email', 'vmuruganjewellers@gmail.com'),
                     _buildInfoRow('Phone', '+91 9677944711'),
-                    _buildInfoRow('Website', 'www.vmuruganjewellery.com'),
+                    _buildInfoRow('Website', 'www.vmuruganjewellery.co.in'),
                   ],
                 ),
               ),

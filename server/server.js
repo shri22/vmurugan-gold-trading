@@ -629,6 +629,108 @@ app.get('/api/transaction-history', async (req, res) => {
   }
 });
 
+// Create scheme endpoint
+app.post('/api/schemes', [
+  body('customer_phone').isMobilePhone('en-IN').withMessage('Invalid customer phone'),
+  body('customer_name').notEmpty().withMessage('Customer name required'),
+  body('scheme_type').isIn(['GOLDPLUS', 'GOLDFLEXI', 'SILVERPLUS', 'SILVERFLEXI']).withMessage('Invalid scheme type'),
+  body('monthly_amount').isFloat({ min: 100 }).withMessage('Monthly amount must be at least ₹100'),
+  body('terms_accepted').isBoolean().withMessage('Terms acceptance required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { customer_phone, customer_name, scheme_type, monthly_amount, terms_accepted } = req.body;
+
+    if (!terms_accepted) {
+      return res.status(400).json({ success: false, message: 'Terms and conditions must be accepted' });
+    }
+
+    // Get or create customer
+    let [customerRows] = await pool.execute(
+      'SELECT id FROM customers WHERE phone = ? AND business_id = ?',
+      [customer_phone, 'DIGI_GOLD_001']
+    );
+
+    let customerId;
+    if (customerRows.length === 0) {
+      // Create customer if doesn't exist
+      const [result] = await pool.execute(
+        'INSERT INTO customers (phone, name, business_id) VALUES (?, ?, ?)',
+        [customer_phone, customer_name, 'DIGI_GOLD_001']
+      );
+      customerId = result.insertId;
+    } else {
+      customerId = customerRows[0].id;
+    }
+
+    // Generate scheme ID
+    const schemeId = `SCH${String(Date.now()).slice(-6)}_${scheme_type}`;
+
+    // Determine duration and metal type
+    const duration = scheme_type.includes('PLUS') ? 12 : null;
+    const metalType = scheme_type.includes('GOLD') ? 'GOLD' : 'SILVER';
+
+    // Create scheme (simplified for now - will add validation later)
+    const [schemeResult] = await pool.execute(`
+      INSERT INTO transactions (
+        transaction_id, customer_phone, amount, gold_grams, silver_grams,
+        metal_type, transaction_type, status, business_id,
+        gateway_transaction_id
+      ) VALUES (?, ?, ?, ?, ?, ?, 'SCHEME_CREATE', 'SUCCESS', ?, ?)
+    `, [
+      schemeId, customer_phone, monthly_amount,
+      metalType === 'GOLD' ? 0.001 : 0, // Placeholder values
+      metalType === 'SILVER' ? 0.001 : 0,
+      metalType, 'DIGI_GOLD_001', `SCHEME_${schemeId}`
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Scheme created successfully',
+      scheme: {
+        id: schemeResult.insertId,
+        scheme_id: schemeId,
+        customer_id: customerId,
+        scheme_type,
+        metal_type: metalType,
+        monthly_amount,
+        duration_months: duration,
+        status: 'ACTIVE'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Scheme creation error:', error);
+    res.status(500).json({ success: false, message: 'Scheme creation failed' });
+  }
+});
+
+// Get customer schemes
+app.get('/api/schemes/:customer_phone', async (req, res) => {
+  try {
+    const { customer_phone } = req.params;
+
+    const [schemes] = await pool.execute(`
+      SELECT * FROM transactions
+      WHERE customer_phone = ? AND transaction_type = 'SCHEME_CREATE' AND business_id = ?
+      ORDER BY timestamp DESC
+    `, [customer_phone, 'DIGI_GOLD_001']);
+
+    res.json({
+      success: true,
+      schemes
+    });
+
+  } catch (error) {
+    console.error('❌ Get schemes error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get schemes' });
+  }
+});
+
 // Export all data (for backup/migration)
 app.get('/api/admin/export', authenticateAdmin, async (req, res) => {
   try {

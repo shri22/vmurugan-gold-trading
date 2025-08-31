@@ -630,7 +630,7 @@
         async function testSqlServerConnection() {
             try {
                 console.log('🔧 Testing SQL Server connection...');
-                const response = await fetch('http://192.168.29.139:3001/api/test-connection', {
+                const response = await fetch('https://api.vmuruganjewellery.co.in:3001/api/test-connection', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -669,7 +669,7 @@
         async function testCustomerData() {
             try {
                 console.log('👥 Testing customer data specifically...');
-                const response = await fetch('http://192.168.29.139:3001/api/customers', {
+                const response = await fetch('https://api.vmuruganjewellery.co.in:3001/api/customers', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -725,10 +725,10 @@
         async function loadCustomersFromFirebase() {
             try {
                 console.log('🔄 Loading customers from SQL Server...');
-                console.log('🌐 API URL: http://192.168.29.139:3001/api/customers');
+                console.log('🌐 API URL: https://api.vmuruganjewellery.co.in:3001/api/customers');
 
                 // SQL Server API endpoint
-                const apiUrl = 'http://192.168.29.139:3001/api/customers';
+                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/customers';
 
                 console.log('📤 Making fetch request...');
                 const response = await fetch(apiUrl, {
@@ -967,7 +967,7 @@
             `;
 
             // Direct API call
-            fetch('http://192.168.29.139:3001/api/customers')
+            fetch('https://api.vmuruganjewellery.co.in:3001/api/customers')
                 .then(response => {
                     console.log('📥 Response status:', response.status);
                     return response.json();
@@ -1004,7 +1004,7 @@
                 console.log('🔄 Loading transactions from SQL Server...');
 
                 // SQL Server API endpoint
-                const apiUrl = 'http://192.168.29.139:3001/api/transactions';
+                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/transactions';
 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -1255,6 +1255,48 @@
             try {
                 console.log(`🔍 Loading schemes for customer: ${customerId}`);
 
+                // SQL Server API endpoint for schemes
+                const apiUrl = `https://api.vmuruganjewellery.co.in:3001/api/schemes/${customerId}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ SQL Server schemes response:', data);
+
+                    if (data.success && data.schemes && data.schemes.length > 0) {
+                        return data.schemes.map(scheme => ({
+                            scheme_id: scheme.scheme_id,
+                            scheme_type: scheme.scheme_type,
+                            metal_type: scheme.metal_type,
+                            monthly_amount: scheme.monthly_amount,
+                            duration_months: scheme.duration_months,
+                            status: scheme.status,
+                            total_invested: scheme.total_invested,
+                            total_metal_accumulated: scheme.total_metal_accumulated,
+                            completed_installments: scheme.completed_installments,
+                            created_at: scheme.created_at
+                        }));
+                    } else {
+                        console.log('📝 No schemes found for customer:', customerId);
+                        return [];
+                    }
+                } else {
+                    console.error('❌ SQL Server schemes API error:', response.status);
+                    // Fallback to Firebase
+                }
+            } catch (error) {
+                console.error('❌ SQL Server schemes connection error:', error);
+                // Fallback to Firebase
+            }
+
+            // Fallback to Firebase for backward compatibility
+            try {
                 // Try multiple Firebase endpoints for schemes
                 const endpoints = [
                     `https://firestore.googleapis.com/v1/projects/vmurugan-gold-trading/databases/(default)/documents/schemes?key=AIzaSyCaS4pdX3a_JFdL0PolTHYnpebg5ppbgs0`,

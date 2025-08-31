@@ -9,6 +9,7 @@ import '../../../core/widgets/vmurugan_logo.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/encryption_service.dart';
+import '../../../core/services/auto_logout_service.dart';
 import '../../../core/config/sql_server_config.dart';
 import '../../../main.dart';
 import 'phone_entry_screen.dart';
@@ -74,9 +75,9 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
         final encryptedMpin = EncryptionService.encryptMPIN(mpin);
         print('🔐 Quick Login - Encrypted MPIN: $encryptedMpin');
 
-        // Use API-based login with encrypted MPIN
+        // Use API-based login with encrypted MPIN (HTTPS for security)
         final response = await http.post(
-          Uri.parse('http://${SqlServerConfig.serverIP}:3001/api/login'),
+          Uri.parse('https://${SqlServerConfig.serverIP}:3001/api/login'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'phone': _savedPhone!,
@@ -102,6 +103,10 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
 
             print('✅ Quick MPIN Login successful for ${_savedPhone}');
             print('✅ Customer marked as registered');
+
+            // Start auto-logout monitoring for logged-in user
+            AutoLogoutService().startMonitoring();
+            print('⏰ Auto-logout monitoring started');
 
             if (mounted) {
               // Navigate to main app

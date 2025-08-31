@@ -5,6 +5,8 @@ import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../models/gold_scheme_model.dart';
 import '../services/gold_scheme_service.dart';
+import '../../schemes/screens/enhanced_scheme_selection_screen.dart';
+import '../../../core/services/customer_service.dart';
 
 class SchemesScreen extends StatefulWidget {
   const SchemesScreen({super.key});
@@ -439,15 +441,45 @@ class _SchemesScreenState extends State<SchemesScreen> {
     );
   }
 
-  void _showCreateSchemeDialog() {
+  void _showCreateSchemeDialog() async {
+    try {
+      // Get customer information
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '';
+      final customerName = customerInfo['name'] ?? '';
+
+      if (customerPhone.isEmpty) {
+        _showErrorDialog('Customer information not found. Please login again.');
+        return;
+      }
+
+      // Navigate to enhanced scheme selection screen
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => EnhancedSchemeSelectionScreen(
+            customerPhone: customerPhone,
+            customerName: customerName,
+          ),
+        ),
+      );
+
+      // If a scheme was created, refresh the schemes list
+      if (result != null) {
+        _loadSchemes();
+      }
+    } catch (e) {
+      print('❌ Error opening scheme selection: $e');
+      _showErrorDialog('Error opening scheme selection. Please try again.');
+    }
+  }
+
+  void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create New Scheme'),
-        content: const Text(
-          'Scheme creation feature will be implemented in the next update. '
-          'For now, you can view the sample 11-month scheme.',
-        ),
+        title: const Text('Error'),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

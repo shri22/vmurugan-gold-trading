@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../models/gold_price_model.dart';
 import '../services/gold_price_service.dart';
@@ -214,10 +215,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             const SizedBox(height: AppSpacing.sm),
             Text(
               _currentPrice!.formattedPrice,
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.primaryGold,
-                fontWeight: FontWeight.bold,
-              ),
+              style: AppTypography.amountDisplay,
             ),
             const SizedBox(height: AppSpacing.xs),
             Row(
@@ -225,8 +223,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                 Expanded(
                   child: Text(
                     'per gram',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                    style: AppTypography.rateInfo.copyWith(
+                      color: AppColors.primaryGreen, // Ensure dark green for visibility
                     ),
                   ),
                 ),
@@ -348,7 +346,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'of 24K Digital Gold',
+            'of 22K Digital Gold',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: AppColors.white.withValues(alpha: 0.9),
             ),
@@ -1796,7 +1794,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       builder: (context) => AlertDialog(
         title: const Text('About Digital Gold'),
         content: const Text(
-          '• 24K pure digital gold\n'
+          '• 22K pure digital gold\n'
           '• Stored securely in digital vault\n'
           '• Real-time price updates\n'
           '• Minimum investment: ₹100\n'

@@ -115,13 +115,13 @@ For testing phase, you'll receive:
 
 ### **4.1 Payment Initiation API**
 
-```php
-<?php
-// /api/payment/initiate
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+**Note**: This project uses Node.js APIs exclusively. See `sql_server_api/server.js` for current implementation.
 
-$input = json_decode(file_get_contents('php://input'), true);
+```javascript
+// Node.js Express endpoint: POST /api/payment/initiate
+app.post('/api/payment/initiate', async (req, res) => {
+  try {
+    const { amount, customer_id, transaction_type } = req.body;
 
 $merchantId = 'YOUR_MERCHANT_ID';
 $secretKey = 'YOUR_SECRET_KEY';

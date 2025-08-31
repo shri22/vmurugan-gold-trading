@@ -207,7 +207,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
                 Text(
                   'per gram',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: AppColors.primaryGreen, // Ensure dark green for visibility
                   ),
                 ),
               ],

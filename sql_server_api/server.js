@@ -235,7 +235,7 @@ app.post('/api/customers', [
 // User login
 app.post('/api/login', [
   body('phone').isMobilePhone('en-IN').withMessage('Invalid phone number'),
-  body('encrypted_mpin').isLength({ min: 4, max: 4 }).withMessage('MPIN must be 4 digits')
+  body('encrypted_mpin').isLength({ min: 32 }).withMessage('Invalid encrypted MPIN format')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -357,8 +357,8 @@ app.get('/api/transaction-history', async (req, res) => {
     request.input('phone', sql.NVarChar(15), phone);
 
     const result = await request.query(`
-      SELECT * FROM transactions 
-      WHERE customer_phone = @phone 
+      SELECT * FROM transactions
+      WHERE customer_phone = @phone
       ORDER BY timestamp DESC
     `);
 
@@ -369,6 +369,72 @@ app.get('/api/transaction-history', async (req, res) => {
 
   } catch (error) {
     console.error('Error getting transaction history:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get all customers (for admin portal)
+app.get('/api/customers', async (req, res) => {
+  try {
+    const result = await pool.request().query(`
+      SELECT id, phone, name, email, address, pan_card, business_id,
+             registration_date, total_invested, total_gold, transaction_count,
+             last_transaction, created_at, updated_at
+      FROM customers
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      customers: result.recordset
+    });
+
+  } catch (error) {
+    console.error('Error getting customers:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get all transactions (for admin portal)
+app.get('/api/transactions', async (req, res) => {
+  try {
+    const result = await pool.request().query(`
+      SELECT * FROM transactions
+      ORDER BY timestamp DESC
+    `);
+
+    res.json({
+      success: true,
+      transactions: result.recordset
+    });
+
+  } catch (error) {
+    console.error('Error getting transactions:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get schemes for a customer (for admin portal)
+app.get('/api/schemes/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const request = pool.request();
+    request.input('customerId', sql.NVarChar(100), customerId);
+
+    const result = await request.query(`
+      SELECT * FROM schemes
+      WHERE customer_id = @customerId OR customer_phone = @customerId
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      schemes: result.recordset
+    });
+
+  } catch (error) {
+    console.error('Error getting schemes:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

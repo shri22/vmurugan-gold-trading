@@ -41,6 +41,13 @@ class ClientServerConfig {
   static const String portfolioGetEndpoint = '$baseUrl/portfolio';
   static const String portfolioUpdateEndpoint = '$baseUrl/portfolio-update';
 
+  // Scheme Management APIs (your Node.js endpoints) - NEW
+  static const String schemeCreateEndpoint = '$baseUrl/schemes';
+  static const String schemeGetEndpoint = '$baseUrl/schemes'; // GET /schemes/:phone
+  static const String schemeUpdateEndpoint = '$baseUrl/schemes'; // PUT /schemes/:scheme_id
+  static const String schemeInvestEndpoint = '$baseUrl/schemes'; // POST /schemes/:scheme_id/invest
+  static const String schemeDetailsEndpoint = '$baseUrl/schemes/details'; // GET /schemes/details/:scheme_id
+
   // Admin APIs (your Node.js endpoints)
   static const String adminCustomersEndpoint = '$baseUrl/admin/customers';
   static const String adminTransactionsEndpoint = '$baseUrl/admin/transactions';

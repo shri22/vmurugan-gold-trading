@@ -48,6 +48,9 @@ dependencies:
   # URL launcher for payment apps
   url_launcher: ^6.2.2
   shared_preferences: ^2.5.3
+
+  # Premium typography with Google Fonts
+  google_fonts: ^6.1.0
   sqflite: ^2.4.2
   path: ^1.9.1
   flutter_launcher_icons: ^0.14.4
@@ -112,6 +115,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  # Premium fonts are loaded via Google Fonts package
+  # No local font assets needed
 
 # Flutter Launcher Icons Configuration
 flutter_launcher_icons:

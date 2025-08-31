@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../utils/responsive.dart';
+import '../theme/app_typography.dart';
 
 enum ButtonType { primary, secondary, outline, text }
 
@@ -139,9 +140,8 @@ class CustomButton extends StatelessWidget {
       );
     }
 
-    final textStyle = TextStyle(
+    final textStyle = AppTypography.buttonText.copyWith(
       fontSize: fontSize ?? Responsive.getFontSize(context, 16),
-      fontWeight: FontWeight.w600,
     );
 
     if (icon != null) {
@@ -232,10 +232,8 @@ class GradientButton extends StatelessWidget {
       );
     }
 
-    final textStyle = TextStyle(
+    final textStyle = AppTypography.buttonText.copyWith(
       fontSize: Responsive.getFontSize(context, 16),
-      fontWeight: FontWeight.w600,
-      color: AppColors.white,
     );
 
     if (icon != null) {

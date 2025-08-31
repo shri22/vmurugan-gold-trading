@@ -4,7 +4,10 @@ import 'core/theme/app_colors.dart';
 import 'core/utils/responsive.dart';
 import 'features/auth/screens/phone_entry_screen.dart';
 import 'features/portfolio/screens/portfolio_screen.dart';
-import 'features/gold/screens/buy_gold_screen.dart';
+
+import 'features/schemes/screens/filtered_scheme_selection_screen.dart';
+import 'features/schemes/models/enhanced_scheme_model.dart';
+import 'core/theme/app_typography.dart';
 import 'features/gold/services/gold_price_service.dart';
 import 'features/gold/models/gold_price_model.dart';
 import 'features/silver/services/silver_price_service.dart';
@@ -21,6 +24,9 @@ import 'features/transaction/screens/transaction_history_screen.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/scheme_management_service.dart';
 import 'core/services/customer_service.dart';
+
+// Global navigator key for auto-logout navigation
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   // Ensure Flutter binding is initialized
@@ -42,6 +48,7 @@ class DigiGoldApp extends StatelessWidget {
       child: MaterialApp(
         title: 'VMurugan',
         debugShowCheckedModeBanner: false,
+        navigatorKey: navigatorKey, // Add global navigator key
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
@@ -52,8 +59,31 @@ class DigiGoldApp extends StatelessWidget {
 
   void _handleAutoLogout() {
     // This will be called when auto logout occurs
-    // The app will automatically navigate to login screen
-    print('🔒 Auto logout triggered - user will be redirected to login');
+    // Navigate to MPIN login screen (bypass phone verification)
+    print('🔒 Auto logout triggered - redirecting to MPIN login');
+
+    // Use a global navigator key to navigate from anywhere
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        // Check if user has saved phone number
+        final savedPhone = await AuthService.getSavedPhoneNumber();
+
+        if (savedPhone != null) {
+          // Navigate to quick MPIN login (bypass phone verification)
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const QuickMpinLoginScreen()),
+            (route) => false,
+          );
+        } else {
+          // Fallback to phone entry if no saved phone
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const PhoneEntryScreen()),
+            (route) => false,
+          );
+        }
+      }
+    });
   }
 }
 
@@ -85,8 +115,9 @@ class _AppInitializerState extends State<AppInitializer> {
         // Smart login flow based on user state
         if (isLoggedIn && savedPhone != null) {
           // Case 2: Subsequent Logins - User is logged in with saved phone
-          // Go directly to home page
+          // Go directly to home page and start auto-logout monitoring
           print('✅ Smart Login: Returning user - going to home');
+          AutoLogoutService().startMonitoring(); // Start monitoring for logged-in user
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomePage()),
           );
@@ -572,7 +603,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // GOLDPLUS Card
+            // Gold Scheme Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -608,22 +639,22 @@ class _HomePageState extends State<HomePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'GOLDPLUS',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
+                            Text(
+                              'Gold Scheme',
+                              style: AppTypography.cardTitle,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '97% value addition • No GST on investment',
+                              style: AppTypography.featureText.copyWith(
+                                color: Colors.white.withOpacity(0.9),
                               ),
                             ),
-
-                            const SizedBox(height: AppSpacing.sm),
-                            const Text(
-                              'GPS | 15 months | 75% benefit on VA*',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '3% GST on redemption only',
+                              style: AppTypography.featureText.copyWith(
+                                color: Colors.white.withOpacity(0.8),
                               ),
                             ),
                           ],
@@ -640,33 +671,16 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                          ),
-                          child: const Text(
-                            'Know More',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
                         child: GestureDetector(
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const BuyGoldScreen(),
+                                builder: (context) => FilteredSchemeSelectionScreen(
+                                  customerPhone: '+91 9876543210', // Default for demo
+                                  customerName: 'Demo Customer', // Default for demo
+                                  metalType: MetalType.gold, // Show only Gold schemes
+                                ),
                               ),
                             );
                           },
@@ -680,7 +694,7 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(AppBorderRadius.sm),
                             ),
                             child: Text(
-                              _schemeStatus?['gold']?['buttonText'] ?? 'Join Now',
+                              'View Schemes',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.black,
@@ -698,7 +712,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: AppSpacing.md),
 
-            // SILVERPLUS Card
+            // Silver Scheme Card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -738,22 +752,22 @@ class _HomePageState extends State<HomePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'SILVERPLUS',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
+                            Text(
+                              'Silver Scheme',
+                              style: AppTypography.cardTitle,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '97% value addition • No GST on investment',
+                              style: AppTypography.featureText.copyWith(
+                                color: Colors.white.withOpacity(0.9),
                               ),
                             ),
-
-                            const SizedBox(height: AppSpacing.sm),
-                            const Text(
-                              'SPS | 15 months | 65% benefit on VA*',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '3% GST on redemption only',
+                              style: AppTypography.featureText.copyWith(
+                                color: Colors.white.withOpacity(0.8),
                               ),
                             ),
                           ],
@@ -770,33 +784,16 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                          ),
-                          child: const Text(
-                            'Know More',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
                         child: GestureDetector(
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const BuySilverScreen(),
+                                builder: (context) => FilteredSchemeSelectionScreen(
+                                  customerPhone: '+91 9876543210', // Default for demo
+                                  customerName: 'Demo Customer', // Default for demo
+                                  metalType: MetalType.silver, // Show only Silver schemes
+                                ),
                               ),
                             );
                           },
@@ -810,7 +807,7 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(AppBorderRadius.sm),
                             ),
                             child: Text(
-                              _schemeStatus?['silver']?['buttonText'] ?? 'Join Now',
+                              'View Schemes',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.black,
@@ -894,7 +891,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             Text('📞 Customer Support: +91 9677944711'),
             SizedBox(height: 8),
-            Text('📧 Email: vmuruganjewellery@gmail.com'),
+            Text('📧 Email: vmuruganjewellers@gmail.com'),
             SizedBox(height: 8),
             Text('🕒 Hours: 9 AM - 6 PM (Mon-Sat)'),
             SizedBox(height: 16),
@@ -953,7 +950,7 @@ class _HomePageState extends State<HomePage> {
             SizedBox(height: 16),
             Text('🏆 Licensed & Regulated'),
             Text('🔒 Bank-grade security'),
-            Text('💎 Pure 24K digital gold'),
+            Text('💎 Pure 22K digital gold'),
             SizedBox(height: 16),
             Text(
               '📞 Contact Details:',
@@ -963,7 +960,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             SizedBox(height: 8),
-            Text('📧 Email: vmuruganjewellery@gmail.com'),
+            Text('📧 Email: vmuruganjewellers@gmail.com'),
             Text('📱 Phone: 9677944711'),
             Text('🌐 Website: www.vmuruganjewellery.co.in'),
           ],
