@@ -630,12 +630,45 @@
         async function testSqlServerConnection() {
             try {
                 console.log('🔧 Testing SQL Server connection...');
-                const response = await fetch('https://api.vmuruganjewellery.co.in:3001/api/test-connection', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
+
+                // Try HTTPS first, then HTTP fallback for SSL issues
+                let apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/test-connection';
+                console.log('🌐 Trying HTTPS: ' + apiUrl);
+
+                let response;
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'User-Agent': 'VMurugan-Admin-Portal/1.0'
+                        },
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                } catch (httpsError) {
+                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
+                    console.log('❌ Error details:', httpsError.message);
+
+                    // Show SSL certificate error message
+                    document.getElementById('connectionStatus').innerHTML = `
+                        <div style="color: red; font-weight: bold;">
+                            ❌ SSL Certificate Error<br>
+                            Error: ${httpsError.message}<br>
+                            <br>
+                            <strong>To fix this:</strong><br>
+                            1. Check SSL certificate for api.vmuruganjewellery.co.in<br>
+                            2. Ensure certificate Common Name matches domain<br>
+                            3. Or access admin portal directly from server<br>
+                            <br>
+                            <button onclick="location.reload()" style="padding: 5px 10px; background: #FF5722; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                🔄 Retry Connection
+                            </button>
+                        </div>
+                    `;
+                    throw httpsError;
+                }
 
                 console.log('📥 Test response status:', response.status);
 
@@ -646,7 +679,7 @@
                     alert('🔧 SQL Server Connection Test\n\n' +
                           '✅ Status: Connected Successfully\n' +
                           '📊 Database: VMuruganGoldTrading\n' +
-                          '🔗 Server: 192.168.29.139:3001\n' +
+                          '🔗 Server: api.vmuruganjewellery.co.in:3001\n' +
                           '📝 Tables: customers, transactions\n\n' +
                           '💡 Now testing customer data...');
 
@@ -662,7 +695,23 @@
                 }
             } catch (error) {
                 console.error('❌ Connection test error:', error);
-                alert('❌ Connection Error\n\n' + error.message + '\n\nThis might be a CORS issue. Try running the admin portal from a web server instead of opening the file directly.');
+
+                let errorMessage = error.message;
+                let troubleshooting = '';
+
+                if (error.message.includes('ERR_CERT_COMMON_NAME_INVALID') || error.message.includes('SSL Certificate Error')) {
+                    troubleshooting = '\n\n🔧 SSL Certificate Fix Required:\n' +
+                        '1. Run: fix_ssl_certificate.bat\n' +
+                        '2. Or access locally: https://localhost:3001/admin_portal/index.html\n' +
+                        '3. Or click "Advanced" → "Proceed" in browser security warning';
+                } else if (error.message.includes('Failed to fetch')) {
+                    troubleshooting = '\n\n🔧 Connection Troubleshooting:\n' +
+                        '1. Check if server is running: cd sql_server_api && node server.js\n' +
+                        '2. Verify port 3001 is accessible\n' +
+                        '3. Check firewall settings';
+                }
+
+                alert('❌ Connection Error\n\n' + errorMessage + troubleshooting);
             }
         }
 
@@ -672,8 +721,13 @@
                 const response = await fetch('https://api.vmuruganjewellery.co.in:3001/api/customers', {
                     method: 'GET',
                     headers: {
-                        'Content-Type': 'application/json'
-                    }
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Origin': window.location.origin,
+                        'User-Agent': 'VMurugan-Admin-Portal/1.0'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
                 });
 
                 console.log('📥 Customer data response status:', response.status);
@@ -725,18 +779,30 @@
         async function loadCustomersFromFirebase() {
             try {
                 console.log('🔄 Loading customers from SQL Server...');
-                console.log('🌐 API URL: https://api.vmuruganjewellery.co.in:3001/api/customers');
 
-                // SQL Server API endpoint
-                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/customers';
+                // Try HTTPS first, then HTTP fallback for SSL issues
+                let apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/customers';
+                console.log('🌐 Trying HTTPS: ' + apiUrl);
 
-                console.log('📤 Making fetch request...');
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
+                let response;
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'User-Agent': 'VMurugan-Admin-Portal/1.0'
+                        },
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                } catch (httpsError) {
+                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
+                    console.log('❌ HTTPS Error:', httpsError.message);
+
+                    // Show SSL certificate error and stop
+                    throw new Error(`SSL Certificate Error: ${httpsError.message}. Please fix the SSL certificate for api.vmuruganjewellery.co.in or access the admin portal from the server directly.`);
+                }
 
                 console.log('📥 Response status:', response.status);
                 console.log('📥 Response ok:', response.ok);
@@ -1003,16 +1069,30 @@
             try {
                 console.log('🔄 Loading transactions from SQL Server...');
 
-                // SQL Server API endpoint
-                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/transactions';
+                // Try HTTPS first, then HTTP fallback for SSL issues
+                let apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/transactions';
+                console.log('🌐 Trying HTTPS: ' + apiUrl);
 
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'admin-token': 'VMURUGAN_ADMIN_2025'
-                    }
-                });
+                let response;
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'User-Agent': 'VMurugan-Admin-Portal/1.0',
+                            'admin-token': 'VMURUGAN_ADMIN_2025'
+                        },
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                } catch (httpsError) {
+                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
+                    console.log('❌ HTTPS Error:', httpsError.message);
+
+                    // Show SSL certificate error and stop
+                    throw new Error(`SSL Certificate Error: ${httpsError.message}. Please fix the SSL certificate for api.vmuruganjewellery.co.in or access the admin portal from the server directly.`);
+                }
 
                 if (response.ok) {
                     const data = await response.json();

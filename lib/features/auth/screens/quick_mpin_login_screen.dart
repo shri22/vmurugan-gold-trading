@@ -75,14 +75,25 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
         final encryptedMpin = EncryptionService.encryptMPIN(mpin);
         print('🔐 Quick Login - Encrypted MPIN: $encryptedMpin');
 
-        // Use API-based login with encrypted MPIN (HTTPS for security)
+        // HTTPS only for production security
+        print('🌐 Connecting to: https://${SqlServerConfig.serverIP}:3001/api/login');
+
         final response = await http.post(
           Uri.parse('https://${SqlServerConfig.serverIP}:3001/api/login'),
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'VMurugan-Mobile-App/1.0',
+          },
           body: jsonEncode({
             'phone': _savedPhone!,
             'encrypted_mpin': encryptedMpin,
           }),
+        ).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw Exception('Connection timeout. Please check your internet connection and try again.');
+          },
         );
 
         if (response.statusCode == 200) {
