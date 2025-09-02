@@ -14,6 +14,7 @@ import '../../payment/services/payment_verification_service.dart';
 import '../../payment/services/enhanced_payment_service.dart';
 import '../../payment/screens/enhanced_payment_screen.dart';
 import '../../payment/models/payment_model.dart';
+import '../../../core/config/server_config.dart';
 import '../../../core/services/auto_logout_service.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
@@ -194,6 +195,14 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
+            Text(
+              'Silver Rate',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.primaryGreen,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
             Row(
               children: [
                 Text(
@@ -256,11 +265,26 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
                   return 'Please enter an amount';
                 }
                 final amount = double.tryParse(value);
-                if (amount == null || amount < 100) {
-                  return 'Minimum amount is ₹100';
+                if (amount == null) {
+                  return 'Please enter a valid amount';
                 }
-                if (amount > 1000000) {
-                  return 'Maximum amount is ₹10,00,000';
+
+                // Test environment validation (Bank requirement)
+                if (PaynimoConfig.isTestEnvironment) {
+                  if (amount < PaynimoConfig.minTestAmount) {
+                    return 'Test minimum amount is ₹${PaynimoConfig.minTestAmount}';
+                  }
+                  if (amount > PaynimoConfig.maxTestAmount) {
+                    return 'Test maximum amount is ₹${PaynimoConfig.maxTestAmount}';
+                  }
+                } else {
+                  // Production validation
+                  if (amount < 100) {
+                    return 'Minimum amount is ₹100';
+                  }
+                  if (amount > 1000000) {
+                    return 'Maximum amount is ₹10,00,000';
+                  }
                 }
                 return null;
               },
@@ -386,14 +410,25 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       return;
     }
 
-    if (_selectedAmount < 100) {
-      _showErrorDialog('Minimum investment amount is ₹100');
-      return;
-    }
-
-    if (_selectedAmount > 1000000) {
-      _showErrorDialog('Maximum investment amount is ₹10,00,000');
-      return;
+    // Validate amount based on environment
+    if (PaynimoConfig.isTestEnvironment) {
+      if (_selectedAmount < PaynimoConfig.minTestAmount) {
+        _showErrorDialog('Test minimum amount is ₹${PaynimoConfig.minTestAmount}');
+        return;
+      }
+      if (_selectedAmount > PaynimoConfig.maxTestAmount) {
+        _showErrorDialog('Test maximum amount is ₹${PaynimoConfig.maxTestAmount}');
+        return;
+      }
+    } else {
+      if (_selectedAmount < 100) {
+        _showErrorDialog('Minimum investment amount is ₹100');
+        return;
+      }
+      if (_selectedAmount > 1000000) {
+        _showErrorDialog('Maximum investment amount is ₹10,00,000');
+        return;
+      }
     }
 
     // Check if customer is registered
@@ -462,40 +497,46 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             const SizedBox(height: 20),
             const Text('Choose Payment Method:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            // Primary Payment Method - Omniware Net Banking
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primaryGold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.primaryGold, width: 2),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.account_balance, size: 32, color: AppColors.primaryGold),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Net Banking',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const Text(
-                    'Secure payment via Omniware gateway',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(4),
+            // Primary Payment Method - Paynimo Gateway
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                _showEnhancedPayment(silverGrams);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primaryGold, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.credit_card, size: 32, color: AppColors.primaryGold),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Paynimo Gateway',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
-                    child: const Text(
-                      'RECOMMENDED',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    Text(
+                      PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10 only)' : 'Secure payment via Paynimo gateway',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'RECOMMENDED',
+                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -515,21 +556,21 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             onPressed: () => _showUpiPaymentOptions(silverGrams),
             child: const Text('UPI Options'),
           ),
-          // Primary Payment Button (Omniware Net Banking)
+          // Primary Payment Button (Paynimo Gateway)
           ElevatedButton(
             onPressed: () => _showEnhancedPayment(silverGrams),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryGold,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Pay with Net Banking'),
+            child: Text(PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10)' : 'Pay with Paynimo'),
           ),
         ],
       ),
     );
   }
 
-  /// Show enhanced payment screen with Omniware Net Banking
+  /// Show enhanced payment screen with Paynimo Gateway
   Future<void> _showEnhancedPayment(double silverGrams) async {
     Navigator.pop(context); // Close confirmation dialog
 
@@ -635,7 +676,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
               // Check payment status
               final status = await _enhancedPaymentService.verifyPaymentStatus(
                 response.transactionId,
-                PaymentMethod.omniwareNetbanking,
+                PaymentMethod.paynimoCard,
               );
               await _handleEnhancedPaymentResponse(status, silverGrams);
             },
@@ -673,7 +714,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
               // Retry status check
               final status = await _enhancedPaymentService.verifyPaymentStatus(
                 response.transactionId,
-                PaymentMethod.omniwareNetbanking,
+                PaymentMethod.paynimoCard,
               );
               await _handleEnhancedPaymentResponse(status, silverGrams);
             },

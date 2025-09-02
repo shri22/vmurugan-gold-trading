@@ -87,7 +87,7 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
           ),
 
           // Environment Info
-          if (OmniwareConfig.isTestEnvironment)
+          if (PaynimoConfig.isTestEnvironment)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -103,7 +103,7 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      'Testing Environment: Only Net Banking is available through Omniware gateway',
+                      'Testing Environment: Test payments (₹1-10) available through Paynimo gateway',
                       style: TextStyle(
                         color: Colors.orange.shade700,
                         fontSize: 12,
@@ -128,10 +128,10 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                // Omniware Methods Section
-                if (_paymentService.isOmniwareConfigured) ...[
+                // Paynimo Methods Section
+                if (_paymentService.isPaynimoConfigured) ...[
                   _buildSectionHeader('Secure Gateway Payments'),
-                  ..._buildOmniwareMethods(),
+                  ..._buildPaynimoMethods(),
                   const SizedBox(height: AppSpacing.lg),
                 ],
 
@@ -204,22 +204,22 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
     );
   }
 
-  List<Widget> _buildOmniwareMethods() {
+  List<Widget> _buildPaynimoMethods() {
     final methods = _paymentService.getAvailablePaymentMethods()
-        .where((method) => method.isOmniware)
+        .where((method) => method.isPaynimoMethod)
         .toList();
 
     return methods.map((method) => _buildPaymentMethodTile(
       method: method,
-      icon: _getOmniwareMethodIcon(method),
-      subtitle: _getOmniwareMethodSubtitle(method),
-      isRecommended: method == PaymentMethod.omniwareNetbanking && OmniwareConfig.isTestEnvironment,
+      icon: _getPaynimoMethodIcon(method),
+      subtitle: _getPaynimoMethodSubtitle(method),
+      isRecommended: method == PaymentMethod.paynimoCard && PaynimoConfig.isTestEnvironment,
     )).toList();
   }
 
   List<Widget> _buildUpiMethods() {
     final methods = _paymentService.getAvailablePaymentMethods()
-        .where((method) => !method.isOmniware)
+        .where((method) => !method.isPaynimoMethod)
         .toList();
 
     return methods.map((method) => _buildPaymentMethodTile(
@@ -312,39 +312,39 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
     );
   }
 
-  IconData _getOmniwareMethodIcon(PaymentMethod method) {
+  IconData _getPaynimoMethodIcon(PaymentMethod method) {
     switch (method) {
-      case PaymentMethod.omniwareNetbanking:
-        return Icons.account_balance;
-      case PaymentMethod.omniwareUpi:
-        return Icons.payment;
-      case PaymentMethod.omniwareCard:
+      case PaymentMethod.paynimoCard:
         return Icons.credit_card;
-      case PaymentMethod.omniwareWallet:
+      case PaymentMethod.paynimoNetbanking:
+        return Icons.account_balance;
+      case PaymentMethod.paynimoUpi:
+        return Icons.payment;
+      case PaymentMethod.paynimoWallet:
         return Icons.account_balance_wallet;
-      case PaymentMethod.omniwareEmi:
-        return Icons.schedule_send;
       default:
         return Icons.payment;
     }
   }
 
-  String _getOmniwareMethodSubtitle(PaymentMethod method) {
+
+
+  String _getPaynimoMethodSubtitle(PaymentMethod method) {
     switch (method) {
-      case PaymentMethod.omniwareNetbanking:
-        return 'Secure bank transfer via Omniware gateway';
-      case PaymentMethod.omniwareUpi:
-        return 'UPI payments via Omniware gateway';
-      case PaymentMethod.omniwareCard:
-        return 'Credit/Debit card payments';
-      case PaymentMethod.omniwareWallet:
-        return 'Digital wallet payments';
-      case PaymentMethod.omniwareEmi:
-        return 'Easy monthly installments';
+      case PaymentMethod.paynimoCard:
+        return 'Credit/Debit card payment via Paynimo';
+      case PaymentMethod.paynimoNetbanking:
+        return 'Secure bank transfer via Paynimo';
+      case PaymentMethod.paynimoUpi:
+        return 'UPI payment via Paynimo gateway';
+      case PaymentMethod.paynimoWallet:
+        return 'Digital wallet via Paynimo';
       default:
-        return 'Secure payment via Omniware';
+        return 'Secure Paynimo gateway payment';
     }
   }
+
+
 
   IconData _getUpiMethodIcon(PaymentMethod method) {
     switch (method) {

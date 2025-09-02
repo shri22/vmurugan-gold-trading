@@ -214,45 +214,23 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
+              'Gold Rate',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.primaryGreen,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
               _currentPrice!.formattedPrice,
               style: AppTypography.amountDisplay,
             ),
             const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'per gram',
-                    style: AppTypography.rateInfo.copyWith(
-                      color: AppColors.primaryGreen, // Ensure dark green for visibility
-                    ),
-                  ),
-                ),
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _priceService.isMjdtaAvailable
-                          ? AppColors.success.withValues(alpha: 0.1)
-                          : Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _priceService.isMjdtaAvailable ? 'MJDTA LIVE' : 'UNAVAILABLE',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: _priceService.isMjdtaAvailable
-                            ? AppColors.success
-                            : Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              'per gram',
+              style: AppTypography.rateInfo.copyWith(
+                color: AppColors.primaryGreen, // Ensure dark green for visibility
+              ),
             ),
           ],
         ),
@@ -294,11 +272,26 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
               return 'Please enter an amount';
             }
             final amount = double.tryParse(value);
-            if (amount == null || amount < 100) {
-              return 'Minimum amount is ₹100';
+            if (amount == null) {
+              return 'Please enter a valid amount';
             }
-            if (amount > 1000000) {
-              return 'Maximum amount is ₹10,00,000';
+
+            // Test environment validation (Bank requirement)
+            if (PaynimoConfig.isTestEnvironment) {
+              if (amount < PaynimoConfig.minTestAmount) {
+                return 'Test minimum amount is ₹${PaynimoConfig.minTestAmount}';
+              }
+              if (amount > PaynimoConfig.maxTestAmount) {
+                return 'Test maximum amount is ₹${PaynimoConfig.maxTestAmount}';
+              }
+            } else {
+              // Production validation
+              if (amount < 100) {
+                return 'Minimum amount is ₹100';
+              }
+              if (amount > 1000000) {
+                return 'Maximum amount is ₹10,00,000';
+              }
             }
             return null;
           },
@@ -327,20 +320,21 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           Icon(
             Icons.diamond,
             size: 48,
-            color: AppColors.white,
+            color: AppColors.primaryGreen, // Changed from white to dark green
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             'You will get',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.white.withValues(alpha: 0.9),
+              color: AppColors.primaryGreen, // Changed from white to dark green
+              fontWeight: FontWeight.w600, // Added weight for better visibility
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '${goldQuantity.toStringAsFixed(4)} grams',
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              color: AppColors.white,
+              color: AppColors.primaryGreen, // Changed from white to dark green
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -348,7 +342,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           Text(
             'of 22K Digital Gold',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.white.withValues(alpha: 0.9),
+              color: AppColors.primaryGreen, // Changed from white to dark green
+              fontWeight: FontWeight.w600, // Added weight for better visibility
             ),
           ),
         ],
@@ -411,7 +406,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
   }
 
   Widget _buildBuyButton() {
-    final isValidAmount = _selectedAmount >= 100 && _selectedAmount <= 1000000;
+    final isValidAmount = PaynimoConfig.isTestEnvironment
+        ? (_selectedAmount >= PaynimoConfig.minTestAmount && _selectedAmount <= PaynimoConfig.maxTestAmount)
+        : (_selectedAmount >= 100 && _selectedAmount <= 1000000);
     final canPurchase = _priceService.canPurchase;
 
     return Column(
@@ -463,14 +460,25 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       return;
     }
 
-    if (_selectedAmount < 100) {
-      _showErrorDialog('Minimum investment amount is ₹100');
-      return;
-    }
-
-    if (_selectedAmount > 1000000) {
-      _showErrorDialog('Maximum investment amount is ₹10,00,000');
-      return;
+    // Validate amount based on environment
+    if (PaynimoConfig.isTestEnvironment) {
+      if (_selectedAmount < PaynimoConfig.minTestAmount) {
+        _showErrorDialog('Test minimum amount is ₹${PaynimoConfig.minTestAmount}');
+        return;
+      }
+      if (_selectedAmount > PaynimoConfig.maxTestAmount) {
+        _showErrorDialog('Test maximum amount is ₹${PaynimoConfig.maxTestAmount}');
+        return;
+      }
+    } else {
+      if (_selectedAmount < 100) {
+        _showErrorDialog('Minimum investment amount is ₹100');
+        return;
+      }
+      if (_selectedAmount > 1000000) {
+        _showErrorDialog('Maximum investment amount is ₹10,00,000');
+        return;
+      }
     }
 
     // Check if customer is registered
@@ -537,40 +545,46 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             const SizedBox(height: 20),
             const Text('Choose Payment Method:', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            // Primary Payment Method - Omniware Net Banking
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primaryGold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.primaryGold, width: 2),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.account_balance, size: 32, color: AppColors.primaryGold),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Net Banking',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const Text(
-                    'Secure payment via Omniware gateway',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(4),
+            // Primary Payment Method - Paynimo Gateway
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                _showEnhancedPayment(goldGrams);
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primaryGold, width: 2),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.credit_card, size: 32, color: AppColors.primaryGold),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Paynimo Gateway',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
-                    child: const Text(
-                      'RECOMMENDED',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    Text(
+                      PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10 only)' : 'Secure payment via Paynimo gateway',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'RECOMMENDED',
+                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -1220,14 +1234,14 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          // Primary Payment Button (Omniware Net Banking)
+          // Primary Payment Button (Paynimo Gateway)
           ElevatedButton(
             onPressed: () => _showEnhancedPayment(goldGrams),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryGold,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Pay with Net Banking'),
+            child: Text(PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10)' : 'Pay with Paynimo'),
           ),
           // UPI Payment Options
           TextButton(
@@ -1239,7 +1253,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     );
   }
 
-  /// Show enhanced payment screen with Omniware Net Banking
+  /// Show enhanced payment screen with Paynimo Gateway
   Future<void> _showEnhancedPayment(double goldGrams) async {
     Navigator.pop(context); // Close confirmation dialog
 
@@ -1427,7 +1441,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                 // Check payment status
                 final status = await _enhancedPaymentService.verifyPaymentStatus(
                   response.transactionId,
-                  PaymentMethod.omniwareNetbanking, // Default for verification
+                  PaymentMethod.paynimoCard, // Default for verification
                 );
                 await _handleEnhancedPaymentResponse(status, goldGrams);
               },
@@ -1604,7 +1618,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
                 // Retry status check
                 final status = await _enhancedPaymentService.verifyPaymentStatus(
                   response.transactionId,
-                  PaymentMethod.omniwareNetbanking,
+                  PaymentMethod.paynimoCard,
                 );
                 final goldGrams = _selectedAmount / (_currentPrice?.pricePerGram ?? 1);
                 await _handleEnhancedPaymentResponse(status, goldGrams);

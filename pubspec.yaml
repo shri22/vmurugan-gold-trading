@@ -49,6 +49,9 @@ dependencies:
   url_launcher: ^6.2.2
   shared_preferences: ^2.5.3
 
+  # Worldline ePayments India (Paynimo) Payment Gateway Integration
+  weipl_checkout_flutter: ^1.2.0
+
   # Premium typography with Google Fonts
   google_fonts: ^6.1.0
   sqflite: ^2.4.2
@@ -74,6 +77,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # App icon generation
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -123,17 +129,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/vm_launcher_centered.png"
-  adaptive_icon_background: "#FFFFFF"  # Pure white background
-  adaptive_icon_foreground: "assets/vm_launcher_centered.png"
+  image_path: "VM-LOGO1.png"
+  adaptive_icon_background: "#DC143C"  # VMurugan brand red
+  adaptive_icon_foreground: "VM-LOGO1.png"
   # Additional configurations for better centering and scaling
   min_sdk_android: 21
   # Remove alpha channel for iOS
   remove_alpha_ios: true
   # Ensure proper scaling and centering
-  android_adaptive_icon_background: "#FFFFFF"
-  android_adaptive_icon_foreground: "assets/vm_launcher_centered.png"
+  android_adaptive_icon_background: "#DC143C"
+  android_adaptive_icon_foreground: "VM-LOGO1.png"
   web:
     generate: true
-    image_path: "assets/vm_launcher_centered.png"
-    background_color: "#FFFFFF"
+    image_path: "VM-LOGO1.png"
+    background_color: "#DC143C"
+
+

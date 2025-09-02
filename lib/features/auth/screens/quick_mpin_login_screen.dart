@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
@@ -10,7 +9,8 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/encryption_service.dart';
 import '../../../core/services/auto_logout_service.dart';
-import '../../../core/config/sql_server_config.dart';
+import '../../../core/services/secure_http_client.dart';
+import '../../../core/config/client_server_config.dart';
 import '../../../main.dart';
 import 'phone_entry_screen.dart';
 
@@ -76,10 +76,10 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
         print('🔐 Quick Login - Encrypted MPIN: $encryptedMpin');
 
         // HTTPS only for production security
-        print('🌐 Connecting to: https://${SqlServerConfig.serverIP}:3001/api/login');
+        print('🌐 Connecting to: ${ClientServerConfig.userLoginEndpoint}');
 
-        final response = await http.post(
-          Uri.parse('https://${SqlServerConfig.serverIP}:3001/api/login'),
+        final response = await SecureHttpClient.post(
+          Uri.parse('${ClientServerConfig.userLoginEndpoint}'),
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',

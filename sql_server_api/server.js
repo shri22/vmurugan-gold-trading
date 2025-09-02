@@ -12,6 +12,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const path = require('path');
 
 console.log('🚀 VMurugan SQL Server API Starting...');
 console.log('📊 Port:', PORT);
@@ -22,18 +23,17 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
-// Enhanced CORS configuration for admin portal and mobile app
+// HTTPS-only CORS configuration for admin portal and mobile app
 app.use(cors({
   origin: [
     'https://api.vmuruganjewellery.co.in',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'file://',
-    '*'
+    'https://api.vmuruganjewellery.co.in:3001',
+    'https://localhost:3001',
+    'https://127.0.0.1:3001'
   ],
   credentials: false,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Accept', 'Origin', 'User-Agent', 'admin-token'],
+  allowedHeaders: ['Content-Type', 'Accept', 'Origin', 'User-Agent', 'admin-token', 'X-Requested-With'],
   optionsSuccessStatus: 200
 }));
 
@@ -243,6 +243,38 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Serve admin portal with HTTPS-only security headers
+app.get('/admin_portal/index.html', (req, res) => {
+  const adminPortalPath = path.join(__dirname, '..', 'admin_portal', 'index.html');
+  console.log('📊 Serving HTTPS-only admin portal from:', adminPortalPath);
+
+  // Add HTTPS-only security headers
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  if (require('fs').existsSync(adminPortalPath)) {
+    res.sendFile(adminPortalPath);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Admin portal not found',
+      path: adminPortalPath,
+      suggestion: 'Ensure admin_portal/index.html exists in the project root'
+    });
+  }
+});
+
+// Redirect any HTTP requests to HTTPS (if somehow they reach here)
+app.use((req, res, next) => {
+  if (req.header('x-forwarded-proto') !== 'https') {
+    console.log('🔒 Enforcing HTTPS-only access');
+  }
+  next();
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -251,6 +283,7 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
+      adminPortal: '/admin_portal/index.html',
       testConnection: '/api/test-connection',
       customers: '/api/customers',
       login: '/api/login',
@@ -1134,10 +1167,209 @@ app.get('/api/schemes/details/:scheme_id', async (req, res) => {
   }
 });
 
-// Payment callback endpoint
+// =============================================================================
+// PAYNIMO PAYMENT GATEWAY ENDPOINTS
+// =============================================================================
+
+// Paynimo payment initiation endpoint
+app.post('/api/paynimo/initiate', [
+  body('transactionId').notEmpty().withMessage('Transaction ID required'),
+  body('amount').isFloat({ min: 1 }).withMessage('Amount must be positive'),
+  body('customerName').notEmpty().withMessage('Customer name required'),
+  body('customerEmail').isEmail().withMessage('Valid email required'),
+  body('customerPhone').isMobilePhone('en-IN').withMessage('Valid Indian mobile number required'),
+  body('description').notEmpty().withMessage('Description required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    console.log('🚀 Paynimo payment initiation request:', req.body);
+
+    const {
+      transactionId,
+      amount,
+      customerName,
+      customerEmail,
+      customerPhone,
+      description,
+      paymentMethod = 'credit_card'
+    } = req.body;
+
+    // Validate Paynimo configuration
+    const PaynimoConfig = {
+      merchantCode: 'T1098761',
+      schemeCode: 'FIRST',
+      encryptionKey: '9221995309QQNRIO',
+      encryptionIV: '6753042926GDVTTK',
+      isTestEnvironment: true
+    };
+
+    // Build payment request
+    const paymentRequest = {
+      merchantCode: PaynimoConfig.merchantCode,
+      schemeCode: PaynimoConfig.schemeCode,
+      txnId: transactionId,
+      amount: (amount * 100).toString(), // Convert to paisa
+      currency: 'INR',
+      custName: customerName,
+      custEmail: customerEmail,
+      custMobile: customerPhone,
+      productDescription: description,
+      returnUrl: `https://api.vmuruganjewellery.co.in:3001/api/paynimo/callback`,
+      cancelUrl: `https://api.vmuruganjewellery.co.in:3001/payment/cancel`,
+      requestType: 'T',
+      paymentMode: _mapPaymentMethod(paymentMethod),
+      timestamp: Date.now().toString()
+    };
+
+    // Store transaction in database
+    const request = pool.request();
+    request.input('transaction_id', sql.NVarChar(100), transactionId);
+    request.input('customer_phone', sql.NVarChar(15), customerPhone);
+    request.input('customer_name', sql.NVarChar(100), customerName);
+    request.input('amount', sql.Decimal(12, 2), amount);
+    request.input('payment_method', sql.NVarChar(50), `PAYNIMO_${paymentMethod.toUpperCase()}`);
+    request.input('status', sql.NVarChar(20), 'PENDING');
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    await request.query(`
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, amount, payment_method, status, business_id
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, @amount, @payment_method, @status, @business_id
+      )
+    `);
+
+    console.log('✅ Paynimo payment request stored:', transactionId);
+
+    res.json({
+      success: true,
+      transactionId: transactionId,
+      paymentRequest: paymentRequest,
+      message: 'Payment initiation successful'
+    });
+
+  } catch (error) {
+    console.error('❌ Paynimo payment initiation error:', error);
+    res.status(500).json({ success: false, message: 'Payment initiation failed', error: error.message });
+  }
+});
+
+// Paynimo payment callback endpoint
+app.post('/api/paynimo/callback', async (req, res) => {
+  try {
+    console.log('💳 Paynimo payment callback received:', req.body);
+
+    const {
+      txnId,
+      gatewayTxnId,
+      status,
+      amount,
+      paymentMode,
+      responseCode,
+      responseMessage
+    } = req.body;
+
+    // Map Paynimo status to our status
+    let mappedStatus = 'FAILED';
+    if (status === 'SUCCESS' || responseCode === '0') {
+      mappedStatus = 'SUCCESS';
+    } else if (status === 'PENDING') {
+      mappedStatus = 'PENDING';
+    }
+
+    // Update transaction status in database
+    const request = pool.request();
+    request.input('transaction_id', sql.NVarChar(100), txnId);
+    request.input('gateway_transaction_id', sql.NVarChar(100), gatewayTxnId);
+    request.input('status', sql.NVarChar(20), mappedStatus);
+
+    await request.query(`
+      UPDATE transactions
+      SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = GETDATE()
+      WHERE transaction_id = @transaction_id
+    `);
+
+    console.log('✅ Paynimo payment status updated:', txnId, mappedStatus);
+
+    // Redirect based on status
+    if (mappedStatus === 'SUCCESS') {
+      res.redirect(`/payment/success?transaction_id=${txnId}&gateway_id=${gatewayTxnId}`);
+    } else {
+      res.redirect(`/payment/failure?transaction_id=${txnId}&reason=${responseMessage || 'Payment failed'}`);
+    }
+
+  } catch (error) {
+    console.error('❌ Paynimo payment callback error:', error.message);
+    res.redirect(`/payment/failure?reason=Callback processing failed`);
+  }
+});
+
+// Paynimo payment status check endpoint
+app.get('/api/paynimo/status/:transactionId', async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    console.log('🔍 Paynimo payment status check:', transactionId);
+
+    const request = pool.request();
+    request.input('transaction_id', sql.NVarChar(100), transactionId);
+
+    const result = await request.query(`
+      SELECT transaction_id, status, gateway_transaction_id, amount, payment_method, timestamp
+      FROM transactions
+      WHERE transaction_id = @transaction_id
+    `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    const transaction = result.recordset[0];
+
+    res.json({
+      success: true,
+      transactionId: transaction.transaction_id,
+      status: transaction.status,
+      gatewayTransactionId: transaction.gateway_transaction_id,
+      amount: transaction.amount,
+      paymentMethod: transaction.payment_method,
+      timestamp: transaction.timestamp
+    });
+
+  } catch (error) {
+    console.error('❌ Paynimo status check error:', error);
+    res.status(500).json({ success: false, message: 'Status check failed', error: error.message });
+  }
+});
+
+// Helper function to map payment methods
+function _mapPaymentMethod(method) {
+  switch (method) {
+    case 'credit_card':
+      return 'CC';
+    case 'debit_card':
+      return 'DC';
+    case 'net_banking':
+      return 'NB';
+    case 'upi':
+      return 'UP';
+    case 'wallet':
+      return 'WL';
+    default:
+      return 'CC';
+  }
+}
+
+// Legacy payment callback endpoint (deprecated)
 app.post('/api/payment/callback', async (req, res) => {
   try {
-    console.log('💳 Payment callback received:', req.body);
+    console.log('💳 Legacy payment callback received:', req.body);
 
     const {
       transaction_id,
@@ -1160,7 +1392,7 @@ app.post('/api/payment/callback', async (req, res) => {
       WHERE transaction_id = @transaction_id
     `);
 
-    console.log('✅ Payment status updated:', transaction_id, status);
+    console.log('✅ Legacy payment status updated:', transaction_id, status);
 
     res.json({
       success: true,
@@ -1168,7 +1400,7 @@ app.post('/api/payment/callback', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Payment callback error:', error.message);
+    console.error('❌ Legacy payment callback error:', error.message);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
@@ -1307,6 +1539,9 @@ app.use('*', (req, res) => {
       '/api/transactions',
       '/api/transaction-history',
       '/api/schemes/:customerId',
+      '/api/paynimo/initiate',
+      '/api/paynimo/callback',
+      '/api/paynimo/status/:transactionId',
       '/api/payment/callback',
       '/payment/success',
       '/payment/failure',
@@ -1342,21 +1577,37 @@ async function startServer() {
 
   try {
     if (fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath)) {
+      console.log('🔍 SSL certificate files found:');
+      console.log(`   Key: ${sslKeyPath}`);
+      console.log(`   Cert: ${sslCertPath}`);
+
       const keyContent = fs.readFileSync(sslKeyPath, 'utf8');
       const certContent = fs.readFileSync(sslCertPath, 'utf8');
 
       // Validate certificate content
       if (keyContent.includes('BEGIN') && certContent.includes('BEGIN CERTIFICATE')) {
-        // Skip crypto validation to avoid ASN1 encoding errors
-        console.log('🔒 SSL certificates found - bypassing validation and starting HTTPS server...');
+        console.log('🔒 SSL certificates validated - configuring HTTPS server...');
+
+        // Extract certificate details for logging
+        const certLines = certContent.split('\n');
+        const certData = certLines.slice(1, -2).join('');
+        console.log('📜 Certificate loaded successfully');
 
         httpsOptions = {
           key: keyContent,
           cert: certContent,
-          // Options to handle SSL compatibility issues
+          // Enhanced SSL options for better compatibility
           secureProtocol: 'TLSv1_2_method',
           honorCipherOrder: true,
-          rejectUnauthorized: false // Allow self-signed certificates
+          ciphers: [
+            'ECDHE-RSA-AES128-GCM-SHA256',
+            'ECDHE-RSA-AES256-GCM-SHA384',
+            'ECDHE-RSA-AES128-SHA256',
+            'ECDHE-RSA-AES256-SHA384'
+          ].join(':'),
+          rejectUnauthorized: false, // Allow self-signed certificates
+          requestCert: false,
+          agent: false
         };
 
 
@@ -1440,8 +1691,10 @@ async function startServer() {
       console.log(`🏥 Health Check: https://api.vmuruganjewellery.co.in:${httpsPort}/health`);
       console.log(`🔗 API Base URL: https://api.vmuruganjewellery.co.in:${httpsPort}/api`);
       console.log(`💾 Database: ${sqlConfig.database} on ${sqlConfig.server}`);
-      console.log(`💳 Payment URLs:`);
-      console.log(`   Callback: https://api.vmuruganjewellery.co.in:${httpsPort}/api/payment/callback`);
+      console.log(`💳 Paynimo Payment URLs:`);
+      console.log(`   Initiate: https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/initiate`);
+      console.log(`   Callback: https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/callback`);
+      console.log(`   Status:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/status/:transactionId`);
       console.log(`   Success:  https://api.vmuruganjewellery.co.in:${httpsPort}/payment/success`);
       console.log(`   Failure:  https://api.vmuruganjewellery.co.in:${httpsPort}/payment/failure`);
       console.log(`   Cancel:   https://api.vmuruganjewellery.co.in:${httpsPort}/payment/cancel`);

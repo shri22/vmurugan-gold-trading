@@ -3,5 +3,5 @@
     <color name="vmurugan_background">#DC143C</color>
     <color name="vmurugan_accent">#FFD700</color>
     <color name="vmurugan_text">#FFFFFF</color>
-	<color name="ic_launcher_background">#FFFFFF</color>
+	<color name="ic_launcher_background">#DC143C</color>
 </resources>

@@ -3,18 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/payment_model.dart';
 import 'upi_payment_service.dart';
-import 'omniware_payment_service.dart';
-import '../../../core/config/server_config.dart';
+import 'paynimo_payment_service.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/config/server_config.dart';
 
-/// Enhanced Payment Service that handles both UPI and Omniware payments
+/// Enhanced Payment Service that handles UPI and Paynimo payments
 class EnhancedPaymentService {
   static final EnhancedPaymentService _instance = EnhancedPaymentService._internal();
   factory EnhancedPaymentService() => _instance;
   EnhancedPaymentService._internal();
 
   final UpiPaymentService _upiService = UpiPaymentService();
-  final OmniwarePaymentService _omniwareService = OmniwarePaymentService();
+  final PaynimoPaymentService _paynimoService = PaynimoPaymentService();
 
   // =============================================================================
   // MAIN PAYMENT PROCESSING
@@ -33,8 +33,16 @@ class EnhancedPaymentService {
       print('   Amount: ₹${request.amount}');
       print('   Transaction ID: ${request.transactionId}');
 
-      if (request.method.isOmniware) {
-        return await _processOmniwarePayment(
+      if (request.method.isPaynimoMethod) {
+        // For test environment, allow small amounts
+        if (PaynimoConfig.isTestEnvironment && !PaynimoConfig.isValidTestAmount(request.amount)) {
+          return PaymentResponse.failed(
+            transactionId: request.transactionId,
+            errorMessage: 'Test amount must be between ₹${PaynimoConfig.minTestAmount} and ₹${PaynimoConfig.maxTestAmount}',
+          );
+        }
+
+        return await _processPaynimoPayment(
           request: request,
           customerName: customerName,
           customerEmail: customerEmail,
@@ -93,149 +101,86 @@ class EnhancedPaymentService {
   }
 
   // =============================================================================
-  // OMNIWARE PAYMENT PROCESSING
+  // PAYNIMO PAYMENT PROCESSING
   // =============================================================================
 
-  /// Process Omniware gateway payments
-  Future<PaymentResponse> _processOmniwarePayment({
+  /// Process Paynimo gateway payments
+  Future<PaymentResponse> _processPaynimoPayment({
     required PaymentRequest request,
     String? customerName,
     String? customerEmail,
     String? customerPhone,
   }) async {
     try {
-      print('🏦 Processing Omniware payment: ${request.method.displayName}');
+      print('💳 Processing Paynimo payment: ${request.method.displayName}');
 
-      // Get customer details if not provided
-      if (customerName == null || customerEmail == null || customerPhone == null) {
-        final customerInfo = await CustomerService.getCustomerInfo();
-        customerName ??= customerInfo['name'] ?? 'Customer';
-        customerEmail ??= customerInfo['email'] ?? 'customer@vmuruganjewellery.co.in';
-        customerPhone ??= customerInfo['phone'] ?? '+919677944711';
+      // Get customer details
+      customerName ??= 'VMurugan Customer';
+      customerEmail ??= 'customer@vmuruganjewellery.co.in';
+      customerPhone ??= '9999999999';
+
+      // Try to get actual customer details if phone is available
+      if (customerPhone != '9999999999') {
+        try {
+          // TODO: Implement customer service integration
+          print('📞 Customer phone: $customerPhone');
+          // For now, use default values
+        } catch (e) {
+          print('⚠️ Could not fetch customer details: $e');
+        }
       }
 
-      // Check if method is available in current environment
-      if (OmniwareConfig.isTestEnvironment && !request.method.isAvailableInTesting) {
-        return PaymentResponse.failed(
-          transactionId: request.transactionId,
-          errorMessage: '${request.method.displayName} is not available in testing environment. Only Net Banking is available.',
-        );
-      }
-
-      // Initiate payment with Omniware
-      final omniwareResponse = await _omniwareService.initiatePayment(
+      // Initiate payment with Paynimo
+      final paynimoResponse = await _paynimoService.initiatePayment(
         transactionId: request.transactionId,
         amount: request.amount,
-        customerName: customerName,
-        customerEmail: customerEmail,
+        customerName: customerName ?? 'VMurugan Customer',
+        customerEmail: customerEmail ?? 'customer@vmuruganjewellery.co.in',
         customerPhone: customerPhone,
         description: request.description,
-        paymentMethod: request.method.omniwareMethodString,
+        paymentMethod: _getPaynimoMethodString(request.method),
       );
 
-      if (omniwareResponse.success && omniwareResponse.paymentUrl != null) {
-        // Launch payment URL in browser
-        final launched = await _launchPaymentUrl(omniwareResponse.paymentUrl!);
-        
-        if (launched) {
-          // Wait for payment completion and check status
-          return await _waitForOmniwarePayment(request.transactionId);
-        } else {
-          return PaymentResponse.failed(
-            transactionId: request.transactionId,
-            errorMessage: 'Could not open payment page. Please try again.',
-          );
-        }
+      if (paynimoResponse.success) {
+        return PaymentResponse.success(
+          transactionId: request.transactionId,
+          gatewayTransactionId: paynimoResponse.gatewayTransactionId ?? '',
+          additionalData: {
+            'paynimo_payment_id': paynimoResponse.paymentId,
+            'paynimo_payment_url': paynimoResponse.paymentUrl,
+            'payment_method': request.method.displayName,
+            'gateway': 'Paynimo',
+            'amount': request.amount,
+            'customer_name': customerName,
+            'customer_email': customerEmail,
+            'customer_phone': customerPhone,
+          },
+        );
       } else {
         return PaymentResponse.failed(
           transactionId: request.transactionId,
-          errorMessage: omniwareResponse.errorMessage ?? 'Payment initiation failed',
+          errorMessage: paynimoResponse.errorMessage ?? 'Paynimo payment initiation failed',
+          additionalData: {
+            'gateway': 'Paynimo',
+            'payment_method': request.method.displayName,
+          },
         );
       }
 
     } catch (e) {
-      print('❌ Omniware payment error: $e');
+      print('❌ Paynimo payment processing error: $e');
       return PaymentResponse.failed(
         transactionId: request.transactionId,
-        errorMessage: 'Omniware payment failed: $e',
+        errorMessage: 'Paynimo payment processing failed: $e',
+        additionalData: {
+          'gateway': 'Paynimo',
+          'payment_method': request.method.displayName,
+        },
       );
     }
   }
 
-  /// Launch payment URL in browser
-  Future<bool> _launchPaymentUrl(String paymentUrl) async {
-    try {
-      print('🌐 Launching payment URL: $paymentUrl');
-      
-      final uri = Uri.parse(paymentUrl);
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
 
-      if (launched) {
-        print('✅ Payment URL launched successfully');
-        return true;
-      } else {
-        print('❌ Failed to launch payment URL');
-        return false;
-      }
-    } catch (e) {
-      print('❌ Error launching payment URL: $e');
-      return false;
-    }
-  }
-
-  /// Wait for Omniware payment completion
-  Future<PaymentResponse> _waitForOmniwarePayment(String transactionId) async {
-    print('⏳ Waiting for Omniware payment completion...');
-
-    // Poll payment status for up to 10 minutes
-    const maxAttempts = 60; // 60 attempts * 10 seconds = 10 minutes
-    const pollInterval = Duration(seconds: 10);
-
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        print('🔍 Checking payment status (attempt $attempt/$maxAttempts)...');
-
-        final status = await _omniwareService.checkPaymentStatus(transactionId);
-        
-        if (status.isSuccess) {
-          print('✅ Payment completed successfully!');
-          return status.toPaymentResponse();
-        } else if (status.isFailed || status.isCancelled) {
-          print('❌ Payment failed or cancelled: ${status.status}');
-          return status.toPaymentResponse();
-        }
-
-        // Payment still pending, wait before next check
-        if (attempt < maxAttempts) {
-          print('⏳ Payment still pending, waiting ${pollInterval.inSeconds} seconds...');
-          await Future.delayed(pollInterval);
-        }
-
-      } catch (e) {
-        print('❌ Error checking payment status: $e');
-        // Continue polling unless it's the last attempt
-        if (attempt == maxAttempts) {
-          return PaymentResponse.failed(
-            transactionId: transactionId,
-            errorMessage: 'Payment status check failed: $e',
-          );
-        }
-      }
-    }
-
-    // Timeout reached
-    print('⏰ Payment status check timeout reached');
-    return PaymentResponse.pending(
-      transactionId: transactionId,
-      additionalData: {
-        'timeout': true,
-        'message': 'Payment status check timeout. Please verify manually.',
-      },
-    );
-  }
 
   // =============================================================================
   // PAYMENT STATUS VERIFICATION
@@ -246,19 +191,14 @@ class EnhancedPaymentService {
     try {
       print('🔍 Verifying payment status for transaction: $transactionId');
 
-      if (method.isOmniware) {
-        final status = await _omniwareService.checkPaymentStatus(transactionId);
-        return status.toPaymentResponse();
-      } else {
-        // For UPI payments, use existing verification logic
-        return PaymentResponse.pending(
-          transactionId: transactionId,
-          additionalData: {
-            'verification_required': true,
-            'method': method.displayName,
-          },
-        );
-      }
+      // For UPI and Paynimo payments, use existing verification logic
+      return PaymentResponse.pending(
+        transactionId: transactionId,
+        additionalData: {
+          'verification_required': true,
+          'method': method.displayName,
+        },
+      );
     } catch (e) {
       print('❌ Payment verification error: $e');
       return PaymentResponse.failed(
@@ -276,6 +216,16 @@ class EnhancedPaymentService {
   List<PaymentMethod> getAvailablePaymentMethods() {
     final methods = <PaymentMethod>[];
 
+    // Add Paynimo methods if configured (primary gateway)
+    if (isPaynimoConfigured) {
+      methods.addAll([
+        PaymentMethod.paynimoCard,
+        PaymentMethod.paynimoNetbanking,
+        PaymentMethod.paynimoUpi,
+        PaymentMethod.paynimoWallet,
+      ]);
+    }
+
     // Always add UPI methods
     methods.addAll([
       PaymentMethod.gpay,
@@ -284,43 +234,29 @@ class EnhancedPaymentService {
       PaymentMethod.qrCode,
     ]);
 
-    // Add Omniware methods based on environment
-    if (OmniwareConfig.isTestEnvironment) {
-      methods.add(PaymentMethod.omniwareNetbanking);
-    } else {
-      methods.addAll([
-        PaymentMethod.omniwareNetbanking,
-        PaymentMethod.omniwareUpi,
-        PaymentMethod.omniwareCard,
-        PaymentMethod.omniwareWallet,
-        PaymentMethod.omniwareEmi,
-      ]);
-    }
+
 
     return methods;
   }
 
-  /// Check if Omniware is properly configured
-  bool get isOmniwareConfigured => OmniwareConfig.isConfigured;
+  /// Check if Paynimo is properly configured
+  bool get isPaynimoConfigured => true; // Always configured for Paynimo
 
   /// Get payment method recommendations
   List<PaymentMethod> getRecommendedMethods() {
     final available = getAvailablePaymentMethods();
-    
+
     // Prioritize based on reliability and user preference
     final recommended = <PaymentMethod>[];
-    
-    // Add Omniware methods first (more reliable for larger amounts)
-    if (OmniwareConfig.isTestEnvironment) {
-      recommended.add(PaymentMethod.omniwareNetbanking);
-    } else {
-      recommended.addAll([
-        PaymentMethod.omniwareUpi,
-        PaymentMethod.omniwareCard,
-        PaymentMethod.omniwareNetbanking,
-      ]);
-    }
-    
+
+    // Add Paynimo methods first (more reliable for larger amounts)
+    recommended.addAll([
+      PaymentMethod.paynimoCard,
+      PaymentMethod.paynimoNetbanking,
+      PaymentMethod.paynimoUpi,
+      PaymentMethod.paynimoWallet,
+    ]);
+
     // Add UPI methods
     recommended.addAll([
       PaymentMethod.gpay,
@@ -329,5 +265,21 @@ class EnhancedPaymentService {
     ]);
 
     return recommended.where((method) => available.contains(method)).toList();
+  }
+
+  /// Get Paynimo method string
+  String _getPaynimoMethodString(PaymentMethod method) {
+    switch (method) {
+      case PaymentMethod.paynimoCard:
+        return 'CARD';
+      case PaymentMethod.paynimoNetbanking:
+        return 'NET_BANKING';
+      case PaymentMethod.paynimoUpi:
+        return 'UPI';
+      case PaymentMethod.paynimoWallet:
+        return 'WALLET';
+      default:
+        return 'CARD'; // Default fallback
+    }
   }
 }

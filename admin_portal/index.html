@@ -648,22 +648,46 @@
                         credentials: 'omit'
                     });
                 } catch (httpsError) {
-                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
+                    console.log('⚠️ HTTPS connection failed - SSL certificate needs acceptance');
                     console.log('❌ Error details:', httpsError.message);
 
-                    // Show SSL certificate error message
+                    // Show HTTPS-only SSL certificate acceptance guide
                     document.getElementById('connectionStatus').innerHTML = `
-                        <div style="color: red; font-weight: bold;">
-                            ❌ SSL Certificate Error<br>
-                            Error: ${httpsError.message}<br>
+                        <div style="color: #ff5722; font-weight: bold; padding: 20px; border: 2px solid #ff5722; border-radius: 8px; background: #fff3e0;">
+                            🔒 HTTPS SSL Certificate Acceptance Required<br>
+                            <span style="font-size: 14px; color: #666;">Error: ${httpsError.message}</span><br>
                             <br>
-                            <strong>To fix this:</strong><br>
-                            1. Check SSL certificate for api.vmuruganjewellery.co.in<br>
-                            2. Ensure certificate Common Name matches domain<br>
-                            3. Or access admin portal directly from server<br>
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                                <strong style="color: #1976d2;">🔐 HTTPS-Only Security Notice:</strong><br>
+                                <span style="font-size: 13px; color: #424242;">
+                                This admin portal operates exclusively over HTTPS for maximum security.
+                                You need to accept the SSL certificate to proceed.
+                                </span>
+                            </div>
+
+                            <div style="text-align: left; margin: 15px 0; font-weight: normal;">
+                                <strong style="color: #ff5722;">📋 Certificate Acceptance Steps:</strong><br>
+                                <ol style="margin: 10px 0; padding-left: 20px; font-size: 14px;">
+                                    <li>Click this HTTPS link: <a href="https://api.vmuruganjewellery.co.in:3001/health" target="_blank" style="color: #2196F3; font-weight: bold;">Accept SSL Certificate</a></li>
+                                    <li>In the security warning, click <strong>"Advanced"</strong></li>
+                                    <li>Click <strong>"Proceed to api.vmuruganjewellery.co.in (unsafe)"</strong></li>
+                                    <li>You should see: <code style="background: #f5f5f5; padding: 2px 4px;">{"status":"OK"}</code></li>
+                                    <li>Return here and click <strong>"Retry Connection"</strong></li>
+                                </ol>
+                            </div>
+
+                            <div style="background: #f3e5f5; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                                <strong style="color: #7b1fa2;">🏠 Alternative - Local Access:</strong><br>
+                                <span style="font-size: 13px;">If accessing from the server machine: </span>
+                                <a href="https://localhost:3001/admin_portal/index.html" target="_blank" style="color: #7b1fa2;">https://localhost:3001/admin_portal/index.html</a>
+                            </div>
+
                             <br>
-                            <button onclick="location.reload()" style="padding: 5px 10px; background: #FF5722; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                                🔄 Retry Connection
+                            <button onclick="testSqlServerConnection()" style="padding: 10px 20px; background: #ff5722; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; font-weight: bold;">
+                                🔄 Retry HTTPS Connection
+                            </button>
+                            <button onclick="window.open('https://api.vmuruganjewellery.co.in:3001/health', '_blank')" style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                🔐 Accept Certificate
                             </button>
                         </div>
                     `;
@@ -775,34 +799,24 @@
             }
         }
 
-        // Load real customer data from SQL Server
+        // Load real customer data from SQL Server (HTTPS-only)
         async function loadCustomersFromFirebase() {
             try {
-                console.log('🔄 Loading customers from SQL Server...');
+                console.log('🔄 Loading customers from SQL Server via HTTPS...');
 
-                // Try HTTPS first, then HTTP fallback for SSL issues
-                let apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/customers';
-                console.log('🌐 Trying HTTPS: ' + apiUrl);
+                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/customers';
+                console.log('🔒 HTTPS-only request to:', apiUrl);
 
-                let response;
-                try {
-                    response = await fetch(apiUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'User-Agent': 'VMurugan-Admin-Portal/1.0'
-                        },
-                        mode: 'cors',
-                        credentials: 'omit'
-                    });
-                } catch (httpsError) {
-                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
-                    console.log('❌ HTTPS Error:', httpsError.message);
-
-                    // Show SSL certificate error and stop
-                    throw new Error(`SSL Certificate Error: ${httpsError.message}. Please fix the SSL certificate for api.vmuruganjewellery.co.in or access the admin portal from the server directly.`);
-                }
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'VMurugan-Admin-Portal/1.0'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
 
                 console.log('📥 Response status:', response.status);
                 console.log('📥 Response ok:', response.ok);
@@ -1019,6 +1033,83 @@
 
         let showTestDataFlag = false;
 
+        function openCertificateHelp() {
+            const helpWindow = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+            helpWindow.document.write(`
+                <html>
+                <head>
+                    <title>HTTPS-Only SSL Certificate Guide - VMurugan Gold Trading</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; background: #f8f9fa; }
+                        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        .step { background: #e3f2fd; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #2196F3; }
+                        .security { background: #fff3e0; border: 1px solid #ff9800; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                        .success { background: #e8f5e8; border: 1px solid #4caf50; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                        code { background: #f5f5f5; padding: 3px 6px; border-radius: 3px; font-family: monospace; }
+                        .btn { background: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+                        .btn:hover { background: #1976D2; }
+                        ol li { margin: 8px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>🔐 HTTPS-Only SSL Certificate Guide</h1>
+
+                        <div class="security">
+                            <strong>🔒 Security Notice:</strong> This admin portal operates exclusively over HTTPS for maximum security.
+                            All communications are encrypted and secure.
+                        </div>
+
+                        <h2>🚀 Certificate Acceptance (Required)</h2>
+                        <div class="step">
+                            <h3>Step 1: Accept the SSL Certificate</h3>
+                            <ol>
+                                <li><strong>Click this link:</strong> <a href="https://api.vmuruganjewellery.co.in:3001/health" target="_blank" style="color: #2196F3; font-weight: bold;">Accept SSL Certificate</a></li>
+                                <li>You'll see a browser security warning (this is normal for self-signed certificates)</li>
+                                <li>Click <strong>"Advanced"</strong> or <strong>"Show Details"</strong></li>
+                                <li>Click <strong>"Proceed to api.vmuruganjewellery.co.in (unsafe)"</strong> or <strong>"Accept Risk and Continue"</strong></li>
+                                <li>You should see: <code>{"status":"OK","message":"VMurugan SQL Server API is running"}</code></li>
+                                <li>Return to the admin portal and click <strong>"Retry Connection"</strong></li>
+                            </ol>
+                        </div>
+
+                        <div class="success">
+                            <strong>✅ Why This Works:</strong> Once you accept the certificate, your browser will trust it for all subsequent
+                            HTTPS requests to the same domain, allowing the admin portal to function normally.
+                        </div>
+
+                        <h2>🏠 Local Server Access</h2>
+                        <div class="step">
+                            <p><strong>If you're accessing from the server machine itself:</strong></p>
+                            <ul>
+                                <li><a href="https://localhost:3001/admin_portal/index.html" target="_blank">https://localhost:3001/admin_portal/index.html</a></li>
+                                <li><a href="https://127.0.0.1:3001/admin_portal/index.html" target="_blank">https://127.0.0.1:3001/admin_portal/index.html</a></li>
+                            </ul>
+                            <p><em>Local access may have fewer certificate warnings.</em></p>
+                        </div>
+
+                        <h2>🔧 Technical Details</h2>
+                        <div class="step">
+                            <p><strong>Certificate Information:</strong></p>
+                            <ul>
+                                <li><strong>Common Name:</strong> api.vmuruganjewellery.co.in</li>
+                                <li><strong>Type:</strong> Self-signed SSL certificate</li>
+                                <li><strong>Encryption:</strong> 4096-bit RSA</li>
+                                <li><strong>Validity:</strong> 1 year</li>
+                                <li><strong>Purpose:</strong> HTTPS server authentication</li>
+                            </ul>
+                        </div>
+
+                        <div style="text-align: center; margin-top: 30px;">
+                            <button class="btn" onclick="window.close()">Close Help</button>
+                            <button class="btn" onclick="window.open('https://api.vmuruganjewellery.co.in:3001/health', '_blank')">Accept Certificate Now</button>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+
         function forceLoadData() {
             console.log('🔧 Force loading data...');
 
@@ -1032,25 +1123,43 @@
                 </tr>
             `;
 
-            // Direct API call
-            fetch('https://api.vmuruganjewellery.co.in:3001/api/customers')
+            // HTTPS-only API call
+            fetch('https://api.vmuruganjewellery.co.in:3001/api/customers', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'User-Agent': 'VMurugan-Admin-Portal/1.0'
+                },
+                mode: 'cors',
+                credentials: 'omit'
+            })
                 .then(response => {
-                    console.log('📥 Response status:', response.status);
+                    console.log('📥 HTTPS Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTPS ${response.status}: ${response.statusText}`);
+                    }
                     return response.json();
                 })
                 .then(data => {
-                    console.log('📊 Raw data:', data);
+                    console.log('📊 HTTPS Raw data:', data);
                     if (data.success && data.customers) {
-                        console.log('✅ Found customers:', data.customers.length);
+                        console.log('✅ Found customers via HTTPS:', data.customers.length);
                         displayCustomers(data.customers);
+                        alert('✅ Data force loaded successfully via HTTPS!\n\n' +
+                              `Found ${data.customers.length} customers in database.`);
                     } else {
-                        console.log('❌ No customers in response');
+                        console.log('❌ No customers in HTTPS response');
                         tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: red;">No data found</td></tr>`;
                     }
                 })
                 .catch(error => {
-                    console.error('❌ Error:', error);
-                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: red;">Error: ${error.message}</td></tr>`;
+                    console.error('❌ HTTPS Error:', error);
+                    let helpText = '';
+                    if (error.message.includes('ERR_CERT_COMMON_NAME_INVALID') || error.message.includes('certificate') || error.message.includes('Failed to fetch')) {
+                        helpText = '<br><br>🔒 <strong>HTTPS SSL Certificate Issue:</strong><br>Click "🔐 Accept Certificate" button above to resolve this.';
+                    }
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: red;">❌ HTTPS Error: ${error.message}${helpText}</td></tr>`;
                 });
         }
 
@@ -1064,35 +1173,25 @@
             }
         }
 
-        // Load real transaction data from SQL Server
+        // Load real transaction data from SQL Server (HTTPS-only)
         async function loadTransactionsFromFirebase() {
             try {
-                console.log('🔄 Loading transactions from SQL Server...');
+                console.log('🔄 Loading transactions from SQL Server via HTTPS...');
 
-                // Try HTTPS first, then HTTP fallback for SSL issues
-                let apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/transactions';
-                console.log('🌐 Trying HTTPS: ' + apiUrl);
+                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/transactions';
+                console.log('🔒 HTTPS-only request to:', apiUrl);
 
-                let response;
-                try {
-                    response = await fetch(apiUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'User-Agent': 'VMurugan-Admin-Portal/1.0',
-                            'admin-token': 'VMURUGAN_ADMIN_2025'
-                        },
-                        mode: 'cors',
-                        credentials: 'omit'
-                    });
-                } catch (httpsError) {
-                    console.log('⚠️ HTTPS failed (SSL certificate issue)');
-                    console.log('❌ HTTPS Error:', httpsError.message);
-
-                    // Show SSL certificate error and stop
-                    throw new Error(`SSL Certificate Error: ${httpsError.message}. Please fix the SSL certificate for api.vmuruganjewellery.co.in or access the admin portal from the server directly.`);
-                }
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'VMurugan-Admin-Portal/1.0',
+                        'admin-token': 'VMURUGAN_ADMIN_2025'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
 
                 if (response.ok) {
                     const data = await response.json();

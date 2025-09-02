@@ -504,30 +504,39 @@ class _HomePageState extends State<HomePage> {
               children: [
                 // Gold Rate Card
                 Expanded(
+                  flex: 1,
                   child: Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      padding: const EdgeInsets.all(AppSpacing.md),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.circle, color: AppColors.primaryGold, size: 12),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Gold Rate',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Gold Rate',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryGreen, // Changed to dark green for better visibility
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            goldPrice != null ? '₹${goldPrice.toStringAsFixed(0)}' : '₹9160',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: AppColors.primaryGold,
-                              fontWeight: FontWeight.bold,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              goldPrice != null ? '₹${goldPrice.toStringAsFixed(0)}' : '₹9160',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: AppColors.primaryGold,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           Text(
@@ -535,39 +544,49 @@ class _HomePageState extends State<HomePage> {
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.grey[600],
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.sm),
                 // Silver Rate Card
                 Expanded(
+                  flex: 1,
                   child: Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      padding: const EdgeInsets.all(AppSpacing.md),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.circle, color: Colors.grey, size: 12),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Silver Rate',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Silver Rate',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primaryGreen, // Changed to dark green for better visibility
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '₹86',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.bold,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '₹86',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           Text(
@@ -575,6 +594,7 @@ class _HomePageState extends State<HomePage> {
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.grey[600],
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -591,6 +611,7 @@ class _HomePageState extends State<HomePage> {
               'Investment Schemes',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
+                color: AppColors.primaryGreen, // Changed to dark green for better visibility
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -641,7 +662,10 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Text(
                               'Gold Scheme',
-                              style: AppTypography.cardTitle,
+                              style: AppTypography.cardTitle.copyWith(
+                                color: Colors.white, // Reverted back to white as requested
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
@@ -754,7 +778,10 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Text(
                               'Silver Scheme',
-                              style: AppTypography.cardTitle,
+                              style: AppTypography.cardTitle.copyWith(
+                                color: Colors.white, // Reverted back to white as requested
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
