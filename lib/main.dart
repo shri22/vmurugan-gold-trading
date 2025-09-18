@@ -24,6 +24,7 @@ import 'features/transaction/screens/transaction_history_screen.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/scheme_management_service.dart';
 import 'core/services/customer_service.dart';
+import 'features/payment/services/worldline_payment_service.dart';
 
 // Global navigator key for auto-logout navigation
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -34,6 +35,8 @@ void main() async {
 
   // Initialize Firebase for free SMS OTP functionality
   await FirebaseInit.initialize();
+
+  // Worldline Payment Service will auto-initialize when first used
 
   runApp(const DigiGoldApp());
 }

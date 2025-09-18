@@ -27,7 +27,7 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
           children: [
             Row(
               children: [
-                const Icon(Icons.server, color: Colors.blue),
+                const Icon(Icons.dns, color: Colors.blue),
                 const SizedBox(width: 8),
                 const Text(
                   'Server Connection Test',
@@ -88,7 +88,7 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
             ),
             
             // Setup Instructions
-            if (!ServerConfig.isConfigured) ...[
+            if (ServerConfig.baseUrl.contains('localhost')) ...[
               const SizedBox(height: 16),
               _buildSetupInstructions(),
             ],
@@ -99,7 +99,7 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
   }
 
   Widget _buildConfigSection() {
-    final config = ServerConfig.status;
+    final config = 'Production Server: ${ServerConfig.baseUrl}';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -114,10 +114,10 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text('URL: ${config['base_url']}'),
-          Text('IP: ${config['teammate_ip']}'),
-          Text('Port: ${config['port']}'),
-          Text('Configured: ${config['configured'] ? 'Yes' : 'No'}'),
+          Text('URL: ${ServerConfig.baseUrl}'),
+          Text('HTTPS: ${ServerConfig.useHttps ? 'Enabled' : 'Disabled'}'),
+          Text('Timeout: ${ServerConfig.timeout}ms'),
+          Text('Status: Production Ready'),
         ],
       ),
     );
@@ -145,7 +145,12 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
             ],
           ),
           const SizedBox(height: 8),
-          ...ServerConfig.setupInstructions.map(
+          ...[
+            'Ensure server is running on production environment',
+            'Check SSL certificates are valid',
+            'Verify database connectivity',
+            'Test payment gateway endpoints'
+          ].map(
             (instruction) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Text('• $instruction'),

@@ -32,6 +32,9 @@
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Worldline SMS OTP auto-read permission -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
     <!-- Support for older devices -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -84,7 +87,22 @@
                 <data android:scheme="https"
                       android:host="vmuruganjewellery.co.in" />
             </intent-filter>
+
+            <!-- CRITICAL: Worldline payment callback intent filter -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="worldline"
+                      android:host="payment" />
+            </intent-filter>
         </activity>
+
+            <!-- CRITICAL: Official Worldline Checkout Activity -->
+        <activity
+            android:name="com.weipl.checkout.WLCheckoutActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -102,10 +120,10 @@
             <data android:mimeType="text/plain"/>
         </intent>
 
-        <!-- Query for UPI apps -->
+        <!-- Query for UPI apps - Official Worldline requirement -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="upi" />
+            <data android:scheme="upi" android:host="pay"/>
         </intent>
 
         <!-- Query for specific payment apps -->
@@ -121,5 +139,19 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
         </intent>
+
+        <!-- CRITICAL: Query for Worldline payment activities -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="worldline" />
+        </intent>
+
+        <!-- Query for banking apps that Worldline might redirect to -->
+        <package android:name="com.sbi.SBIFreedomPlus" />
+        <package android:name="com.icicibank.pockets" />
+        <package android:name="com.axis.mobile" />
+        <package android:name="com.hdfcbank.payzapp" />
+        <package android:name="com.csam.icici.bank.imobile" />
     </queries>
 </manifest>

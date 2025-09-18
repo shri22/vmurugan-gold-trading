@@ -9,12 +9,6 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../services/silver_price_service.dart';
 import '../models/silver_price_model.dart';
-import '../../payment/services/upi_payment_service.dart';
-import '../../payment/services/payment_verification_service.dart';
-import '../../payment/services/enhanced_payment_service.dart';
-import '../../payment/screens/enhanced_payment_screen.dart';
-import '../../payment/models/payment_model.dart';
-import '../../../core/config/server_config.dart';
 import '../../../core/services/auto_logout_service.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
@@ -25,6 +19,9 @@ import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/services/notification_service.dart';
 import '../../notifications/models/notification_model.dart';
+import '../../payment/models/payment_response.dart';
+import '../../payment/widgets/payment_options_dialog.dart';
+import '../../../core/config/validation_config.dart';
 
 class BuySilverScreen extends StatefulWidget {
   const BuySilverScreen({super.key});
@@ -35,400 +32,303 @@ class BuySilverScreen extends StatefulWidget {
 
 class _BuySilverScreenState extends State<BuySilverScreen> {
   final SilverPriceService _priceService = SilverPriceService();
-  final UpiPaymentService _paymentService = UpiPaymentService();
-  final PaymentVerificationService _verificationService = PaymentVerificationService();
-  final EnhancedPaymentService _enhancedPaymentService = EnhancedPaymentService();
   final PortfolioService _portfolioService = PortfolioService();
   final SchemeManagementService _schemeService = SchemeManagementService();
   final AutoLogoutService _autoLogoutService = AutoLogoutService();
+
   final TextEditingController _amountController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   SilverPriceModel? _currentPrice;
   double _selectedAmount = 0.0;
+  String? _selectedSchemeId;
+  List<dynamic> _availableSchemes = []; // Simplified for now
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeServices();
-    _amountController.text = _selectedAmount.toStringAsFixed(0);
+    _initializeScreen();
   }
 
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
+  Future<void> _initializeScreen() async {
+    await _loadSilverPrice();
+    await _loadAvailableSchemes();
   }
 
-  void _initializeServices() {
-    _priceService.initialize();
+  Future<void> _loadSilverPrice() async {
+    try {
+      setState(() => _isLoading = true);
+      final price = await _priceService.getCurrentPrice();
+      setState(() {
+        _currentPrice = price;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      print('Error loading silver price: $e');
+    }
+  }
 
-
-
-    // Listen to price updates
-    _priceService.priceStream.listen((price) {
-      if (mounted) {
-        print('🥈 BuySilverScreen: Received price update: ${price?.pricePerGram ?? 'null'}');
+  Future<void> _loadAvailableSchemes() async {
+    try {
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerId = customerInfo['customer_id'];
+      
+      if (customerId != null && customerId.isNotEmpty) {
+        // final schemes = await _schemeService.getActiveSchemes(customerId);
         setState(() {
-          _currentPrice = price;
+          _availableSchemes = []; // Temporarily disabled
         });
       }
-    });
-
-    // Load initial price
-    _loadInitialPrice();
-  }
-
-
-
-  void _loadInitialPrice() async {
-    final price = await _priceService.getCurrentPrice();
-    setState(() {
-      _currentPrice = price;
-    });
+    } catch (e) {
+      print('Error loading schemes: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final silverQuantity = _currentPrice != null
-        ? _selectedAmount / _currentPrice!.pricePerGram
-        : 0.0;
-
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Buy Silver'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: _showInfoDialog,
-          ),
-        ],
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: Responsive.getPadding(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Current Silver Price Card
-            _buildSilverPriceCard(),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // Amount Selection Section
-            _buildAmountSelectionSection(),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // Silver Quantity Preview
-            _buildSilverQuantityPreview(silverQuantity),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // Investment Summary
-            _buildInvestmentSummary(silverQuantity),
-
-            const SizedBox(height: AppSpacing.xxl),
-
-            // Buy Button
-            _buildBuyButton(),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPriceCard(),
+                    const SizedBox(height: 24),
+                    _buildAmountInput(),
+                    const SizedBox(height: 24),
+                    _buildSchemeSelection(),
+                    const SizedBox(height: 32),
+                    _buildBuyButton(),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
-  Widget _buildSilverPriceCard() {
+  Widget _buildPriceCard() {
     if (_currentPrice == null) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: Center(child: CircularProgressIndicator()),
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text('Loading silver price...'),
         ),
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Current Silver Price',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.trending_up,
-                        size: 16,
-                        color: Colors.green[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'Silver Rate',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.primaryGreen,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Text(
-                  '₹${_currentPrice!.pricePerGram.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'per gram',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.primaryGreen, // Ensure dark green for visibility
-                  ),
-                ),
-              ],
-            ),
-
-          ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.grey[300]!, Colors.grey[400]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
-
-  Widget _buildAmountSelectionSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Enter Investment Amount',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Custom amount input
-            CustomTextField(
-              controller: _amountController,
-              label: 'Investment Amount (₹)',
-              hint: 'Enter amount in ₹',
-              keyboardType: TextInputType.number,
-              prefixIcon: Icons.currency_rupee,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(7), // Max 10 lakh
-              ],
-              onChanged: (value) {
-                final amount = double.tryParse(value) ?? 0;
-                setState(() {
-                  _selectedAmount = amount;
-                });
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter an amount';
-                }
-                final amount = double.tryParse(value);
-                if (amount == null) {
-                  return 'Please enter a valid amount';
-                }
-
-                // Test environment validation (Bank requirement)
-                if (PaynimoConfig.isTestEnvironment) {
-                  if (amount < PaynimoConfig.minTestAmount) {
-                    return 'Test minimum amount is ₹${PaynimoConfig.minTestAmount}';
-                  }
-                  if (amount > PaynimoConfig.maxTestAmount) {
-                    return 'Test maximum amount is ₹${PaynimoConfig.maxTestAmount}';
-                  }
-                } else {
-                  // Production validation
-                  if (amount < 100) {
-                    return 'Minimum amount is ₹100';
-                  }
-                  if (amount > 1000000) {
-                    return 'Maximum amount is ₹10,00,000';
-                  }
-                }
-                return null;
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSilverQuantityPreview(double silverQuantity) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You will get',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Icon(
-                  Icons.circle,
-                  color: Colors.grey[400],
-                  size: 20,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '${silverQuantity.toStringAsFixed(3)} grams',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'of Silver',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInvestmentSummary(double silverQuantity) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Investment Summary',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _buildSummaryRow('Investment Amount', '₹${_selectedAmount.toStringAsFixed(2)}'),
-            _buildSummaryRow('Silver Rate', '₹${_currentPrice?.pricePerGram.toStringAsFixed(2) ?? 'N/A'}/gram'),
-            _buildSummaryRow('Silver Quantity', '${silverQuantity.toStringAsFixed(3)} grams'),
-            const Divider(height: AppSpacing.lg),
-            _buildSummaryRow(
-              'Total Amount',
-              '₹${_selectedAmount.toStringAsFixed(2)}',
-              isTotal: true,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            ),
+          const Text(
+            'Current Silver Price',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 8),
           Text(
-            value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              color: isTotal ? Colors.grey[700] : null,
-            ),
+            '₹${_currentPrice!.pricePerGram.toStringAsFixed(2)}/gram',
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
+          if (_currentPrice!.lastUpdated != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Last updated: ${_formatDateTime(_currentPrice!.lastUpdated!)}',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildBuyButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: CustomButton(
-        text: 'Buy Silver',
-        onPressed: _handleBuySilver,
-        type: ButtonType.primary,
-        icon: Icons.shopping_cart,
-      ),
+  Widget _buildAmountInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Investment Amount',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            prefixText: '₹ ',
+            hintText: 'Enter amount',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) {
+            setState(() {
+              _selectedAmount = double.tryParse(value) ?? 0.0;
+            });
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter an amount';
+            }
+            final amount = double.tryParse(value);
+            if (amount == null) {
+              return 'Please enter a valid amount';
+            }
+            // Use dynamic validation based on sandbox mode
+            return ValidationConfig.validatePaymentAmount(amount);
+          },
+        ),
+        if (_selectedAmount > 0 && _currentPrice != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'You will get: ${(_selectedAmount / _currentPrice!.pricePerGram).toStringAsFixed(3)} grams of silver',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ],
     );
   }
+
+  Widget _buildSchemeSelection() {
+    if (_availableSchemes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Scheme (Optional)',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedSchemeId,
+          decoration: const InputDecoration(
+            hintText: 'Choose a scheme',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem<String>(
+              value: null,
+              child: Text('No scheme (Direct purchase)'),
+            ),
+            // Temporarily disabled scheme dropdown
+            // ..._availableSchemes.map((scheme) => DropdownMenuItem<String>(
+            //   value: scheme.schemeId,
+            //   child: Text('${scheme.schemeName} - ₹${scheme.installmentAmount}/month'),
+            // )),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedSchemeId = value;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBuyButton() {
+    final isValidAmount = ValidationConfig.validatePaymentAmount(_selectedAmount) == null;
+    final canPurchase = _priceService.canPurchase;
+
+    return Column(
+      children: [
+        if (!canPurchase) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              border: Border.all(color: Colors.orange.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Silver purchases are temporarily unavailable. Please try again later.',
+                    style: TextStyle(
+                      color: Colors.orange.shade700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        GradientButton(
+          text: canPurchase ? 'Proceed to Payment' : 'Service Unavailable',
+          onPressed: (isValidAmount && canPurchase) ? _handleBuySilver : null,
+          gradient: canPurchase ? AppColors.goldGreenGradient : LinearGradient(
+            colors: [Colors.grey.shade400, Colors.grey.shade500],
+          ),
+          icon: canPurchase ? Icons.payment : Icons.warning,
+          isFullWidth: true,
+        ),
+      ],
+    );
+  }
+
   Future<void> _handleBuySilver() async {
-    // First check if MJDTA is available
+    // First check if silver service is available
     if (!_priceService.canPurchase) {
-      _showMjdtaUnavailableDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Silver purchases are currently unavailable. Please try again later.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
-    // Validate amount based on environment
-    if (PaynimoConfig.isTestEnvironment) {
-      if (_selectedAmount < PaynimoConfig.minTestAmount) {
-        _showErrorDialog('Test minimum amount is ₹${PaynimoConfig.minTestAmount}');
-        return;
-      }
-      if (_selectedAmount > PaynimoConfig.maxTestAmount) {
-        _showErrorDialog('Test maximum amount is ₹${PaynimoConfig.maxTestAmount}');
-        return;
-      }
-    } else {
-      if (_selectedAmount < 100) {
-        _showErrorDialog('Minimum investment amount is ₹100');
-        return;
-      }
-      if (_selectedAmount > 1000000) {
-        _showErrorDialog('Maximum investment amount is ₹10,00,000');
-        return;
-      }
+    // Validate amount using dynamic validation
+    final amountError = ValidationConfig.validatePaymentAmount(_selectedAmount);
+    if (amountError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(amountError),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
     }
 
     // Check if customer is registered
@@ -456,570 +356,72 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   Future<void> _navigateToPayment() async {
     // Check if price is available
     if (_currentPrice == null) {
-      _showErrorDialog('Silver price not available. Please wait for price update or try again.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Silver price not available. Please wait for price update or try again.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
     final silverGrams = _selectedAmount / _currentPrice!.pricePerGram;
 
-    // Show payment options dialog for demo
+    // Show payment options dialog
     _showPaymentOptionsDialog(silverGrams);
   }
 
   void _showPaymentOptionsDialog(double silverGrams) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Payment Method'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    'Silver Purchase Summary',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Amount: ₹${_selectedAmount.toStringAsFixed(2)}'),
-                  Text('Silver: ${silverGrams.toStringAsFixed(3)} grams'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Choose Payment Method:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            // Primary Payment Method - Paynimo Gateway
-            GestureDetector(
-              onTap: () {
-                Navigator.pop(context);
-                _showEnhancedPayment(silverGrams);
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGold.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.primaryGold, width: 2),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.credit_card, size: 32, color: AppColors.primaryGold),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Paynimo Gateway',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text(
-                      PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10 only)' : 'Secure payment via Paynimo gateway',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'RECOMMENDED',
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Or choose UPI payment:',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          // UPI Options Button
-          TextButton(
-            onPressed: () => _showUpiPaymentOptions(silverGrams),
-            child: const Text('UPI Options'),
-          ),
-          // Primary Payment Button (Paynimo Gateway)
-          ElevatedButton(
-            onPressed: () => _showEnhancedPayment(silverGrams),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryGold,
-              foregroundColor: Colors.black,
-            ),
-            child: Text(PaynimoConfig.isTestEnvironment ? 'Test Payment (₹1-10)' : 'Pay with Paynimo'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Show enhanced payment screen with Paynimo Gateway
-  Future<void> _showEnhancedPayment(double silverGrams) async {
-    Navigator.pop(context); // Close confirmation dialog
-
-    try {
-      final result = await Navigator.push<PaymentResponse>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EnhancedPaymentScreen(
-            amount: _selectedAmount,
-            goldGrams: silverGrams, // Using goldGrams parameter for silver
-            description: 'Silver Purchase - ${silverGrams.toStringAsFixed(3)}g',
-            onPaymentComplete: (response) {
-              _handleEnhancedPaymentResponse(response, silverGrams);
-            },
-          ),
-        ),
-      );
-
-      if (result != null) {
-        await _handleEnhancedPaymentResponse(result, silverGrams);
-      }
-    } catch (e) {
-      print('❌ Enhanced payment error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// Handle enhanced payment response
-  Future<void> _handleEnhancedPaymentResponse(PaymentResponse response, double silverGrams) async {
-    if (response.status == PaymentStatus.success) {
-      await _handleVerifiedPayment(response, 'Enhanced Payment', silverGrams);
-    } else if (response.status == PaymentStatus.pending) {
-      _showPendingPaymentDialog(response, silverGrams);
-    } else {
-      _showFailedPaymentDialog(response, silverGrams);
-    }
-  }
-
-  /// Show UPI payment options dialog
-  Future<void> _showUpiPaymentOptions(double silverGrams) async {
-    Navigator.pop(context); // Close confirmation dialog
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('UPI Payment Options'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Choose your preferred UPI payment method:'),
-            const SizedBox(height: 20),
-            _buildPaymentOption('🟢 Google Pay', 'Pay with GPay', () => _processRealPayment(PaymentMethod.gpay, silverGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('🟣 PhonePe', 'Pay with PhonePe', () => _processRealPayment(PaymentMethod.phonepe, silverGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('💳 UPI Apps', 'Pay with any UPI app', () => _processRealPayment(PaymentMethod.upiIntent, silverGrams)),
-            const SizedBox(height: 8),
-            _buildPaymentOption('📱 QR Code', 'Scan QR to pay', () => _processRealPayment(PaymentMethod.qrCode, silverGrams)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Show pending payment dialog
-  void _showPendingPaymentDialog(PaymentResponse response, double silverGrams) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment Pending'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.pending, size: 48, color: Colors.orange),
-            const SizedBox(height: 16),
-            Text('Payment is being processed...'),
-            const SizedBox(height: 8),
-            Text('Transaction ID: ${response.transactionId}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Check payment status
-              final status = await _enhancedPaymentService.verifyPaymentStatus(
-                response.transactionId,
-                PaymentMethod.paynimoCard,
-              );
-              await _handleEnhancedPaymentResponse(status, silverGrams);
-            },
-            child: const Text('Check Status'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Show failed payment dialog
-  void _showFailedPaymentDialog(PaymentResponse response, double silverGrams) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment Failed'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(response.errorMessage ?? 'Payment could not be completed'),
-            const SizedBox(height: 8),
-            Text('Transaction ID: ${response.transactionId}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Retry status check
-              final status = await _enhancedPaymentService.verifyPaymentStatus(
-                response.transactionId,
-                PaymentMethod.paynimoCard,
-              );
-              await _handleEnhancedPaymentResponse(status, silverGrams);
-            },
-            child: const Text('Check Again'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption(String icon, String title, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title)),
-            const Icon(Icons.arrow_forward_ios, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _processRealPayment(PaymentMethod method, double silverGrams) async {
-    Navigator.pop(context); // Close payment dialog
-
-    try {
-      // Set payment in progress to prevent auto logout
-      _autoLogoutService.setPaymentInProgress(true);
-
-      // Create payment request with method-specific UPI ID
-      final request = PaymentRequest(
-        transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
-        amount: _selectedAmount,
-        merchantName: UpiConfig.merchantName,
-        merchantUpiId: UpiConfig.getUpiId(method),  // Get UPI ID based on payment method
-        description: 'Silver Purchase - ${silverGrams.toStringAsFixed(3)}g',
-        method: method,
-      );
-
-      // Show launching dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text('Launching ${method.displayName}...'),
-              const SizedBox(height: 8),
-              const Text(
-                'Please complete the payment in the app that opens',
-                style: TextStyle(fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-
-      PaymentResponse response;
-
-      // Launch the appropriate payment app
-      switch (method) {
-        case PaymentMethod.gpay:
-          response = await _paymentService.payWithGPay(request);
-          break;
-        case PaymentMethod.phonepe:
-          response = await _paymentService.payWithPhonePe(request);
-          break;
-        case PaymentMethod.upiIntent:
-          response = await _paymentService.payWithUpiIntent(request);
-          break;
-        default:
-          response = PaymentResponse.failed(
-            transactionId: request.transactionId,
-            errorMessage: 'Payment method not supported',
-          );
-      }
-
-      Navigator.pop(context); // Close launching dialog
-
-      // Handle payment response based on status
-      if (response.status == PaymentStatus.pending) {
-        // Payment was initiated, now verify with user
-        print('💳 Payment initiated, showing verification dialog...');
-
-        final verificationResult = await _verificationService.showPaymentVerificationDialog(
-          context: context,
-          request: request,
-          transactionId: response.transactionId,
-        );
-
-        // Handle verification result
-        await _handleVerifiedPayment(verificationResult, method.displayName, silverGrams);
-
-      } else if (response.status == PaymentStatus.success) {
-        // Direct success (shouldn't happen with new flow, but handle it)
-        await _handleVerifiedPayment(response, method.displayName, silverGrams);
-
-      } else {
-        // Payment failed or cancelled
-        await NotificationTemplates.paymentFailed(
-          transactionId: response.transactionId,
-          amount: _selectedAmount,
-          reason: response.errorMessage ?? 'Payment was not completed',
-        );
-        _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment was not completed'}');
-
-        // Payment process completed (failed), resume auto logout monitoring
-        _autoLogoutService.setPaymentInProgress(false);
-      }
-
-    } catch (e) {
-      Navigator.pop(context); // Close any open dialog
-      _showErrorDialog('Payment error: ${e.toString()}');
-
-      // Payment process completed (error), resume auto logout monitoring
-      _autoLogoutService.setPaymentInProgress(false);
-    }
-  }
-
-  Future<void> _handleVerifiedPayment(PaymentResponse response, String paymentMethod, double silverGrams) async {
-    if (response.status == PaymentStatus.success) {
-      print('🎉 Payment verified successful! Creating scheme...');
-
-      // Get customer info for scheme creation
-      final customerInfo = await CustomerService.getCustomerInfo();
-      final customerId = customerInfo['customer_id'];
-
-      String? schemeId;
-      if (customerId != null && customerId.isNotEmpty) {
-        // Auto-create scheme for this purchase
-        schemeId = await _getOrCreateAutoScheme(customerId, Map<String, String>.from(customerInfo));
-        print('✅ Scheme created for verified payment: $schemeId');
-      } else {
-        print('⚠️ No customer ID found, skipping scheme creation');
-      }
-
-      // Save transaction to database (with scheme ID if available)
-      await _saveTransaction(response, paymentMethod, silverGrams, schemeId: schemeId);
-      _showRealSuccessDialog(paymentMethod, silverGrams, response, schemeId: schemeId);
-
-    } else if (response.status == PaymentStatus.failed) {
-      // Create payment failed notification
-      await NotificationTemplates.paymentFailed(
-        transactionId: response.transactionId,
-        amount: _selectedAmount,
-        reason: response.errorMessage ?? 'Payment verification failed',
-      );
-      _showErrorDialog('Payment failed: ${response.errorMessage ?? 'Payment verification failed'}');
-
-    } else if (response.status == PaymentStatus.cancelled) {
-      // Payment was cancelled by user
-      _showErrorDialog('Payment was cancelled');
-
-    } else {
-      // Unknown status
-      _showErrorDialog('Payment status unknown. Please check your bank statement and contact support if money was debited.');
-    }
-
-    // Payment process completed, resume auto logout monitoring
-    _autoLogoutService.setPaymentInProgress(false);
-  }
-
-  Future<void> _saveTransaction(PaymentResponse response, String paymentMethod, double silverGrams, {String? schemeId}) async {
-    try {
-      // Save to local database
-      await _portfolioService.saveTransaction(
-        transactionId: response.transactionId,
-        type: TransactionType.BUY,
+      builder: (context) => PaymentOptionsDialog(
         amount: _selectedAmount,
         metalGrams: silverGrams,
-        metalPricePerGram: _currentPrice!.pricePerGram,
-        metalType: MetalType.silver,
-        paymentMethod: paymentMethod,
-        status: TransactionStatus.SUCCESS,
-        gatewayTransactionId: response.gatewayTransactionId,
-      );
-
-      // Save to server with customer details (updated for metal type)
-      await CustomerService.saveTransactionWithCustomerData(
-        transactionId: response.transactionId,
-        type: 'BUY',
-        amount: _selectedAmount,
-        goldGrams: silverGrams, // Using goldGrams field for metal grams (backward compatibility)
-        goldPricePerGram: _currentPrice!.pricePerGram, // Using goldPricePerGram for metal price
-        paymentMethod: paymentMethod,
-        status: 'SUCCESS',
-        gatewayTransactionId: response.gatewayTransactionId ?? '',
-      );
-
-      // Log analytics event
-      await CustomerService.logEvent('silver_purchase_completed', {
-        'transaction_id': response.transactionId,
-        'amount': _selectedAmount,
-        'silver_grams': silverGrams,
-        'payment_method': paymentMethod,
-        'silver_price_per_gram': _currentPrice!.pricePerGram,
-      });
-
-      // Create success notification (using goldGrams as 0 for silver)
-      await NotificationTemplates.paymentSuccess(
-        transactionId: response.transactionId,
-        amount: _selectedAmount,
-        goldGrams: 0, // This is silver purchase, so goldGrams is 0
-        paymentMethod: paymentMethod,
-      );
-
-      print('✅ Transaction saved successfully');
-    } catch (e) {
-      print('❌ Error saving transaction: $e');
-      // Don't throw error here as payment was successful
-    }
-  }
-  void _showRealSuccessDialog(String paymentMethod, double silverGrams, PaymentResponse response, {String? schemeId}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.check_circle, color: Colors.green, size: 32),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(child: Text('Payment Successful!')),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('🎉 Your silver purchase was successful!'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Transaction ID: ${response.transactionId}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text('Amount: ₹${_selectedAmount.toStringAsFixed(2)}'),
-                  Text('Silver: ${silverGrams.toStringAsFixed(3)} grams'),
-                  Text('Payment Method: $paymentMethod'),
-                  if (schemeId != null) Text('Scheme ID: $schemeId'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '✅ Payment has been automatically verified. Silver will be added to your portfolio.',
-                style: TextStyle(fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Close success dialog
-              Navigator.pop(context); // Go back to main screen
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[300],
-              foregroundColor: Colors.black,
-            ),
-            child: const Text('Continue'),
-          ),
-        ],
+        metalType: 'silver',
+        onPaymentComplete: _handlePaymentComplete,
       ),
     );
   }
+
+
+
+  void _handlePaymentComplete(PaymentResponse response) {
+    if (response.status == PaymentStatus.success) {
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Silver purchase successful! Transaction ID: ${response.transactionId}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      // Navigate back to portfolio or show success screen
+      Navigator.pop(context);
+    } else {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment failed: ${response.message}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Error'),
+        title: const Row(
+          children: [
+            Icon(Icons.error, color: Colors.red, size: 32),
+            SizedBox(width: 12),
+            Text('Error'),
+          ],
+        ),
         content: Text(message),
         actions: [
           TextButton(
@@ -1031,142 +433,13 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
     );
   }
 
-  void _showMjdtaUnavailableDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Service Unavailable'),
-        content: const Text(
-          'Silver trading is temporarily unavailable. Please try again later.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('About Silver Investment'),
-        content: const SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Digital Silver Investment',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              SizedBox(height: 8),
-              Text('• Invest in pure silver digitally'),
-              Text('• Real-time market prices'),
-              Text('• Secure storage and insurance'),
-              Text('• Easy buying and selling'),
-              Text('• No making charges'),
-              SizedBox(height: 12),
-              Text(
-                'Investment Details',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              SizedBox(height: 8),
-              Text('• Minimum investment: ₹100'),
-              Text('• Maximum investment: ₹10,00,000'),
-              Text('• Live MJDTA prices'),
-              Text('• Instant portfolio updates'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
   }
-
-  String _formatTime(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
-    }
-  }
-
-  Future<String?> _getOrCreateAutoScheme(String customerId, Map<String, String> customerInfo) async {
-    print('🎯 _getOrCreateAutoScheme called for SILVER with:');
-    print('   Customer ID: $customerId');
-    print('   Customer Info: $customerInfo');
-    print('   Selected Amount: $_selectedAmount');
-
-    try {
-      final customerPhone = customerInfo['phone'] ?? '';
-      final customerName = customerInfo['name'] ?? '';
-
-      // Check if customer already has an active silver scheme
-      final existingScheme = await _schemeService.getCustomerSchemeByMetal(customerPhone, MetalType.silver);
-
-      if (existingScheme != null) {
-        print('✅ Found existing silver scheme: ${existingScheme.schemeId}');
-        return existingScheme.schemeId;
-      }
-
-      print('📝 Creating new SILVERPLUS scheme...');
-      // Create new SILVERPLUS scheme with 15 months duration
-      final newScheme = await _schemeService.createScheme(
-        customerPhone: customerPhone,
-        customerName: customerName,
-        monthlyAmount: _selectedAmount, // Use current purchase as monthly amount
-        metalType: MetalType.silver,
-        durationMonths: 15, // SILVERPLUS is 15 months
-      );
-
-      print('✅ Created new SILVERPLUS scheme: ${newScheme.schemeId}');
-      return newScheme.schemeId;
-    } catch (e) {
-      print('❌ Error creating/getting silver scheme: $e');
-      return null;
-    }
-  }
-
-  // Update scheme with payment
-  Future<void> _updateSchemePayment(String schemeId, double amount, double silverGrams, String paymentMethod, String transactionId) async {
-    try {
-      print('💰 Recording payment for scheme $schemeId: ₹$amount for ${silverGrams}g silver');
-
-      // Get the current silver price per gram
-      final silverPricePerGram = _currentPrice?.pricePerGram ?? 0.0; // Keep fallback for scheme calculations
-
-      // Find the next pending installment for this scheme
-      // For now, we'll create a dummy installment ID - in production this would be retrieved from database
-      final installmentId = '${schemeId}_INST_01'; // This should be the actual next pending installment
-
-      // Pay the installment
-      await _schemeService.payInstallment(
-        installmentId: installmentId,
-        metalPricePerGram: silverPricePerGram,
-        paymentMethod: paymentMethod,
-        transactionId: transactionId,
-      );
-
-      print('✅ Installment payment recorded successfully');
-    } catch (e) {
-      print('❌ Error updating scheme payment: $e');
-    }
-  }
-
 }

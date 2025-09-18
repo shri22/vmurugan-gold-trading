@@ -86,7 +86,7 @@ class ValidationConfigScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    ValidationConfig.currentMode.displayName,
+                    ValidationConfig.currentMode,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -95,7 +95,7 @@ class ValidationConfigScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    ValidationConfig.currentMode.description,
+                    ValidationConfig.isDemoMode ? 'Demo mode for testing' : 'Production mode with real services',
                     style: TextStyle(
                       color: Colors.grey[600],
                     ),
@@ -188,11 +188,11 @@ class ValidationConfigScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            ...ValidationConfig.getProductionSwitchInstructions().asMap().entries.map(
-              (entry) => Padding(
+            ...ValidationConfig.getProductionSwitchInstructions().split('\n').map(
+              (instruction) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
-                  entry.value,
+                  instruction,
                   style: TextStyle(color: Colors.grey[700]),
                 ),
               ),

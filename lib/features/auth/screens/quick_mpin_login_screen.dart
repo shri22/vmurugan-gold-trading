@@ -90,7 +90,7 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             'encrypted_mpin': encryptedMpin,
           }),
         ).timeout(
-          const Duration(seconds: 30),
+          const Duration(seconds: 15),
           onTimeout: () {
             throw Exception('Connection timeout. Please check your internet connection and try again.');
           },

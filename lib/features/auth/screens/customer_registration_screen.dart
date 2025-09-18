@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/secure_http_client.dart';
@@ -51,6 +53,19 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     _addressController.dispose();
     _panController.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $url')),
+        );
+      }
+    }
   }
 
   Future<void> _registerCustomer() async {
@@ -601,16 +616,35 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                     activeColor: const Color(0xFFFFD700),
                   ),
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() => _agreedToTerms = !_agreedToTerms);
-                      },
-                      child: Text(
-                        'I agree to the Terms & Conditions and Privacy Policy. My transaction data will be securely stored for business analytics.',
+                    child: RichText(
+                      text: TextSpan(
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[700],
                         ),
+                        children: [
+                          const TextSpan(text: 'I agree to the '),
+                          TextSpan(
+                            text: 'Terms & Conditions',
+                            style: const TextStyle(
+                              color: Color(0xFFDAA520),
+                              decoration: TextDecoration.underline,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _launchURL('https://api.vmuruganjewellery.co.in:3001/terms-of-service'),
+                          ),
+                          const TextSpan(text: ' and '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: const TextStyle(
+                              color: Color(0xFFDAA520),
+                              decoration: TextDecoration.underline,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _launchURL('https://api.vmuruganjewellery.co.in:3001/privacy-policy'),
+                          ),
+                          const TextSpan(text: '. My transaction data will be securely stored for business analytics.'),
+                        ],
                       ),
                     ),
                   ),

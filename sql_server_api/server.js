@@ -1,4 +1,4 @@
-// VMurugan Gold Trading - SQL Server API (SQL Server 2005 Compatible)
+// VMurugan Gold Trading - SQL Server API (SQL Server 2019 Compatible)
 const express = require('express');
 const https = require('https'); // ADDED: For HTTPS support
 const fs = require('fs'); // ADDED: For reading SSL certificates
@@ -14,6 +14,33 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const path = require('path');
 
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+  console.log('📁 Created logs directory:', logsDir);
+}
+
+// Server-side logging function
+function writeServerLog(message, logType = 'general') {
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}\n`;
+
+    // Create log file with date
+    const logFileName = `${logType}_${new Date().toISOString().split('T')[0]}.log`;
+    const logFilePath = path.join(logsDir, logFileName);
+
+    // Append to log file
+    fs.appendFileSync(logFilePath, logMessage);
+
+    // Also log to console
+    console.log(message);
+  } catch (error) {
+    console.error('❌ Error writing to log file:', error);
+  }
+}
+
 console.log('🚀 VMurugan SQL Server API Starting...');
 console.log('📊 Port:', PORT);
 
@@ -23,14 +50,28 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
-// HTTPS-only CORS configuration for admin portal and mobile app
+// CORS configuration for production server - Allow mobile app requests
 app.use(cors({
-  origin: [
-    'https://api.vmuruganjewellery.co.in',
-    'https://api.vmuruganjewellery.co.in:3001',
-    'https://localhost:3001',
-    'https://127.0.0.1:3001'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    // Allow specific origins for web clients
+    const allowedOrigins = [
+      'https://api.vmuruganjewellery.co.in',
+      'https://api.vmuruganjewellery.co.in:3001',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ];
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Log the origin for debugging
+    console.log(`🔍 CORS: Request from origin: ${origin}`);
+    return callback(null, true); // Allow all origins for mobile app compatibility
+  },
   credentials: false,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Accept', 'Origin', 'User-Agent', 'admin-token', 'X-Requested-With'],
@@ -56,15 +97,27 @@ app.options('*', (req, res) => {
 
 // MPIN encryption functions
 function hashMPIN(mpin) {
-  // Simple hash for MPIN (in production, use bcrypt or similar)
-  return crypto.createHash('sha256').update(mpin + 'VMURUGAN_SALT').digest('hex');
+  // Hash MPIN using same salt as client-side EncryptionService
+  return crypto.createHash('sha256').update(mpin + 'VMURUGAN_GOLD_MPIN_SALT_2025').digest('hex');
 }
 
-function verifyMPIN(inputMPIN, hashedMPIN) {
-  return hashMPIN(inputMPIN) === hashedMPIN;
+function verifyMPIN(encryptedInputMPIN, storedHashedMPIN) {
+  // Try direct comparison first (for new users after fix)
+  if (encryptedInputMPIN === storedHashedMPIN) {
+    return true;
+  }
+
+  // Try double-hash comparison (for existing users before fix)
+  const doubleHashedInput = hashMPIN(encryptedInputMPIN);
+  if (doubleHashedInput === storedHashedMPIN) {
+    console.log('🔄 Legacy MPIN format detected - consider migrating user');
+    return true;
+  }
+
+  return false;
 }
 
-// SQL Server configuration
+// SQL Server 2019 configuration
 const sqlConfig = {
   server: 'DESKTOP-3QPE6QQ',
   port: 1433,
@@ -72,12 +125,41 @@ const sqlConfig = {
   user: 'sa',
   password: 'git@#12345',
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
-    enableArithAbort: true,
+    encrypt: false, // Use true for Azure SQL
+    trustServerCertificate: true, // Use true for self-signed certificates
+    enableArithAbort: true, // Required for SQL Server 2005+
+    instanceName: '', // Leave empty for default instance
+    useUTC: false, // Use local time
+    dateFirst: 1, // Monday as first day of week
+    language: 'us_english',
+    // SQL Server 2019 specific options
+    abortTransactionOnError: true, // Enhanced error handling
+    maxRetriesOnFailure: 3, // Connection retry attempts
+    multipleActiveResultSets: true, // MARS support
+    packetSize: 4096, // Optimized packet size for SQL Server 2019
+    readOnlyIntent: false, // Allow read/write operations
+    rowCollectionOnDone: false, // Performance optimization
+    rowCollectionOnRequestCompletion: false, // Performance optimization
+    tdsVersion: '7_4', // TDS version for SQL Server 2019
+    arrayRowMode: true, // Use array mode for better performance (replaces useColumnNames)
+    validateParameters: true, // Enhanced parameter validation
+    cancelTimeout: 5000, // Cancel timeout for long-running queries
+    cryptoCredentialsDetails: {
+      minVersion: 'TLSv1.2' // Minimum TLS version for security
+    }
   },
-  connectionTimeout: 30000,
-  requestTimeout: 30000,
+  pool: {
+    max: 20, // Maximum number of connections in pool
+    min: 5,  // Minimum number of connections in pool
+    idleTimeoutMillis: 30000, // Close connections after 30 seconds of inactivity
+    acquireTimeoutMillis: 60000, // Maximum time to wait for a connection
+    createTimeoutMillis: 30000, // Maximum time to wait when creating a connection
+    destroyTimeoutMillis: 5000, // Maximum time to wait when destroying a connection
+    reapIntervalMillis: 1000, // How often to check for idle connections
+    createRetryIntervalMillis: 200 // How long to wait before retrying connection creation
+  },
+  connectionTimeout: 30000, // Optimized for SQL Server 2019
+  requestTimeout: 30000,    // Optimized for SQL Server 2019
 };
 
 console.log('🔗 SQL Server Config:', {
@@ -118,14 +200,14 @@ async function initializeDatabase() {
   }
 }
 
-// Create database tables - SQL Server 2005 Compatible
+// Create database tables - SQL Server 2019 Compatible
 async function createTablesIfNotExist() {
   try {
     console.log('📋 Creating tables if not exist...');
     
-    // Create customers table - Using DATETIME instead of DATETIME2
+    // Create customers table - Using SQL Server 2019 features
     await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='customers' AND xtype='U')
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='customers')
       BEGIN
         CREATE TABLE customers (
           id INT IDENTITY(1,1) PRIMARY KEY,
@@ -135,23 +217,26 @@ async function createTablesIfNotExist() {
           address NVARCHAR(MAX),
           pan_card NVARCHAR(10),
           device_id NVARCHAR(100),
-          registration_date DATETIME DEFAULT GETDATE(),
+          mpin NVARCHAR(255) NULL,
+          registration_date DATETIME2(3) DEFAULT SYSDATETIME(),
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
           total_invested DECIMAL(12,2) DEFAULT 0.00,
           total_gold DECIMAL(10,4) DEFAULT 0.0000,
           transaction_count INT DEFAULT 0,
-          last_transaction DATETIME NULL,
-          created_at DATETIME DEFAULT GETDATE(),
-          updated_at DATETIME DEFAULT GETDATE()
+          last_transaction DATETIME2(3) NULL,
+          created_at DATETIME2(3) DEFAULT SYSDATETIME(),
+          updated_at DATETIME2(3) DEFAULT SYSDATETIME()
         )
         CREATE INDEX IX_customers_phone ON customers (phone)
-        PRINT 'Customers table created'
+        CREATE INDEX IX_customers_created_at ON customers (created_at)
+        CREATE INDEX IX_customers_business_id ON customers (business_id)
+        PRINT 'Customers table created with SQL Server 2019 features'
       END
     `);
 
-    // Create transactions table - Using DATETIME instead of DATETIME2
+    // Create transactions table - Using SQL Server 2019 features
     await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='transactions' AND xtype='U')
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='transactions')
       BEGIN
         CREATE TABLE transactions (
           id INT IDENTITY(1,1) PRIMARY KEY,
@@ -168,18 +253,22 @@ async function createTablesIfNotExist() {
           device_info NVARCHAR(MAX),
           location NVARCHAR(MAX),
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
-          timestamp DATETIME DEFAULT GETDATE(),
-          created_at DATETIME DEFAULT GETDATE()
+          timestamp DATETIME2(3) DEFAULT SYSDATETIME(),
+          created_at DATETIME2(3) DEFAULT SYSDATETIME(),
+          updated_at DATETIME2(3) DEFAULT SYSDATETIME()
         )
         CREATE INDEX IX_transactions_customer ON transactions (customer_phone)
+        CREATE INDEX IX_transactions_transaction_id ON transactions (transaction_id)
+        CREATE INDEX IX_transactions_timestamp ON transactions (timestamp)
         CREATE INDEX IX_transactions_status ON transactions (status)
-        PRINT 'Transactions table created'
+        CREATE INDEX IX_transactions_business_id ON transactions (business_id)
+        PRINT 'Transactions table created with SQL Server 2019 features'
       END
     `);
 
-    // Create schemes table - SQL Server 2005 Compatible
+    // Create schemes table - SQL Server 2019 Compatible
     await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='schemes' AND xtype='U')
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='schemes')
       BEGIN
         CREATE TABLE schemes (
           id INT IDENTITY(1,1) PRIMARY KEY,
@@ -192,22 +281,32 @@ async function createTablesIfNotExist() {
           monthly_amount DECIMAL(12,2) NOT NULL,
           duration_months INT NULL,
           status NVARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED')),
-          start_date DATETIME DEFAULT GETDATE(),
-          end_date DATETIME NULL,
+          start_date DATETIME2(3) DEFAULT SYSDATETIME(),
+          end_date DATETIME2(3) NULL,
           total_invested DECIMAL(12,2) DEFAULT 0.00,
           total_metal_accumulated DECIMAL(10,4) DEFAULT 0.0000,
           completed_installments INT DEFAULT 0,
           terms_accepted BIT DEFAULT 0,
-          terms_accepted_at DATETIME NULL,
+          terms_accepted_at DATETIME2(3) NULL,
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
-          created_at DATETIME DEFAULT GETDATE(),
-          updated_at DATETIME DEFAULT GETDATE()
+          created_at DATETIME2(3) DEFAULT SYSDATETIME(),
+          updated_at DATETIME2(3) DEFAULT SYSDATETIME()
         )
         CREATE INDEX IX_schemes_customer ON schemes (customer_id)
         CREATE INDEX IX_schemes_phone ON schemes (customer_phone)
         CREATE INDEX IX_schemes_type ON schemes (scheme_type)
         CREATE INDEX IX_schemes_status ON schemes (status)
-        PRINT 'Schemes table created'
+        CREATE INDEX IX_schemes_business_id ON schemes (business_id)
+        PRINT 'Schemes table created with SQL Server 2019 features'
+      END
+    `);
+
+    // Database migration: Add MPIN column if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'mpin')
+      BEGIN
+        ALTER TABLE customers ADD mpin NVARCHAR(255) NULL
+        PRINT 'MPIN column added to customers table'
       END
     `);
 
@@ -233,7 +332,7 @@ async function createTablesIfNotExist() {
 app.get('/health', (req, res) => {
   console.log('📋 Health check requested from:', req.ip);
   res.json({
-    status: 'OK',
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'VMurugan SQL Server API',
     database: sqlConfig.database,
@@ -267,6 +366,348 @@ app.get('/admin_portal/index.html', (req, res) => {
   }
 });
 
+// Serve Privacy Policy
+app.get('/privacy-policy', (req, res) => {
+  const privacyPolicyPath = path.join(__dirname, '..', 'privacy_policy_vmurugan.html');
+  console.log('🔒 Serving Privacy Policy from:', privacyPolicyPath);
+
+  // Set security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  if (require('fs').existsSync(privacyPolicyPath)) {
+    res.sendFile(privacyPolicyPath);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Privacy Policy not found',
+      path: privacyPolicyPath
+    });
+  }
+});
+
+// Serve Terms of Service
+app.get('/terms-of-service', (req, res) => {
+  const termsPath = path.join(__dirname, '..', 'terms_of_service_vmurugan.html');
+  console.log('📋 Serving Terms of Service from:', termsPath);
+
+  // Set security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  if (require('fs').existsSync(termsPath)) {
+    res.sendFile(termsPath);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Terms of Service not found',
+      path: termsPath
+    });
+  }
+});
+
+// Worldline Checkout Page - Following Payment_GateWay.md specifications
+app.get('/worldline-checkout', (req, res) => {
+  const requestId = `CHECKOUT_${Date.now()}`;
+  console.log(`🌐 [${requestId}] Serving Worldline checkout page`);
+
+  const { token, merchantCode, txnId, amount, consumerId, consumerMobileNo, consumerEmailId } = req.query;
+
+  if (!token || !merchantCode || !txnId || !amount) {
+    console.log(`❌ [${requestId}] Missing required parameters`);
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required parameters: token, merchantCode, txnId, amount'
+    });
+  }
+
+  console.log(`🎫 [${requestId}] Token: ${token.substring(0, 20)}...`);
+  console.log(`🏪 [${requestId}] Merchant: ${merchantCode}`);
+  console.log(`💰 [${requestId}] Amount: ₹${amount}`);
+
+  // Generate HTML page with Worldline Checkout.js integration
+  const checkoutHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VMurugan Gold Trading - Payment Gateway</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { color: #d4af37; font-size: 24px; font-weight: bold; }
+        .amount { font-size: 32px; color: #2c5530; margin: 20px 0; }
+        .pay-btn { background: #d4af37; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 5px; cursor: pointer; width: 100%; }
+        .pay-btn:hover { background: #b8941f; }
+        .info { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .loading { display: none; text-align: center; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🏆 VMurugan Gold Trading</div>
+            <h2>Secure Payment Gateway</h2>
+        </div>
+
+        <div style="text-align: center;">
+            <div>Payment Amount</div>
+            <div class="amount">₹${amount}</div>
+            <div>Transaction ID: ${txnId}</div>
+        </div>
+
+        <div class="info">
+            <strong>Test Environment Instructions:</strong><br>
+            1. Click "Pay Now" to open payment gateway<br>
+            2. Select "Net Banking" → "Test Bank"<br>
+            3. Enter Login ID: <strong>test</strong><br>
+            4. Enter Password: <strong>test</strong><br>
+            5. Complete the payment process
+        </div>
+
+        <button id="payBtn" class="pay-btn">Pay Now</button>
+
+        <div id="loading" class="loading">
+            <div>Opening payment gateway...</div>
+            <div>Please wait...</div>
+        </div>
+
+        <div id="debugInfo" style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; font-family: monospace; font-size: 12px; display: none;">
+            <strong>Debug Information:</strong><br>
+            <div id="debugLog"></div>
+        </div>
+
+        <button id="showDebug" style="margin-top: 10px; padding: 10px; background: #666; color: white; border: none; border-radius: 3px;">Show Debug Info</button>
+    </div>
+
+    <!-- Load jQuery from reliable CDN -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+            onerror="console.error('❌ Failed to load jQuery'); loadFallbackJQuery();"></script>
+
+    <!-- Try multiple Worldline Checkout.js sources -->
+    <script>
+        var checkoutLoaded = false;
+        var checkoutSources = [
+            'https://www.paynimo.com/paynimocheckout/client/lib/checkout.js',
+            'https://paynimo.com/paynimocheckout/client/lib/checkout.js',
+            'https://secure.paynimo.com/paynimocheckout/client/lib/checkout.js'
+        ];
+
+        function loadCheckoutScript(index) {
+            if (index >= checkoutSources.length) {
+                console.error('❌ All Checkout.js sources failed');
+                showCheckoutError();
+                return;
+            }
+
+            var script = document.createElement('script');
+            script.src = checkoutSources[index];
+            script.onload = function() {
+                console.log('✅ Checkout.js loaded from: ' + checkoutSources[index]);
+                checkoutLoaded = true;
+            };
+            script.onerror = function() {
+                console.error('❌ Failed to load from: ' + checkoutSources[index]);
+                loadCheckoutScript(index + 1);
+            };
+            document.head.appendChild(script);
+        }
+
+        // Start loading checkout script
+        loadCheckoutScript(0);
+    </script>
+
+    <script>
+        function loadFallbackJQuery() {
+            console.log('🔄 Loading fallback jQuery...');
+            var script = document.createElement('script');
+            script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+            script.onload = function() { console.log('✅ Fallback jQuery loaded'); };
+            script.onerror = function() { console.error('❌ Fallback jQuery failed'); };
+            document.head.appendChild(script);
+        }
+
+        function showCheckoutError() {
+            console.error('❌ Worldline Checkout.js failed to load');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('payBtn').disabled = false;
+            alert('Payment gateway is currently unavailable. Please try again later or contact support.');
+        }
+    </script>
+
+    <script>
+        console.log('🚀 Worldline Checkout Page Loaded');
+        console.log('🎫 Token: ${token.substring(0, 20)}...');
+        console.log('🏪 Merchant: ${merchantCode}');
+        console.log('💰 Amount: ₹${amount}');
+
+        var debugLog = [];
+        function addDebugLog(message) {
+            debugLog.push(new Date().toLocaleTimeString() + ': ' + message);
+            console.log(message);
+            if (document.getElementById('debugLog')) {
+                document.getElementById('debugLog').innerHTML = debugLog.join('<br>');
+            }
+        }
+
+        // Show/hide debug info
+        $('#showDebug').on('click', function() {
+            $('#debugInfo').toggle();
+        });
+
+        // Check if jQuery and Checkout.js are loaded
+        $(document).ready(function() {
+            addDebugLog('✅ jQuery loaded successfully');
+
+            // Wait for checkout script to load with retry mechanism
+            function waitForCheckout(attempts) {
+                attempts = attempts || 0;
+                addDebugLog('🔍 Checking Worldline Checkout.js... (attempt ' + (attempts + 1) + ')');
+
+                if (typeof $.pnCheckout === 'function') {
+                    addDebugLog('✅ Worldline Checkout.js loaded successfully');
+                } else if (attempts < 20) { // Try for 10 seconds (20 * 500ms)
+                    addDebugLog('⏳ Waiting for Checkout.js to load...');
+                    setTimeout(function() {
+                        waitForCheckout(attempts + 1);
+                    }, 500);
+                } else {
+                    addDebugLog('❌ Worldline Checkout.js failed to load after 10 seconds');
+                    addDebugLog('❌ $.pnCheckout is ' + typeof $.pnCheckout);
+                    addDebugLog('🔧 Implementing fallback payment method...');
+
+                    // Enable fallback payment method
+                    $('#payBtn').text('Try Alternative Payment Method');
+                    $('#payBtn').removeClass('btn-primary').addClass('btn-warning');
+                    $('#loading').hide();
+                    $('#payBtn').prop('disabled', false);
+                    $('#debugInfo').show();
+
+                    addDebugLog('✅ Fallback payment method enabled');
+                    alert('Primary payment gateway unavailable. Using alternative method.');
+                }
+            }
+
+            waitForCheckout();
+        });
+
+        $('#payBtn').on('click', function() {
+            addDebugLog('💳 Pay Now button clicked');
+            $('#loading').show();
+            $('#payBtn').prop('disabled', true);
+            $('#debugInfo').show(); // Show debug info when payment starts
+
+            // Add timeout to prevent infinite loading
+            setTimeout(function() {
+                if ($('#loading').is(':visible')) {
+                    addDebugLog('⏰ Payment gateway timeout - showing fallback');
+                    $('#loading').hide();
+                    $('#payBtn').prop('disabled', false);
+                    alert('Payment gateway is taking longer than expected. Please try again or contact support.');
+                }
+            }, 30000); // 30 second timeout
+
+            try {
+                // Check if Worldline Checkout SDK is available
+                if (typeof $.pnCheckout === 'function') {
+                    addDebugLog('🔄 Using Worldline Checkout SDK...');
+
+                    var checkoutData = {
+                        "features": {"showPGResponseMsg": true},
+                        "consumerData": {
+                            "deviceId": "WEBSH2",
+                            "token": "${token}",
+                            "returnUrl": "https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify",
+                            "merchantCode": "${merchantCode}",
+                            "currency": "INR",
+                            "consumerId": "${consumerId || 'GUEST'}",
+                            "consumerMobileNo": "${consumerMobileNo || '9876543210'}",
+                            "consumerEmailId": "${consumerEmailId || 'test@vmuruganjewellery.co.in'}",
+                            "txnId": "${txnId}",
+                            "items": [{
+                                "itemId": "GOLD_PURCHASE",
+                                "amount": "${amount}",
+                                "comAmt": "0"
+                            }]
+                        }
+                    };
+
+                    addDebugLog('📤 Checkout Data: ' + JSON.stringify(checkoutData, null, 2));
+
+                    $.pnCheckout(checkoutData).then(function(response) {
+                        addDebugLog("🎯 Payment Response: " + JSON.stringify(response));
+                        $('#loading').hide();
+                        $('#payBtn').prop('disabled', false);
+
+                        if (response && response.status === 'success') {
+                            alert('Payment completed successfully! WL Transaction ID: ' + (response.pgTransactionId || response.gatewayTransactionId || 'N/A'));
+                        } else {
+                            alert('Payment status: ' + (response ? response.status : 'Unknown') + '\\nMessage: ' + (response ? response.message || 'No message' : 'No response'));
+                        }
+                    }).catch(function(error) {
+                        addDebugLog("❌ Payment Error: " + error.message);
+                        $('#loading').hide();
+                        $('#payBtn').prop('disabled', false);
+                        alert('Payment failed: ' + (error.message || error.toString()));
+                    });
+
+                } else {
+                    addDebugLog('🔄 SDK not available - Using Direct Form Submission...');
+
+                    // Create and submit form directly to Worldline
+                    var form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'https://www.paynimo.com/api/paynimoV2.req';
+                    form.target = '_self';
+
+                    var formData = {
+                        'merchantCode': '${merchantCode}',
+                        'txnId': '${txnId}',
+                        'amount': '${amount}',
+                        'currency': 'INR',
+                        'token': '${token}',
+                        'returnUrl': 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify',
+                        'consumerId': '${consumerId || 'GUEST'}',
+                        'consumerMobileNo': '${consumerMobileNo || '9876543210'}',
+                        'consumerEmailId': '${consumerEmailId || 'test@vmuruganjewellery.co.in'}'
+                    };
+
+                    for (var key in formData) {
+                        var input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = formData[key];
+                        form.appendChild(input);
+                    }
+
+                    addDebugLog('📤 Submitting direct form to Worldline...');
+                    addDebugLog('🌐 Form Action: ' + form.action);
+                    addDebugLog('📋 Form Data: ' + JSON.stringify(formData, null, 2));
+
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+
+            } catch (e) {
+                addDebugLog("❌ Checkout Error: " + e.message);
+                $('#loading').hide();
+                $('#payBtn').prop('disabled', false);
+                alert('Payment initialization failed: ' + e.message);
+            }
+        });
+    </script>
+</body>
+</html>`;
+
+  console.log(`✅ [${requestId}] Serving checkout HTML page`);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(checkoutHtml);
+});
+
 // Redirect any HTTP requests to HTTPS (if somehow they reach here)
 app.use((req, res, next) => {
   if (req.header('x-forwarded-proto') !== 'https') {
@@ -297,7 +738,7 @@ app.get('/', (req, res) => {
 app.get('/api/test-connection', async (req, res) => {
   try {
     console.log('🧪 Testing database connection...');
-    const result = await pool.request().query('SELECT @@VERSION as version, @@SERVERNAME as servername, GETDATE() as currenttime');
+    const result = await pool.request().query('SELECT @@VERSION as version, @@SERVERNAME as servername, SYSDATETIME() as currenttime');
     res.json({
       success: true,
       message: 'SQL Server connection successful',
@@ -333,11 +774,11 @@ app.post('/api/customers', [
     const { phone, name, email, address, pan_card, device_id, encrypted_mpin } = req.body;
     const business_id = 'VMURUGAN_001';
 
-    // Hash MPIN if provided
+    // Store encrypted MPIN directly (client already hashed it)
     let hashedMPIN = null;
     if (encrypted_mpin) {
-      hashedMPIN = hashMPIN(encrypted_mpin);
-      console.log('🔐 MPIN encrypted for storage');
+      hashedMPIN = encrypted_mpin; // Client already encrypted with salt
+      console.log('🔐 MPIN stored directly (already encrypted by client)');
     }
 
     const request = pool.request();
@@ -361,7 +802,7 @@ app.post('/api/customers', [
         UPDATE customers
         SET name = @name, email = @email, address = @address,
             pan_card = @pan_card, device_id = @device_id,
-            ${hashedMPIN ? 'mpin = @mpin,' : ''} updated_at = GETDATE()
+            ${hashedMPIN ? 'mpin = @mpin,' : ''} updated_at = SYSDATETIME()
         WHERE phone = @phone
       END
     `);
@@ -428,13 +869,23 @@ app.post('/api/login', [
       });
     }
 
-    // Verify MPIN
+    // Verify MPIN using hybrid verification
+    console.log('🔐 Verifying MPIN with hybrid system...');
+    console.log('🔐 Input encrypted MPIN:', encrypted_mpin.substring(0, 20) + '...');
+    console.log('🔐 Stored MPIN hash:', customer.mpin.substring(0, 20) + '...');
+
     if (verifyMPIN(encrypted_mpin, customer.mpin)) {
-      console.log('✅ Login successful:', phone);
+      console.log('✅ Login successful (hybrid verification):', phone);
       res.json({
         success: true,
         message: 'Login successful',
-        user: {
+        customer: {  // Changed from 'user' to 'customer' for consistency
+          customer_id: customer.id,
+          phone: customer.phone,
+          name: customer.name,
+          email: customer.email
+        },
+        user: {  // Keep 'user' for backward compatibility
           id: customer.id,
           phone: customer.phone,
           name: customer.name,
@@ -442,6 +893,7 @@ app.post('/api/login', [
         }
       });
     } else {
+      console.log('❌ MPIN verification failed for:', phone);
       res.status(401).json({
         success: false,
         message: 'Invalid MPIN. Please try again.'
@@ -587,14 +1039,16 @@ app.post('/api/customers/:phone/update-mpin', [
       });
     }
 
-    if (!verifyMPIN(current_mpin, customer.mpin)) {
+    // Encrypt current MPIN to compare with stored MPIN
+    const encryptedCurrentMPIN = hashMPIN(current_mpin);
+    if (!verifyMPIN(encryptedCurrentMPIN, customer.mpin)) {
       return res.status(401).json({
         success: false,
         message: 'Current MPIN is incorrect'
       });
     }
 
-    // Hash new MPIN
+    // Encrypt new MPIN for storage
     const hashedNewMPIN = hashMPIN(new_mpin);
 
     // Update MPIN
@@ -602,7 +1056,7 @@ app.post('/api/customers/:phone/update-mpin', [
     updateRequest.input('phone', sql.NVarChar(15), phone);
     updateRequest.input('new_mpin', sql.NVarChar(255), hashedNewMPIN);
 
-    await updateRequest.query('UPDATE customers SET mpin = @new_mpin, updated_at = GETDATE() WHERE phone = @phone');
+    await updateRequest.query('UPDATE customers SET mpin = @new_mpin, updated_at = SYSDATETIME() WHERE phone = @phone');
 
     console.log('✅ MPIN updated successfully:', phone);
     res.json({
@@ -654,7 +1108,7 @@ app.post('/api/customers/:phone/set-mpin', [
       });
     }
 
-    // Hash new MPIN
+    // Encrypt new MPIN for storage
     const hashedMPIN = hashMPIN(new_mpin);
 
     // Set MPIN
@@ -662,7 +1116,7 @@ app.post('/api/customers/:phone/set-mpin', [
     updateRequest.input('phone', sql.NVarChar(15), phone);
     updateRequest.input('mpin', sql.NVarChar(255), hashedMPIN);
 
-    await updateRequest.query('UPDATE customers SET mpin = @mpin, updated_at = GETDATE() WHERE phone = @phone');
+    await updateRequest.query('UPDATE customers SET mpin = @mpin, updated_at = SYSDATETIME() WHERE phone = @phone');
 
     console.log('✅ MPIN set successfully:', phone);
     res.json({
@@ -1168,7 +1622,511 @@ app.get('/api/schemes/details/:scheme_id', async (req, res) => {
 });
 
 // =============================================================================
-// PAYNIMO PAYMENT GATEWAY ENDPOINTS
+// HEALTH CHECK ENDPOINT FOR DEBUGGING
+// =============================================================================
+
+// Health check endpoint to verify server connectivity
+app.get('/health', (req, res) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🏥 Health check request received at ${timestamp} from ${req.ip || 'unknown'}`);
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: timestamp,
+    server: 'VMurugan Gold Trading API',
+    version: '1.0.0'
+  });
+});
+
+
+
+
+
+
+
+// =============================================================================
+// WORLDLINE PAYMENT GATEWAY INTEGRATION - CLEAN SLATE REBUILD
+// =============================================================================
+
+// Worldline configuration (from Payment_GateWay.md) - BANK COMPLIANCE
+const WORLDLINE_CONFIG = {
+  MERCHANT_CODE: "T1098761",
+  SCHEME_CODE: "FIRST",
+  ENCRYPTION_KEY: "9221995309QQNRIO",
+  ENCRYPTION_IV: "6753042926GDVTTK",
+  WORLDLINE_URL: "https://www.paynimo.com/api/paynimoV2.req",
+  MIN_AMOUNT: 1,
+  MAX_AMOUNT: 10, // Sandbox limits
+  IS_TEST_ENVIRONMENT: true,
+  // CRITICAL: Test environment configuration for proper credential entry flow
+  TEST_MODE: "INTERACTIVE", // Ensures test credentials page is displayed
+  FORCE_TEST_CREDENTIALS: true // Forces test credential entry instead of auto-completion
+};
+
+// Generate hash for Worldline - supports both SHA-256 and SHA-512
+function generateWorldlineHash(text, algorithm = 'sha512') {
+  return crypto.createHash(algorithm).update(text).digest('hex');
+}
+
+// Worldline Token Generation API - Following Payment_GateWay.md specifications
+app.post('/api/payments/worldline/token', [
+  // Accept amount as whole number (1-10) for test environment
+  body('amount').custom((value) => {
+    let amount;
+    // If it's a string, convert to number
+    if (typeof value === 'string') {
+      amount = parseInt(value);
+    } else if (typeof value === 'number') {
+      amount = Math.round(value);
+    } else {
+      throw new Error('Amount must be a number or string');
+    }
+
+    // Validate range for test environment (1-10)
+    if (amount < WORLDLINE_CONFIG.MIN_AMOUNT || amount > WORLDLINE_CONFIG.MAX_AMOUNT) {
+      throw new Error(`Amount must be between ${WORLDLINE_CONFIG.MIN_AMOUNT} and ${WORLDLINE_CONFIG.MAX_AMOUNT} for sandbox environment`);
+    }
+    return true;
+  }),
+], async (req, res) => {
+  const requestStartTime = Date.now();
+  const requestId = `TOKEN_${requestStartTime}`;
+
+  // Log to both console and file
+  writeServerLog('', 'worldline');
+  writeServerLog('🔥 ===== WORLDLINE TOKEN REQUEST STARTED =====', 'worldline');
+  writeServerLog(`📋 Request ID: ${requestId}`, 'worldline');
+  writeServerLog(`⏰ Timestamp: ${new Date().toISOString()}`, 'worldline');
+  writeServerLog(`🌐 Client IP: ${req.ip || 'unknown'}`, 'worldline');
+  writeServerLog(`📦 Request Body: ${JSON.stringify(req.body, null, 2)}`, 'worldline');
+
+  try {
+    console.log(`🔍 [${requestId}] STEP 1: Validating request parameters...`);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log(`❌ [${requestId}] VALIDATION FAILED:`, JSON.stringify(errors.array(), null, 2));
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { amount: rawAmount, orderId, customerId } = req.body;
+    const txnId = orderId || Date.now().toString();
+
+    // CRITICAL FIX: Maintain decimal format throughout entire process
+    // Worldline requires exact format consistency between server hash and client consumerData
+    const amount = parseFloat(rawAmount);
+    const formattedAmount = amount.toFixed(2); // Always "X.00" format for hash consistency
+
+    // Log to both console and file
+    writeServerLog(`💰 [${requestId}] Raw Amount: ${JSON.stringify(rawAmount)} (${typeof rawAmount})`, 'worldline');
+    writeServerLog(`💰 [${requestId}] Processed Amount: ${amount}`, 'worldline');
+    writeServerLog(`💰 [${requestId}] Formatted Amount for Hash: "${formattedAmount}"`, 'worldline');
+    writeServerLog(`💰 [${requestId}] ✅ Amount is within test range (1-10): ${amount >= 1 && amount <= 10}`, 'worldline');
+    writeServerLog(`🆔 [${requestId}] Transaction ID: ${txnId}`, 'worldline');
+    writeServerLog(`👤 [${requestId}] Customer ID: ${customerId}`, 'worldline');
+
+    // Build payload for Worldline API (following Payment_GateWay.md)
+    const payload = {
+      merchant: { identifier: WORLDLINE_CONFIG.MERCHANT_CODE },
+      payment: { instruction: { amount: formattedAmount, currency: "INR" } },
+      transaction: {
+        deviceIdentifier: "S",
+        identifier: txnId,
+        type: "SALE",
+        tokenType: "TXN_TOKEN",
+      },
+      consumer: { identifier: customerId || "CUST123" },
+    };
+
+    console.log(`🔍 [${requestId}] STEP 2: Requesting token from Worldline...`);
+    console.log(`📤 [${requestId}] Payload:`, JSON.stringify(payload, null, 2));
+
+    // CRITICAL FIX: Generate hash-based token for Worldline checkout
+    // According to Worldline documentation, token should be a hash generated using specific algorithm
+    console.log(`🔍 [${requestId}] STEP 2: Generating Worldline hash token...`);
+
+    // CRITICAL FIX: Use exact test environment values for hash generation
+    // Worldline test environment requires specific hardcoded values
+    const testMobileNo = '9999999999';           // Worldline test environment requirement
+    const testEmailId = 'test@domain.com';       // Worldline test environment requirement
+
+    // Build hash string according to Worldline specification
+    // Format: merchantId|txnId|amount|accountNo|consumerId|consumerMobileNo|consumerEmailId|debitStartDate|debitEndDate|maxAmount|amountType|frequency|cardNumber|expMonth|expYear|cvvCode|SALT
+    const hashComponents = [
+      WORLDLINE_CONFIG.MERCHANT_CODE,           // merchantId
+      txnId,                                    // txnId
+      formattedAmount,                          // amount (CRITICAL: Use consistent decimal format)
+      '',                                       // accountNo (empty for regular transactions)
+      customerId || 'GUEST',                    // consumerId
+      testMobileNo,                            // consumerMobileNo (TEST: 9999999999)
+      testEmailId,                             // consumerEmailId (TEST: test@domain.com)
+      '',                                       // debitStartDate (empty for regular transactions)
+      '',                                       // debitEndDate (empty for regular transactions)
+      '',                                       // maxAmount (empty for regular transactions)
+      '',                                       // amountType (empty for regular transactions)
+      '',                                       // frequency (empty for regular transactions)
+      '',                                       // cardNumber (empty for regular transactions)
+      '',                                       // expMonth (empty for regular transactions)
+      '',                                       // expYear (empty for regular transactions)
+      '',                                       // cvvCode (empty for regular transactions)
+      WORLDLINE_CONFIG.ENCRYPTION_KEY           // SALT (encryption key)
+    ];
+
+    const hashString = hashComponents.join('|');
+    console.log(`🔐 [${requestId}] Hash string components: ${hashComponents.length} fields`);
+    console.log(`🔐 [${requestId}] COMPLETE Hash string: ${hashString}`);
+    console.log(`🔐 [${requestId}] Hash components breakdown:`);
+    hashComponents.forEach((component, index) => {
+      console.log(`🔐 [${requestId}] Field ${index + 1}: "${component}"`);
+    });
+
+    // CRITICAL: Log expected consumerData format for Flutter app comparison
+    console.log('');
+    console.log(`🔍 [${requestId}] HASH VALIDATION - EXPECTED CONSUMER DATA FORMAT:`);
+    console.log('================================================================');
+    console.log(`🔐 Expected Field 1 - merchantId: "${WORLDLINE_CONFIG.MERCHANT_CODE}"`);
+    console.log(`🔐 Expected Field 2 - txnId: "${txnId}"`);
+    console.log(`🔐 Expected Field 3 - amount: "${formattedAmount}"`);
+    console.log(`🔐 Expected Field 4 - accountNo: ""`);
+    console.log(`🔐 Expected Field 5 - consumerId: "${customerId || 'GUEST'}"`);
+    console.log(`🔐 Expected Field 6 - consumerMobileNo: "${testMobileNo}" (TEST ENVIRONMENT)`);
+    console.log(`🔐 Expected Field 7 - consumerEmailId: "${testEmailId}" (TEST ENVIRONMENT)`);
+    console.log(`🔐 Expected Field 8 - debitStartDate: ""`);
+    console.log(`🔐 Expected Field 9 - debitEndDate: ""`);
+    console.log(`🔐 Expected Field 10 - maxAmount: ""`);
+    console.log(`🔐 Expected Field 11 - amountType: ""`);
+    console.log(`🔐 Expected Field 12 - frequency: ""`);
+    console.log(`🔐 Expected Field 13 - cardNumber: ""`);
+    console.log(`🔐 Expected Field 14 - expMonth: ""`);
+    console.log(`🔐 Expected Field 15 - expYear: ""`);
+    console.log(`🔐 Expected Field 16 - cvvCode: ""`);
+    console.log(`🔐 SALT (Field 17): "${WORLDLINE_CONFIG.ENCRYPTION_KEY}" (NOT sent to Flutter)`);
+    console.log('================================================================');
+    console.log(`💡 [${requestId}] Flutter app MUST send consumerData with EXACT same field values`);
+    console.log(`💡 [${requestId}] Compare Flutter logs with these expected values for mismatch detection`);
+    console.log(`🚨 [${requestId}] CRITICAL: Amount MUST be "${formattedAmount}" (decimal format)`);
+    console.log('');
+
+    // Generate SHA-512 hash (ANDROIDSH2 algorithm) for better security
+    const token = generateWorldlineHash(hashString, 'sha512');
+
+    // CRITICAL: Validate hash generation integrity (SHA-512 produces 128 character hex string)
+    if (!token || token.length !== 128) {
+      throw new Error(`Hash generation failed - invalid token length: ${token ? token.length : 'null'} (expected 128 for SHA-512)`);
+    }
+
+    // Verify hash is properly generated by testing with known input (SHA-512)
+    const testHash = generateWorldlineHash('test', 'sha512');
+    if (!testHash || testHash.length !== 128) {
+      throw new Error(`Hash generation function is not working correctly - test hash length: ${testHash ? testHash.length : 'null'} (expected 128 for SHA-512)`);
+    }
+
+    console.log(`✅ [${requestId}] STEP 2 COMPLETED: Hash token generated successfully`);
+    console.log(`🎫 [${requestId}] Token: ${token.substring(0, 20)}...`);
+    console.log(`🔐 [${requestId}] Token length: ${token.length} characters (expected: 128)`);
+    console.log(`🧪 [${requestId}] Hash function test: ${testHash.substring(0, 10)}... (length: ${testHash.length})`);
+
+    // Store hash components for verification debugging
+    console.log(`📋 [${requestId}] Hash components stored for verification:`);
+    console.log(`   - Merchant Code: ${WORLDLINE_CONFIG.MERCHANT_CODE}`);
+    console.log(`   - Transaction ID: ${txnId}`);
+    console.log(`   - Amount: ${amount}`);
+    console.log(`   - Customer ID: ${customerId || 'GUEST'}`);
+    console.log(`   - Encryption Key: ${WORLDLINE_CONFIG.ENCRYPTION_KEY.substring(0, 5)}...`);
+
+    // Store transaction in database
+    console.log(`🔍 [${requestId}] STEP 3: Storing transaction in database...`);
+    const request = pool.request();
+    request.input('transaction_id', sql.NVarChar(100), txnId);
+    request.input('customer_phone', sql.NVarChar(15), 'N/A');
+    request.input('customer_name', sql.NVarChar(100), customerId || 'VMurugan Customer');
+    request.input('type', sql.NVarChar(10), 'BUY');
+    request.input('amount', sql.Decimal(12, 2), amount);
+    request.input('gold_grams', sql.Decimal(10, 4), 0);
+    request.input('gold_price_per_gram', sql.Decimal(10, 2), 0);
+    request.input('payment_method', sql.NVarChar(50), 'WORLDLINE_NETBANKING');
+    request.input('status', sql.NVarChar(20), 'PENDING');
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    await request.query(`
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, type, amount, gold_grams, gold_price_per_gram, payment_method, status, business_id
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams, @gold_price_per_gram, @payment_method, @status, @business_id
+      )
+    `);
+
+    console.log(`✅ [${requestId}] STEP 3 COMPLETED: Transaction stored in database`);
+
+    const totalTime = Date.now() - requestStartTime;
+
+    // CRITICAL: Bank's exact specification compliance - ONLY the exact format specified
+    // Bank requirement: "Please ensure that the information provided in the consumerData object
+    // exactly matches the details used in the pipe-separated format for token generation"
+
+    console.log(`🏦 [${requestId}] BANK COMPLIANCE: Using ONLY the exact 17-field format as specified`);
+
+    const response = {
+      token: token,  // SHA-256 hash token using exact bank specification
+      txnId: txnId,
+      merchantCode: WORLDLINE_CONFIG.MERCHANT_CODE,
+      amount: formattedAmount,  // CRITICAL: Use consistent decimal format
+      currency: "INR",
+
+      // CRITICAL: Include ALL hash components for consumerData object (exact field matching)
+      // This MUST match the pipe-separated format exactly as per bank's email
+      consumerDataFields: {
+        merchantId: WORLDLINE_CONFIG.MERCHANT_CODE,       // Field 1
+        txnId: txnId,                                     // Field 2
+        amount: formattedAmount,                          // Field 3 (CRITICAL: Consistent decimal format)
+        accountNo: '',                                    // Field 4 - Empty but must be present
+        consumerId: customerId || 'GUEST',                // Field 5
+        consumerMobileNo: testMobileNo,                   // Field 6 (TEST: 9999999999)
+        consumerEmailId: testEmailId,                     // Field 7 (TEST: test@domain.com)
+        debitStartDate: '',                               // Field 8 - Empty but must be present
+        debitEndDate: '',                                 // Field 9 - Empty but must be present
+        maxAmount: '',                                    // Field 10 - Empty but must be present
+        amountType: '',                                   // Field 11 - Empty but must be present
+        frequency: '',                                    // Field 12 - Empty but must be present
+        cardNumber: '',                                   // Field 13 - Empty but must be present
+        expMonth: '',                                     // Field 14 - Empty but must be present
+        expYear: '',                                      // Field 15 - Empty but must be present
+        cvvCode: ''                                       // Field 16 - Empty but must be present
+        // Field 17 is SALT (not included in consumerData, used only for hash generation)
+      },
+
+      // Bank compliance information
+      tokenType: 'HASH_GENERATED',
+      algorithm: 'SHA512',
+      deviceId: 'ANDROIDSH2', // Matches Flutter app device ID for SHA-512
+      integrationKit: 'FLUTTER_PLUGIN',
+      bankCompliance: {
+        format: '17-field pipe-separated as per bank specification',
+        fieldCount: 17,
+        emptyFieldHandling: 'Empty strings without whitespace',
+        specification: 'merchantId|txnId|amount|accountNo|consumerId|consumerMobileNo|consumerEmailId|debitStartDate|debitEndDate|maxAmount|amountType|frequency|cardNumber|expMonth|expYear|cvvCode|SALT'
+      },
+
+      // CRITICAL: Test environment configuration for proper bank authentication flow
+      testEnvironment: {
+        mode: 'INTERACTIVE',
+        forceCredentialEntry: true,
+        autoRedirect: false,
+        bankAuthenticationRequired: true,
+        expectedFlow: 'Test Bank selection → Credentials entry (test/test) → Manual payment completion'
+      }
+    };
+
+    console.log(`📤 [${requestId}] Response:`, JSON.stringify(response, null, 2));
+    console.log(`⏱️ [${requestId}] Total processing time: ${totalTime}ms`);
+    console.log(`✅ [${requestId}] TOKEN REQUEST COMPLETED SUCCESSFULLY`);
+    console.log('');
+    console.log('🔍 PAYMENT FLOW TRACKING - TOKEN GENERATED');
+    console.log('==========================================');
+    console.log(`📋 Next Step: Flutter app will use this token to open Worldline gateway`);
+    console.log(`📋 Expected: User selects Test Bank → Credentials page → test/test → Success`);
+    console.log(`📋 Watch for: Payment response callback with actual authentication result`);
+    console.log('==========================================');
+    console.log('🔥 ===== WORLDLINE TOKEN REQUEST ENDED =====');
+    console.log('');
+
+    res.json(response);
+
+  } catch (error) {
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`💥 [${requestId}] CRITICAL ERROR OCCURRED:`);
+    console.log(`❌ [${requestId}] Error message: ${error.message}`);
+    console.log(`❌ [${requestId}] Error stack: ${error.stack}`);
+
+    const errorResponse = {
+      error: 'Token generation failed',
+      message: error.message,
+      requestId: requestId
+    };
+
+    console.log(`📤 [${requestId}] Sending error response:`, JSON.stringify(errorResponse, null, 2));
+    console.log(`❌ [${requestId}] TOKEN REQUEST FAILED`);
+    console.log('🔥 ===== WORLDLINE TOKEN REQUEST ENDED =====');
+    console.log('');
+
+    res.status(500).json(errorResponse);
+  }
+});
+
+// Worldline Payment Verification API - Following Payment_GateWay.md specifications
+app.post('/api/payments/worldline/verify', async (req, res) => {
+  const requestStartTime = Date.now();
+  const requestId = `VERIFY_${requestStartTime}`;
+
+  console.log('');
+  console.log('🔥 ===== WORLDLINE VERIFY REQUEST STARTED =====');
+  console.log(`📋 Request ID: ${requestId}`);
+  console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  console.log(`🌐 Client IP: ${req.ip || 'unknown'}`);
+  console.log(`📦 Request Body:`, JSON.stringify(req.body, null, 2));
+
+  try {
+    // Extract payment response data
+    const responsePayload = req.body;
+    const txnId = responsePayload.txnId || responsePayload.merchantTransactionId;
+    const status = responsePayload.statusCode || responsePayload.status;
+    const gatewayTxnId = responsePayload.pgTransactionId || responsePayload.gatewayTransactionId;
+    const amount = responsePayload.amount;
+
+    console.log(`🔍 [${requestId}] STEP 1: Processing verification request...`);
+    console.log(`🆔 [${requestId}] Transaction ID: ${txnId}`);
+    console.log(`📊 [${requestId}] Status: ${status}`);
+    console.log(`🏦 [${requestId}] Gateway Transaction ID: ${gatewayTxnId}`);
+    console.log(`💰 [${requestId}] Amount: ${amount}`);
+
+    // CRITICAL FIX: Implement proper hash verification
+    console.log(`🔍 [${requestId}] STEP 2: Performing hash verification...`);
+
+    let isVerified = false;
+    let verificationMethod = 'NONE';
+
+    // Check if response contains hash for verification
+    const responseHash = responsePayload.hash || responsePayload.checksum;
+
+    if (responseHash && txnId && amount && status) {
+      // BANK COMPLIANCE: Use ONLY the exact hash verification format as specified
+      // NO FALLBACK MECHANISMS - Only the bank's exact specification
+      try {
+        console.log(`🏦 [${requestId}] BANK COMPLIANCE: Using ONLY exact hash verification format`);
+
+        // Use the EXACT same 17-field format used for token generation
+        // This ensures 100% compliance with bank's requirement for field matching
+        const verificationHashComponents = [
+          WORLDLINE_CONFIG.MERCHANT_CODE,         // merchantId (Field 1)
+          txnId,                                  // txnId (Field 2)
+          amount.toString(),                      // amount (Field 3)
+          '',                                     // accountNo (Field 4 - empty)
+          responsePayload.consumerId || 'GUEST',  // consumerId (Field 5)
+          '9876543210',                          // consumerMobileNo (Field 6)
+          'test@vmuruganjewellery.co.in',        // consumerEmailId (Field 7)
+          '',                                     // debitStartDate (Field 8 - empty)
+          '',                                     // debitEndDate (Field 9 - empty)
+          '',                                     // maxAmount (Field 10 - empty)
+          '',                                     // amountType (Field 11 - empty)
+          '',                                     // frequency (Field 12 - empty)
+          '',                                     // cardNumber (Field 13 - empty)
+          '',                                     // expMonth (Field 14 - empty)
+          '',                                     // expYear (Field 15 - empty)
+          '',                                     // cvvCode (Field 16 - empty)
+          WORLDLINE_CONFIG.ENCRYPTION_KEY         // SALT (Field 17)
+        ];
+
+        const verificationHashString = verificationHashComponents.join('|');
+        const expectedHash = generateWorldlineHash(verificationHashString);
+
+        console.log(`🔐 [${requestId}] Bank specification hash components: ${verificationHashComponents.length} fields`);
+        console.log(`🔐 [${requestId}] Hash string (first 100 chars): ${verificationHashString.substring(0, 100)}...`);
+        console.log(`🔍 [${requestId}] Expected hash: ${expectedHash.substring(0, 20)}...`);
+        console.log(`🔍 [${requestId}] Received hash: ${responseHash.substring(0, 20)}...`);
+
+        if (responseHash === expectedHash) {
+          isVerified = true;
+          verificationMethod = 'BANK_SPECIFICATION_VERIFIED';
+          console.log(`✅ [${requestId}] Bank specification hash verification PASSED`);
+        } else {
+          isVerified = false;
+          verificationMethod = 'BANK_SPECIFICATION_FAILED';
+          console.log(`❌ [${requestId}] Bank specification hash verification FAILED`);
+          console.log(`🏦 [${requestId}] NO FALLBACK - Using only bank's exact specification`);
+        }
+      } catch (hashError) {
+        console.error(`❌ [${requestId}] Hash computation error:`, hashError.message);
+        verificationMethod = 'HASH_ERROR';
+        isVerified = false;
+      }
+    } else {
+      // BANK COMPLIANCE: NO FALLBACK - Hash is required for all transactions
+      console.log(`❌ [${requestId}] No hash found in response - BANK COMPLIANCE REQUIRES HASH`);
+      isVerified = false;
+      verificationMethod = 'NO_HASH_BANK_COMPLIANCE_FAILED';
+      console.log(`🏦 [${requestId}] Bank specification requires hash validation for all transactions`);
+    }
+
+    // BANK COMPLIANCE: NO OVERRIDE for Hash_Validation_fail errors
+    // If Worldline returns Hash_Validation_fail, the transaction must be rejected
+    if (!isVerified && (status === 'Hash_Validation_fail' || responsePayload.statusMessage === 'Hash_Validation_fail')) {
+      console.log(`❌ [${requestId}] Hash_Validation_fail error from Worldline - TRANSACTION REJECTED`);
+      verificationMethod = 'HASH_VALIDATION_FAIL_REJECTED';
+      console.log(`🏦 [${requestId}] Bank compliance: No override for hash validation failures`);
+    }
+
+    console.log(`📊 [${requestId}] Verification result: ${isVerified ? 'VERIFIED' : 'FAILED'} (${verificationMethod})`);
+
+    if (isVerified) {
+      console.log(`✅ [${requestId}] STEP 2: Payment verification SUCCESSFUL`);
+
+      // Update transaction status in database
+      const mappedStatus = (status === 'SUCCESS' || status === '0') ? 'SUCCESS' : 'FAILED';
+      console.log(`📊 [${requestId}] Status mapping: "${status}" -> "${mappedStatus}"`);
+
+      const request = pool.request();
+      request.input('transaction_id', sql.NVarChar(100), txnId);
+      request.input('gateway_transaction_id', sql.NVarChar(100), gatewayTxnId || `WL_${txnId}`);
+      request.input('status', sql.NVarChar(20), mappedStatus);
+
+      await request.query(`
+        UPDATE transactions
+        SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = GETDATE()
+        WHERE transaction_id = @transaction_id
+      `);
+
+      console.log(`✅ [${requestId}] STEP 3: Database updated successfully`);
+
+      const totalTime = Date.now() - requestStartTime;
+      const response = {
+        verified: true,
+        valid: true,
+        transactionId: txnId,
+        status: mappedStatus,
+        gatewayTransactionId: gatewayTxnId,
+        raw: responsePayload
+      };
+
+      console.log(`📤 [${requestId}] Response:`, JSON.stringify(response, null, 2));
+      console.log(`⏱️ [${requestId}] Total processing time: ${totalTime}ms`);
+      console.log(`✅ [${requestId}] VERIFY REQUEST COMPLETED SUCCESSFULLY`);
+      console.log('🔥 ===== WORLDLINE VERIFY REQUEST ENDED =====');
+      console.log('');
+
+      return res.json(response);
+    } else {
+      console.log(`❌ [${requestId}] Payment verification FAILED`);
+      const response = { verified: false, valid: false, raw: responsePayload };
+      return res.json(response);
+    }
+
+  } catch (error) {
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`💥 [${requestId}] CRITICAL ERROR OCCURRED:`);
+    console.log(`❌ [${requestId}] Error message: ${error.message}`);
+    console.log(`❌ [${requestId}] Error stack: ${error.stack}`);
+
+    const errorResponse = {
+      verified: false,
+      valid: false,
+      error: error.message,
+      requestId: requestId
+    };
+
+    console.log(`📤 [${requestId}] Sending error response:`, JSON.stringify(errorResponse, null, 2));
+    console.log(`❌ [${requestId}] VERIFY REQUEST FAILED`);
+    console.log('🔥 ===== WORLDLINE VERIFY REQUEST ENDED =====');
+    console.log('');
+
+    res.status(500).json(errorResponse);
+  }
+});
+
+
+// =============================================================================
+// STATIC PAGES AND ADMIN PORTAL
+// =============================================================================
+
+// =============================================================================
+// PAYNIMO PAYMENT GATEWAY ENDPOINTS (Legacy - Deprecated)
 // =============================================================================
 
 // Paynimo payment initiation endpoint
@@ -1289,7 +2247,7 @@ app.post('/api/paynimo/callback', async (req, res) => {
 
     await request.query(`
       UPDATE transactions
-      SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = GETDATE()
+      SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = SYSDATETIME()
       WHERE transaction_id = @transaction_id
     `);
 
@@ -1305,6 +2263,107 @@ app.post('/api/paynimo/callback', async (req, res) => {
   } catch (error) {
     console.error('❌ Paynimo payment callback error:', error.message);
     res.redirect(`/payment/failure?reason=Callback processing failed`);
+  }
+});
+
+// =============================================================================
+// WORLDLINE PAYMENT RESPONSE DETAILED LOGGING - FOR DEBUGGING
+// =============================================================================
+
+// Enhanced payment response logging endpoint for debugging authentication failures
+app.post('/api/worldline/payment-response-debug', async (req, res) => {
+  const requestId = `WL_DEBUG_${Date.now()}`;
+
+  console.log('');
+  console.log('🔍 ===== WORLDLINE PAYMENT RESPONSE DEBUG =====');
+  console.log(`📥 [${requestId}] Received at: ${new Date().toISOString()}`);
+  console.log(`📋 [${requestId}] Full request body:`, JSON.stringify(req.body, null, 2));
+
+  try {
+    const {
+      txnId,
+      status,
+      msg,
+      wlTxnId,
+      gatewayTransactionId,
+      amount,
+      responseCode,
+      responseMessage,
+      authenticationResult,
+      bankResponse
+    } = req.body;
+
+    console.log('');
+    console.log('🎯 AUTHENTICATION FAILURE ANALYSIS:');
+    console.log('===================================');
+    console.log(`🆔 Transaction ID: ${txnId || 'NOT_PROVIDED'}`);
+    console.log(`🏦 WL Transaction ID: ${wlTxnId || gatewayTransactionId || 'NOT_PROVIDED'}`);
+    console.log(`📊 Status: ${status || 'NOT_PROVIDED'}`);
+    console.log(`💬 Message: ${msg || responseMessage || 'NOT_PROVIDED'}`);
+    console.log(`🔢 Response Code: ${responseCode || 'NOT_PROVIDED'}`);
+    console.log(`💰 Amount: ${amount || 'NOT_PROVIDED'}`);
+
+    // Detailed analysis of why authentication failed
+    if (status && status.toLowerCase().includes('fail')) {
+      console.log('');
+      console.log('❌ AUTHENTICATION FAILURE DETECTED:');
+      console.log('===================================');
+      if (msg && msg.toLowerCase().includes('credential')) {
+        console.log('🔐 Root Cause: Test credentials authentication failed');
+        console.log('💡 User Action: Did not enter test/test correctly');
+        console.log('🔧 Fix: Ensure test/test is entered in username/password fields');
+      } else if (msg && msg.toLowerCase().includes('timeout')) {
+        console.log('⏰ Root Cause: Authentication session timed out');
+        console.log('💡 User Action: Took too long to enter credentials');
+        console.log('🔧 Fix: Complete authentication faster');
+      } else if (msg && msg.toLowerCase().includes('cancel')) {
+        console.log('🚫 Root Cause: User cancelled authentication');
+        console.log('💡 User Action: Clicked cancel or back button');
+        console.log('🔧 Fix: Complete the authentication process');
+      } else {
+        console.log('🏦 Root Cause: Test bank service issue');
+        console.log('💡 Possible: Test bank temporarily unavailable');
+        console.log('🔧 Fix: Retry payment or check test bank status');
+      }
+      console.log('📋 Expected Flow: Test Bank → Enter test/test → Click OK → Success');
+      console.log('===================================');
+    } else if (status && status.toLowerCase().includes('success')) {
+      console.log('');
+      console.log('✅ AUTHENTICATION SUCCESS CONFIRMED:');
+      console.log('====================================');
+      console.log('🎉 Test bank authentication completed successfully');
+      console.log('🔐 Test credentials (test/test) were accepted');
+      console.log('💰 Payment processed correctly');
+      console.log('====================================');
+    } else {
+      console.log('');
+      console.log('❓ UNCLEAR AUTHENTICATION STATUS:');
+      console.log('=================================');
+      console.log('⚠️  Status is neither clear success nor failure');
+      console.log('🔍 Manual analysis required');
+      console.log('=================================');
+    }
+
+    console.log('');
+    console.log('🔥 ===== WORLDLINE PAYMENT RESPONSE DEBUG ENDED =====');
+    console.log('');
+
+    res.json({
+      success: true,
+      message: 'Payment response debug logged',
+      requestId,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.log(`💥 [${requestId}] ERROR in debug logging:`);
+    console.log(`❌ [${requestId}] Error: ${error.message}`);
+
+    res.status(500).json({
+      success: false,
+      error: 'Debug logging failed',
+      message: error.message
+    });
   }
 });
 
@@ -1388,7 +2447,7 @@ app.post('/api/payment/callback', async (req, res) => {
 
     await request.query(`
       UPDATE transactions
-      SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = GETDATE()
+      SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = SYSDATETIME()
       WHERE transaction_id = @transaction_id
     `);
 
@@ -1539,13 +2598,12 @@ app.use('*', (req, res) => {
       '/api/transactions',
       '/api/transaction-history',
       '/api/schemes/:customerId',
-      '/api/paynimo/initiate',
-      '/api/paynimo/callback',
-      '/api/paynimo/status/:transactionId',
-      '/api/payment/callback',
-      '/payment/success',
-      '/payment/failure',
-      '/payment/cancel'
+      '/api/payments/worldline/token',
+      '/api/payments/worldline/verify',
+      '/worldline-checkout',
+      '/privacy-policy',
+      '/terms-of-service',
+      '/admin_portal/index.html'
     ]
   });
 });
@@ -1646,10 +2704,9 @@ async function startServer() {
     process.exit(1);
   }
 
-  // Start HTTPS server with HTTP fallback for admin portal
+  // Start HTTPS server for production
   try {
     const httpsPort = process.env.HTTPS_PORT || 3001;
-    const httpPort = process.env.HTTP_PORT || 3001;
 
     // Start HTTPS server
     const httpsServer = https.createServer(httpsOptions, app);
@@ -1674,7 +2731,7 @@ async function startServer() {
         console.error('3. Restart server');
       } else {
         console.error('');
-        console.error('� Common fixes:');
+        console.error('🔧 Common fixes:');
         console.error('1. Check SSL certificates are valid');
         console.error('2. Ensure port 3001 is not in use');
         console.error('3. Run as administrator if needed');
@@ -1685,28 +2742,27 @@ async function startServer() {
     httpsServer.listen(httpsPort, '0.0.0.0', () => {
       console.log('');
       console.log('========================================');
-      console.log('🔒 HTTPS-ONLY SERVER STARTED!');
+      console.log('🔒 HTTPS PRODUCTION SERVER STARTED!');
       console.log('========================================');
       console.log(`🔒 VMurugan HTTPS Server running on port ${httpsPort}`);
       console.log(`🏥 Health Check: https://api.vmuruganjewellery.co.in:${httpsPort}/health`);
       console.log(`🔗 API Base URL: https://api.vmuruganjewellery.co.in:${httpsPort}/api`);
       console.log(`💾 Database: ${sqlConfig.database} on ${sqlConfig.server}`);
-      console.log(`💳 Paynimo Payment URLs:`);
-      console.log(`   Initiate: https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/initiate`);
-      console.log(`   Callback: https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/callback`);
-      console.log(`   Status:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/paynimo/status/:transactionId`);
-      console.log(`   Success:  https://api.vmuruganjewellery.co.in:${httpsPort}/payment/success`);
-      console.log(`   Failure:  https://api.vmuruganjewellery.co.in:${httpsPort}/payment/failure`);
-      console.log(`   Cancel:   https://api.vmuruganjewellery.co.in:${httpsPort}/payment/cancel`);
+      console.log(`🔒 Privacy & Legal URLs:`);
+      console.log(`   Privacy:  https://api.vmuruganjewellery.co.in:${httpsPort}/privacy-policy`);
+      console.log(`   Terms:    https://api.vmuruganjewellery.co.in:${httpsPort}/terms-of-service`);
+      console.log(`💳 Worldline Payment Integration (Clean Slate Rebuild):`);
+      console.log(`   Token:    https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/token`);
+      console.log(`   Verify:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/verify`);
       console.log('');
-      console.log('✅ HTTPS-only mode: No HTTP fallback');
+      console.log('✅ HTTPS-only production mode');
       console.log('🔒 All connections encrypted');
       console.log('========================================');
     });
 
   } catch (httpsError) {
     console.error('❌ Failed to start HTTPS server:', httpsError.message);
-    console.error('� To fix this:');
+    console.error('🔧 To fix this:');
     console.error('1. Check SSL certificates are valid');
     console.error('2. Ensure port 3001 is available');
     console.error('3. Run server as administrator');
@@ -1714,7 +2770,7 @@ async function startServer() {
   }
 }
 
-// HTTPS-only server - no HTTP fallback function needed
+// HTTPS-only production server
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {

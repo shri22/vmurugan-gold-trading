@@ -62,18 +62,34 @@ class AuthService {
   static Future<bool> isPhoneRegistered(String phone) async {
     try {
       print('🔍 AuthService: Checking if phone $phone is registered...');
-      final result = await FirebaseService.getCustomerByPhone(phone);
-      
-      if (result['success'] == true && result['customer'] != null) {
+
+      // Use SQL Server endpoint instead of Firebase for better performance
+      final response = await SecureHttpClient.get(
+        Uri.parse('$baseUrl/customers/$phone'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 5)); // Reduced timeout for faster response
+
+      if (response.statusCode == 200) {
         print('✅ AuthService: Phone $phone is registered');
         return true;
-      } else {
+      } else if (response.statusCode == 404) {
         print('❌ AuthService: Phone $phone is not registered');
+        return false;
+      } else {
+        print('⚠️ AuthService: Unexpected response ${response.statusCode} for phone $phone');
         return false;
       }
     } catch (e) {
       print('❌ AuthService: Error checking phone registration: $e');
-      return false;
+      // Fallback to Firebase if server is unreachable
+      try {
+        print('🔄 AuthService: Falling back to Firebase check...');
+        final result = await FirebaseService.getCustomerByPhone(phone);
+        return result['success'] == true && result['customer'] != null;
+      } catch (fallbackError) {
+        print('❌ AuthService: Firebase fallback also failed: $fallbackError');
+        return false;
+      }
     }
   }
   
@@ -523,7 +539,7 @@ class AuthService {
         Uri.parse('$baseUrl/login'),
         headers: headers,
         body: jsonEncode(loginData),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 15)); // Reduced timeout for faster response
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

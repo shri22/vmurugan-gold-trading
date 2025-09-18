@@ -413,7 +413,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 Expanded(
                   child: _buildSchemeMetric(
                     'Current Value',
-                    '₹${(performance['currentValue'] ?? 0.0).toStringAsFixed(2)}',
+                    '₹${(performance?['currentValue'] ?? 0.0).toStringAsFixed(2)}',
                   ),
                 ),
               ],

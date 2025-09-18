@@ -50,6 +50,9 @@ class SilverPriceModel {
   String get formattedChange => '${changePercent >= 0 ? '+' : ''}${changePercent.toStringAsFixed(2)}%';
   String get formattedChangeAmount => '${changeAmount >= 0 ? '+' : ''}₹${changeAmount.toStringAsFixed(2)}';
 
+  // Getter for backward compatibility
+  DateTime get lastUpdated => timestamp;
+
   // Calculate silver quantity for given amount
   double calculateSilverQuantity(double investmentAmount) {
     return investmentAmount / pricePerGram;
