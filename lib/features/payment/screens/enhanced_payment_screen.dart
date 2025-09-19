@@ -8,9 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:weipl_checkout_flutter/weipl_checkout_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import '../models/payment_response.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/secure_http_client.dart';
+import '../../../core/services/payment_debug_logger.dart';
+import '../../../core/services/logged_http_client.dart';
+import 'payment_debug_screen.dart';
 
 class EnhancedPaymentScreen extends StatefulWidget {
   final double amount;
@@ -44,16 +48,40 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
   // Worldline Flutter Plugin instance
   WeiplCheckoutFlutter wlCheckoutFlutter = WeiplCheckoutFlutter();
 
+  // Debug logger instance
+  final PaymentDebugLogger _debugLogger = PaymentDebugLogger.instance;
+
   @override
   void initState() {
     super.initState();
     _sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // Initialize debug logger
+    _initializeDebugLogger();
+
     _logToFile('🔍 WORLDLINE FLUTTER PLUGIN - initState() called');
     _logToFile('🔍 Amount: ₹${widget.amount.round()} (converted from ${widget.amount})');
     _logToFile('🔍 Description: ${widget.description}');
 
     // Setup Worldline event listeners
     _setupWorldlineEventListeners();
+  }
+
+  Future<void> _initializeDebugLogger() async {
+    try {
+      await _debugLogger.initialize();
+      await _debugLogger.logInfo(
+        'Enhanced Payment Screen Initialized',
+        data: {
+          'amount': widget.amount,
+          'goldGrams': widget.goldGrams,
+          'description': widget.description,
+          'sessionId': _sessionId,
+        },
+      );
+    } catch (e) {
+      print('❌ Failed to initialize debug logger: $e');
+    }
   }
 
   // Log to file function with better accessibility AND add to UI
@@ -288,7 +316,13 @@ ${latestLogs.join('\n')}
 
   /// Handle Worldline payment response according to official documentation
   void _handleWorldlineResponse(Map<dynamic, dynamic> response) {
-    // Log to file instead of on-screen display
+    // Log to comprehensive debug logger
+    _debugLogger.logWorldlineResponse(
+      response: response,
+      description: 'Worldline Payment Gateway Response',
+    );
+
+    // Log to file for backward compatibility
     _logToFile('🎯 WORLDLINE RESPONSE RECEIVED: $response');
     _logToFile('🔍 RESPONSE KEYS: ${response.keys.toList()}');
     _logToFile('🔍 RESPONSE TYPE: ${response.runtimeType}');
@@ -297,6 +331,9 @@ ${latestLogs.join('\n')}
     response.forEach((key, value) {
       _logToFile('🔍 $key: $value (${value.runtimeType})');
     });
+
+    // Enhanced error analysis for Invalid Request
+    _analyzeWorldlineError(response);
 
     // Extract detailed error information for display
     final detailedErrorInfo = _extractDetailedErrorInfo(response);
@@ -568,6 +605,19 @@ ${latestLogs.join('\n')}
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Debug logs button
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PaymentDebugScreen(),
+                ),
+              );
+            },
+            tooltip: 'View Debug Logs',
+          ),
           // Scroll to top button
           IconButton(
             icon: const Icon(Icons.keyboard_arrow_up),
@@ -1061,6 +1111,21 @@ ${latestLogs.join('\n')}
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const PaymentDebugScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.bug_report),
+        label: const Text('Debug Logs'),
+        backgroundColor: const Color(0xFFDC143C),
+        foregroundColor: Colors.white,
+        tooltip: 'View comprehensive payment debug logs',
+      ),
     );
   }
 
@@ -1086,17 +1151,20 @@ ${latestLogs.join('\n')}
 
       _logToFile('📤 TOKEN REQUEST: $url');
       _logToFile('📤 Payload: ${jsonEncode(payload)}');
-      _logToFile('💰 AMOUNT CONVERSION DEBUG:');
+      _logToFile('� SSL Certificate: Development mode - accepting self-signed certificates');
+      _logToFile('�💰 AMOUNT CONVERSION DEBUG:');
       _logToFile('💰 Original Amount: ₹${widget.amount} (${widget.amount.runtimeType})');
       _logToFile('💰 Decimal Amount: ${widget.amount.toStringAsFixed(2)} (decimal format)');
       _logToFile('💰 Final String: "${amountAsDecimal}" (${amountAsDecimal.runtimeType})');
       _logToFile('💰 String Length: ${amountAsDecimal.length} characters');
       _logToFile('💰 Contains Decimal: ${amountAsDecimal.contains('.')}');
 
-      final response = await SecureHttpClient.post(
+      // Use logged HTTP client for comprehensive debugging
+      final response = await LoggedHttpClient.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
+        description: 'Worldline Token Request',
       );
 
       _logToFile('📥 TOKEN RESPONSE: Status ${response.statusCode}');
@@ -1207,7 +1275,7 @@ ${latestLogs.join('\n')}
 
           "items": [
             {
-              "itemId": "GOLD_PURCHASE",
+              "itemId": "first", // CRITICAL: Scheme code for TID T1098761 as per Worldline support (CASE SENSITIVE)
               "amount": consumerData['amount'], // CRITICAL: Use exact same amount from server
               "comAmt": "0"
             }
@@ -1220,6 +1288,16 @@ ${latestLogs.join('\n')}
           }
         }
       };
+
+      // Log comprehensive payload structure to debug logger
+      await _debugLogger.logWorldlinePayload(
+        paymentOptions: paymentOptions,
+        consumerData: consumerData,
+        description: 'Complete Worldline Payment Payload',
+      );
+
+      // Log detailed payload analysis
+      await _logPayloadStructureAnalysis(paymentOptions, consumerData);
 
       _logToFile('📤 Payment Options: ${jsonEncode(paymentOptions)}');
 
@@ -1258,6 +1336,47 @@ ${latestLogs.join('\n')}
     } catch (e) {
       _logToFile('❌ Error initializing Worldline payment: $e');
       throw Exception('Failed to initialize payment: $e');
+    }
+  }
+
+  /// Send error details to server for persistent logging
+  Future<void> _sendErrorToServer(Map<String, dynamic> errorAnalysis, Map<dynamic, dynamic> response) async {
+    try {
+      final serverUrl = 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/error-capture';
+
+      final payload = {
+        'timestamp': DateTime.now().toIso8601String(),
+        'sessionId': _sessionId,
+        'errorAnalysis': errorAnalysis,
+        'fullResponse': response,
+        'paymentContext': {
+          'amount': widget.amount,
+          'orderId': _sessionId, // Use session ID as order ID
+          'customerId': _sessionId, // Use session ID as customer ID
+          'merchantCode': 'T1098761', // Back to your original merchant
+        },
+        'deviceInfo': {
+          'platform': 'Flutter',
+          'version': '1.0.0',
+        }
+      };
+
+      _logToFile('📤 Sending error details to server...');
+
+      final httpResponse = await http.post(
+        Uri.parse(serverUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      );
+
+      if (httpResponse.statusCode == 200) {
+        _logToFile('✅ Error details sent to server successfully');
+      } else {
+        _logToFile('❌ Failed to send error to server: ${httpResponse.statusCode}');
+        _logToFile('❌ Server response: ${httpResponse.body}');
+      }
+    } catch (e) {
+      _logToFile('❌ Exception sending error to server: $e');
     }
   }
 
@@ -1330,6 +1449,219 @@ ${latestLogs.join('\n')}
     errorInfo['fullResponse'] = response;
 
     return errorInfo;
+  }
+
+  /// Enhanced error analysis specifically for Worldline Invalid Request scenarios
+  Future<void> _analyzeWorldlineError(Map<dynamic, dynamic> response) async {
+    try {
+      final errorAnalysis = <String, dynamic>{
+        'timestamp': DateTime.now().toIso8601String(),
+        'responseType': response.runtimeType.toString(),
+        'responseKeys': response.keys.toList(),
+        'responseSize': response.length,
+      };
+
+      // Check for Invalid Request indicators
+      bool isInvalidRequest = false;
+      String? errorMessage;
+      String? errorCode;
+
+      // Check various error formats
+      if (response.containsKey('msg')) {
+        final msg = response['msg']?.toString() ?? '';
+        if (msg.toLowerCase().contains('invalid') ||
+            msg.toLowerCase().contains('error') ||
+            msg.contains('TPPGE')) {
+          isInvalidRequest = true;
+          errorMessage = msg;
+
+          // Extract error code if present
+          final errorCodeMatch = RegExp(r'ERROR CODE (\w+)').firstMatch(msg);
+          if (errorCodeMatch != null) {
+            errorCode = errorCodeMatch.group(1);
+          }
+        }
+        errorAnalysis['msgField'] = msg;
+      }
+
+      if (response.containsKey('error')) {
+        isInvalidRequest = true;
+        errorMessage = response['error']?.toString();
+        errorAnalysis['errorField'] = errorMessage;
+      }
+
+      if (response.containsKey('paymentTransaction')) {
+        final paymentTransaction = response['paymentTransaction'];
+        if (paymentTransaction is Map) {
+          final statusCode = paymentTransaction['statusCode']?.toString();
+          final statusMessage = paymentTransaction['statusMessage']?.toString();
+
+          if (statusCode != '0300') { // 0300 is success
+            isInvalidRequest = true;
+            errorMessage = statusMessage;
+            errorCode = statusCode;
+          }
+
+          errorAnalysis['paymentTransaction'] = {
+            'statusCode': statusCode,
+            'statusMessage': statusMessage,
+            'identifier': paymentTransaction['identifier'],
+            'amount': paymentTransaction['amount'],
+          };
+        }
+      }
+
+      errorAnalysis['isInvalidRequest'] = isInvalidRequest;
+      errorAnalysis['errorMessage'] = errorMessage;
+      errorAnalysis['errorCode'] = errorCode;
+
+      // Analyze potential causes for Invalid Request
+      if (isInvalidRequest) {
+        final potentialCauses = <String>[];
+
+        if (errorCode == 'TPPGE161') {
+          potentialCauses.add('Hash validation failed - check hash generation algorithm');
+        }
+
+        if (errorMessage?.contains('merchant') == true) {
+          potentialCauses.add('Merchant configuration issue - check merchant ID and credentials');
+        }
+
+        if (errorMessage?.contains('amount') == true) {
+          potentialCauses.add('Amount format issue - check decimal formatting and currency');
+        }
+
+        if (errorMessage?.contains('token') == true) {
+          potentialCauses.add('Token validation failed - check token generation and expiry');
+        }
+
+        if (errorMessage?.contains('scheme') == true) {
+          potentialCauses.add('Scheme code issue - verify "FIRST" scheme code for merchant T1098761');
+        }
+
+        errorAnalysis['potentialCauses'] = potentialCauses;
+
+        // Log specific error analysis
+        await _debugLogger.logError(
+          error: 'Worldline Invalid Request Detected',
+          context: 'Payment Gateway Response Analysis',
+          additionalData: errorAnalysis,
+        );
+
+        // CRITICAL: Send error to server for persistent logging
+        await _sendErrorToServer(errorAnalysis, response);
+      }
+
+      // Always log the analysis for debugging
+      await _debugLogger.logInfo(
+        'Worldline Response Analysis',
+        data: errorAnalysis,
+      );
+
+    } catch (e) {
+      await _debugLogger.logError(
+        error: 'Failed to analyze Worldline error: $e',
+        context: 'Error Analysis',
+      );
+    }
+  }
+
+  /// Log detailed payload structure analysis for debugging
+  Future<void> _logPayloadStructureAnalysis(
+    Map<String, dynamic> paymentOptions,
+    Map<String, dynamic> consumerData,
+  ) async {
+    try {
+      final analysis = <String, dynamic>{
+        'timestamp': DateTime.now().toIso8601String(),
+        'payloadStructure': {
+          'hasFeatures': paymentOptions.containsKey('features'),
+          'hasConsumerData': paymentOptions.containsKey('consumerData'),
+          'featuresCount': paymentOptions['features']?.length ?? 0,
+          'consumerDataFieldsCount': paymentOptions['consumerData']?.length ?? 0,
+        },
+        'consumerDataAnalysis': {
+          'hasToken': consumerData.containsKey('token'),
+          'hasMerchantId': consumerData.containsKey('merchantId'),
+          'hasAmount': consumerData.containsKey('amount'),
+          'hasTxnId': consumerData.containsKey('txnId'),
+          'hasConsumerId': consumerData.containsKey('consumerId'),
+          'hasSchemeCode': true, // Always FIRST for our merchant
+        },
+        'criticalFields': {
+          'merchantId': consumerData['merchantId']?.toString(),
+          'txnId': consumerData['txnId']?.toString(),
+          'amount': consumerData['amount']?.toString(),
+          'consumerId': consumerData['consumerId']?.toString(),
+          'currency': 'INR',
+          'schemeCode': 'first',
+        },
+        'hashValidationFields': {
+          'merchantId': consumerData['merchantId']?.toString(),
+          'txnId': consumerData['txnId']?.toString(),
+          'amount': consumerData['amount']?.toString(),
+          'accountNo': consumerData['accountNo']?.toString(),
+          'consumerId': consumerData['consumerId']?.toString(),
+          'consumerMobileNo': consumerData['consumerMobileNo']?.toString(),
+          'consumerEmailId': consumerData['consumerEmailId']?.toString(),
+          'debitStartDate': consumerData['debitStartDate']?.toString(),
+          'debitEndDate': consumerData['debitEndDate']?.toString(),
+          'maxAmount': consumerData['maxAmount']?.toString(),
+          'amountType': consumerData['amountType']?.toString(),
+          'frequency': consumerData['frequency']?.toString(),
+          'cardNumber': consumerData['cardNumber']?.toString(),
+          'expMonth': consumerData['expMonth']?.toString(),
+          'expYear': consumerData['expYear']?.toString(),
+          'cvvCode': consumerData['cvvCode']?.toString(),
+        },
+        'itemsAnalysis': {
+          'itemCount': paymentOptions['consumerData']?['items']?.length ?? 0,
+          'firstItem': paymentOptions['consumerData']?['items']?[0],
+          'schemeCodeCorrect': paymentOptions['consumerData']?['items']?[0]?['itemId'] == 'first',
+        },
+        'amountValidation': {
+          'originalAmount': widget.amount,
+          'consumerDataAmount': consumerData['amount'],
+          'itemAmount': paymentOptions['consumerData']?['items']?[0]?['amount'],
+          'amountConsistency': consumerData['amount'] == paymentOptions['consumerData']?['items']?[0]?['amount'],
+        },
+      };
+
+      // Check for potential issues
+      final issues = <String>[];
+
+      if (consumerData['merchantId'] != 'T1098761') {
+        issues.add('Merchant ID mismatch - expected T1098761');
+      }
+
+      if (paymentOptions['consumerData']?['items']?[0]?['itemId'] != 'first') {
+        issues.add('Scheme code mismatch - expected FIRST');
+      }
+
+      if (consumerData['amount'] != paymentOptions['consumerData']?['items']?[0]?['amount']) {
+        issues.add('Amount inconsistency between consumerData and items');
+      }
+
+      // Check currency if present in consumerData, otherwise assume INR is used in payment options
+      final currency = consumerData['currency'] ?? 'INR';
+      if (currency != 'INR') {
+        issues.add('Currency mismatch - expected INR, found: $currency');
+      }
+
+      analysis['potentialIssues'] = issues;
+      analysis['issueCount'] = issues.length;
+
+      await _debugLogger.logInfo(
+        'Worldline Payload Structure Analysis',
+        data: analysis,
+      );
+
+    } catch (e) {
+      await _debugLogger.logError(
+        error: 'Failed to analyze payload structure: $e',
+        context: 'Payload Structure Analysis',
+      );
+    }
   }
 
 }

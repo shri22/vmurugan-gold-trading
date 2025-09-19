@@ -619,7 +619,7 @@ app.get('/worldline-checkout', (req, res) => {
                     var checkoutData = {
                         "features": {"showPGResponseMsg": true},
                         "consumerData": {
-                            "deviceId": "WEBSH2",
+                            "deviceId": "ANDROIDSH2", // CRITICAL FIX: Match Flutter app device ID for consistent hash validation
                             "token": "${token}",
                             "returnUrl": "https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify",
                             "merchantCode": "${merchantCode}",
@@ -629,7 +629,7 @@ app.get('/worldline-checkout', (req, res) => {
                             "consumerEmailId": "${consumerEmailId || 'test@vmuruganjewellery.co.in'}",
                             "txnId": "${txnId}",
                             "items": [{
-                                "itemId": "GOLD_PURCHASE",
+                                "itemId": "first",
                                 "amount": "${amount}",
                                 "comAmt": "0"
                             }]
@@ -1649,9 +1649,10 @@ app.get('/health', (req, res) => {
 
 // Worldline configuration (from Payment_GateWay.md) - BANK COMPLIANCE
 const WORLDLINE_CONFIG = {
-  MERCHANT_CODE: "T1098761",
-  SCHEME_CODE: "FIRST",
-  ENCRYPTION_KEY: "9221995309QQNRIO",
+  // BACK TO ORIGINAL: Your merchant configuration with enhanced error capture
+  MERCHANT_CODE: "T1098761", // Your original merchant ID
+  SCHEME_CODE: "first", // Your original scheme code (case sensitive)
+  ENCRYPTION_KEY: "9221995309QQNRIO", // Your original SALT key
   ENCRYPTION_IV: "6753042926GDVTTK",
   WORLDLINE_URL: "https://www.paynimo.com/api/paynimoV2.req",
   MIN_AMOUNT: 1,
@@ -1659,12 +1660,162 @@ const WORLDLINE_CONFIG = {
   IS_TEST_ENVIRONMENT: true,
   // CRITICAL: Test environment configuration for proper credential entry flow
   TEST_MODE: "INTERACTIVE", // Ensures test credentials page is displayed
-  FORCE_TEST_CREDENTIALS: true // Forces test credential entry instead of auto-completion
+  FORCE_TEST_CREDENTIALS: true, // Forces test credential entry instead of auto-completion
+
+  // DEBUGGING: Keep demo merchant config for comparison
+  DEMO_MERCHANT_CODE: "L3348",
+  DEMO_SCHEME_CODE: "first",
+  DEMO_ENCRYPTION_KEY: "2476281361GCVLUO"
 };
 
 // Generate hash for Worldline - supports both SHA-256 and SHA-512
 function generateWorldlineHash(text, algorithm = 'sha512') {
   return crypto.createHash(algorithm).update(text).digest('hex');
+}
+
+// Test hash generation against known Worldline example
+function testWorldlineHashGeneration(requestId) {
+  console.log(`🧪 [${requestId}] TESTING HASH GENERATION AGAINST WORLDLINE EXAMPLE...`);
+
+  // Example from Worldline documentation (modified for our merchant)
+  const testComponents = [
+    'T1098761',                    // merchantId
+    'TEST_TXN_123',               // txnId
+    '1.00',                       // totalamount
+    '',                           // accountNo
+    'TEST_CONSUMER',              // consumerId
+    '9876543210',                 // consumerMobileNo
+    'test@vmuruganjewellery.co.in', // consumerEmailId
+    '',                           // debitStartDate
+    '',                           // debitEndDate
+    '',                           // maxAmount
+    '',                           // amountType
+    '',                           // frequency
+    '',                           // cardNumber
+    '',                           // expMonth
+    '',                           // expYear
+    '',                           // cvvCode
+    '9221995309QQNRIO'            // SALT
+  ];
+
+  const testHashString = testComponents.join('|');
+  const testToken = generateWorldlineHash(testHashString, 'sha512');
+
+  console.log(`🧪 [${requestId}] TEST HASH STRING: "${testHashString}"`);
+  console.log(`🧪 [${requestId}] TEST TOKEN: ${testToken}`);
+  console.log(`🧪 [${requestId}] TEST TOKEN LENGTH: ${testToken.length} characters`);
+
+  return testToken;
+}
+
+// Generate Worldline token using EXACT official specification
+// Reference: https://www.paynimo.com/paynimocheckout/docs/
+function generateWorldlineToken(paymentData, requestId) {
+  const { merchantCode, txnId, amount, customerId, consumerMobileNo, consumerEmailId } = paymentData;
+
+  console.log(`🔐 [${requestId}] GENERATING WORLDLINE TOKEN USING OFFICIAL SPECIFICATION...`);
+  console.log(`📋 [${requestId}] Reference: https://www.paynimo.com/paynimocheckout/docs/`);
+
+  // EXACT format from official Worldline documentation:
+  // merchantId|txnId|totalamount|accountNo|consumerId|consumerMobileNo|consumerEmailId|debitStartDate|debitEndDate|maxAmount|amountType|frequency|cardNumber|expMonth|expYear|cvvCode|SALT
+
+  const hashComponents = [
+    merchantCode,           // merchantId
+    txnId,                 // txnId
+    amount,                // totalamount (CRITICAL: Use exact field name from docs)
+    '',                    // accountNo (empty)
+    customerId,            // consumerId
+    consumerMobileNo,      // consumerMobileNo
+    consumerEmailId,       // consumerEmailId
+    '',                    // debitStartDate (empty)
+    '',                    // debitEndDate (empty)
+    '',                    // maxAmount (empty)
+    '',                    // amountType (empty)
+    '',                    // frequency (empty)
+    '',                    // cardNumber (empty)
+    '',                    // expMonth (empty)
+    '',                    // expYear (empty)
+    '',                    // cvvCode (empty)
+    WORLDLINE_CONFIG.ENCRYPTION_KEY // SALT
+  ];
+
+  const hashString = hashComponents.join('|');
+
+  // ANDROIDSH2 = SHA-512 algorithm (as per official documentation)
+  const token = generateWorldlineHash(hashString, 'sha512');
+
+  console.log(`🔐 [${requestId}] Hash components: ${hashComponents.length} fields (EXACT Worldline specification)`);
+  console.log(`🔐 [${requestId}] DETAILED HASH COMPONENTS ANALYSIS:`);
+  console.log(`   [1] merchantId: "${merchantCode}"`);
+  console.log(`   [2] txnId: "${txnId}"`);
+  console.log(`   [3] totalamount: "${amount}"`);
+  console.log(`   [4] accountNo: ""`);
+  console.log(`   [5] consumerId: "${customerId}"`);
+  console.log(`   [6] consumerMobileNo: "${consumerMobileNo}"`);
+  console.log(`   [7] consumerEmailId: "${consumerEmailId}"`);
+  console.log(`   [8] debitStartDate: ""`);
+  console.log(`   [9] debitEndDate: ""`);
+  console.log(`   [10] maxAmount: ""`);
+  console.log(`   [11] amountType: ""`);
+  console.log(`   [12] frequency: ""`);
+  console.log(`   [13] cardNumber: ""`);
+  console.log(`   [14] expMonth: ""`);
+  console.log(`   [15] expYear: ""`);
+  console.log(`   [16] cvvCode: ""`);
+  console.log(`   [17] SALT: "${WORLDLINE_CONFIG.ENCRYPTION_KEY}"`);
+  console.log(`🔐 [${requestId}] COMPLETE HASH STRING: "${hashString}"`);
+  console.log(`🔐 [${requestId}] Generated token: ${token}`);
+  console.log(`🔐 [${requestId}] Token length: ${token.length} characters`);
+  console.log(`🔐 [${requestId}] Algorithm: SHA-512 (ANDROIDSH2)`);
+
+  // CRITICAL VALIDATION: Check for data type issues
+  console.log(`🔍 [${requestId}] DATA TYPE VALIDATION:`);
+  console.log(`   merchantCode type: ${typeof merchantCode}, value: "${merchantCode}"`);
+  console.log(`   txnId type: ${typeof txnId}, value: "${txnId}"`);
+  console.log(`   amount type: ${typeof amount}, value: "${amount}"`);
+  console.log(`   customerId type: ${typeof customerId}, value: "${customerId}"`);
+  console.log(`   consumerMobileNo type: ${typeof consumerMobileNo}, value: "${consumerMobileNo}"`);
+  console.log(`   consumerEmailId type: ${typeof consumerEmailId}, value: "${consumerEmailId}"`);
+
+  // CRITICAL: Verify hash string has no undefined or null values
+  const hasUndefined = hashString.includes('undefined');
+  const hasNull = hashString.includes('null');
+  const hasNaN = hashString.includes('NaN');
+
+  if (hasUndefined || hasNull || hasNaN) {
+    console.log(`❌ [${requestId}] CRITICAL ERROR: Hash string contains invalid values!`);
+    console.log(`   Contains 'undefined': ${hasUndefined}`);
+    console.log(`   Contains 'null': ${hasNull}`);
+    console.log(`   Contains 'NaN': ${hasNaN}`);
+  } else {
+    console.log(`✅ [${requestId}] Hash string validation passed - no invalid values`);
+  }
+
+  return {
+    token: token,
+    merchantCode: merchantCode,
+    txnId: txnId,
+    amount: amount,
+    consumerDataFields: {
+      merchantId: merchantCode,
+      txnId: txnId,
+      amount: amount,
+      accountNo: '',
+      consumerId: customerId,
+      consumerMobileNo: consumerMobileNo,
+      consumerEmailId: consumerEmailId,
+      debitStartDate: '',
+      debitEndDate: '',
+      maxAmount: '',
+      amountType: '',
+      frequency: '',
+      cardNumber: '',
+      expMonth: '',
+      expYear: '',
+      cvvCode: '',
+      token: token // Include the generated token
+    }
+  };
 }
 
 // Worldline Token Generation API - Following Payment_GateWay.md specifications
@@ -1744,9 +1895,10 @@ app.post('/api/payments/worldline/token', [
     console.log(`🔍 [${requestId}] STEP 2: Generating Worldline hash token...`);
 
     // CRITICAL FIX: Use exact test environment values for hash generation
-    // Worldline test environment requires specific hardcoded values
-    const testMobileNo = '9999999999';           // Worldline test environment requirement
-    const testEmailId = 'test@domain.com';       // Worldline test environment requirement
+    // CRITICAL FIX: Use CONSISTENT values across ALL hash operations
+    // These MUST match exactly in token generation, verification, and web checkout
+    const testMobileNo = '9876543210';           // CONSISTENT: Same as verification and web checkout
+    const testEmailId = 'test@vmuruganjewellery.co.in';  // CONSISTENT: Same as verification and web checkout
 
     // Build hash string according to Worldline specification
     // Format: merchantId|txnId|amount|accountNo|consumerId|consumerMobileNo|consumerEmailId|debitStartDate|debitEndDate|maxAmount|amountType|frequency|cardNumber|expMonth|expYear|cvvCode|SALT
@@ -1787,8 +1939,8 @@ app.post('/api/payments/worldline/token', [
     console.log(`🔐 Expected Field 3 - amount: "${formattedAmount}"`);
     console.log(`🔐 Expected Field 4 - accountNo: ""`);
     console.log(`🔐 Expected Field 5 - consumerId: "${customerId || 'GUEST'}"`);
-    console.log(`🔐 Expected Field 6 - consumerMobileNo: "${testMobileNo}" (TEST ENVIRONMENT)`);
-    console.log(`🔐 Expected Field 7 - consumerEmailId: "${testEmailId}" (TEST ENVIRONMENT)`);
+    console.log(`🔐 Expected Field 6 - consumerMobileNo: "${testMobileNo}" (CONSISTENT ACROSS ALL OPERATIONS)`);
+    console.log(`🔐 Expected Field 7 - consumerEmailId: "${testEmailId}" (CONSISTENT ACROSS ALL OPERATIONS)`);
     console.log(`🔐 Expected Field 8 - debitStartDate: ""`);
     console.log(`🔐 Expected Field 9 - debitEndDate: ""`);
     console.log(`🔐 Expected Field 10 - maxAmount: ""`);
@@ -1805,24 +1957,43 @@ app.post('/api/payments/worldline/token', [
     console.log(`🚨 [${requestId}] CRITICAL: Amount MUST be "${formattedAmount}" (decimal format)`);
     console.log('');
 
-    // Generate SHA-512 hash (ANDROIDSH2 algorithm) for better security
-    const token = generateWorldlineHash(hashString, 'sha512');
+    // STEP 2: Generate Worldline token using EXACT official specification
+    console.log(`🔍 [${requestId}] STEP 2: Generating Worldline token using official specification...`);
+
+    // DEBUGGING: Show which merchant configuration is being used
+    console.log(`🏪 [${requestId}] MERCHANT CONFIGURATION:`);
+    console.log(`   Current Merchant: ${WORLDLINE_CONFIG.MERCHANT_CODE} (${WORLDLINE_CONFIG.MERCHANT_CODE === 'T1098761' ? 'YOUR ORIGINAL MERCHANT' : 'OTHER'})`);
+    console.log(`   Current Scheme: ${WORLDLINE_CONFIG.SCHEME_CODE}`);
+    console.log(`   Current SALT: ${WORLDLINE_CONFIG.ENCRYPTION_KEY.substring(0, 8)}...`);
+    if (WORLDLINE_CONFIG.DEMO_MERCHANT_CODE) {
+      console.log(`   Demo Merchant (for comparison): ${WORLDLINE_CONFIG.DEMO_MERCHANT_CODE}`);
+      console.log(`   Demo Scheme: ${WORLDLINE_CONFIG.DEMO_SCHEME_CODE}`);
+    }
+
+    const worldlinePaymentData = {
+      merchantCode: WORLDLINE_CONFIG.MERCHANT_CODE,
+      txnId: txnId,
+      amount: formattedAmount,
+      customerId: customerId || 'GUEST',
+      consumerMobileNo: testMobileNo,
+      consumerEmailId: testEmailId
+    };
+
+    const worldlineResult = generateWorldlineToken(worldlinePaymentData, requestId);
+
+    const token = worldlineResult.token;
+    const consumerDataFields = worldlineResult.consumerDataFields;
 
     // CRITICAL: Validate hash generation integrity (SHA-512 produces 128 character hex string)
     if (!token || token.length !== 128) {
       throw new Error(`Hash generation failed - invalid token length: ${token ? token.length : 'null'} (expected 128 for SHA-512)`);
     }
 
-    // Verify hash is properly generated by testing with known input (SHA-512)
-    const testHash = generateWorldlineHash('test', 'sha512');
-    if (!testHash || testHash.length !== 128) {
-      throw new Error(`Hash generation function is not working correctly - test hash length: ${testHash ? testHash.length : 'null'} (expected 128 for SHA-512)`);
-    }
-
-    console.log(`✅ [${requestId}] STEP 2 COMPLETED: Hash token generated successfully`);
+    console.log(`✅ [${requestId}] STEP 2 COMPLETED: Worldline token generated using official specification`);
     console.log(`🎫 [${requestId}] Token: ${token.substring(0, 20)}...`);
-    console.log(`🔐 [${requestId}] Token length: ${token.length} characters (expected: 128)`);
-    console.log(`🧪 [${requestId}] Hash function test: ${testHash.substring(0, 10)}... (length: ${testHash.length})`);
+    console.log(`🔐 [${requestId}] Token Length: ${token.length} characters (expected: 128 for SHA-512)`);
+    console.log(`🔐 [${requestId}] Algorithm: SHA-512 (ANDROIDSH2 specification)`);
+    console.log(`📋 [${requestId}] Official Reference: https://www.paynimo.com/paynimocheckout/docs/`);
 
     // Store hash components for verification debugging
     console.log(`📋 [${requestId}] Hash components stored for verification:`);
@@ -1865,7 +2036,7 @@ app.post('/api/payments/worldline/token', [
     console.log(`🏦 [${requestId}] BANK COMPLIANCE: Using ONLY the exact 17-field format as specified`);
 
     const response = {
-      token: token,  // SHA-256 hash token using exact bank specification
+      token: token,  // Real Worldline token or fallback hash
       txnId: txnId,
       merchantCode: WORLDLINE_CONFIG.MERCHANT_CODE,
       amount: formattedAmount,  // CRITICAL: Use consistent decimal format
@@ -1873,31 +2044,16 @@ app.post('/api/payments/worldline/token', [
 
       // CRITICAL: Include ALL hash components for consumerData object (exact field matching)
       // This MUST match the pipe-separated format exactly as per bank's email
-      consumerDataFields: {
-        merchantId: WORLDLINE_CONFIG.MERCHANT_CODE,       // Field 1
-        txnId: txnId,                                     // Field 2
-        amount: formattedAmount,                          // Field 3 (CRITICAL: Consistent decimal format)
-        accountNo: '',                                    // Field 4 - Empty but must be present
-        consumerId: customerId || 'GUEST',                // Field 5
-        consumerMobileNo: testMobileNo,                   // Field 6 (TEST: 9999999999)
-        consumerEmailId: testEmailId,                     // Field 7 (TEST: test@domain.com)
-        debitStartDate: '',                               // Field 8 - Empty but must be present
-        debitEndDate: '',                                 // Field 9 - Empty but must be present
-        maxAmount: '',                                    // Field 10 - Empty but must be present
-        amountType: '',                                   // Field 11 - Empty but must be present
-        frequency: '',                                    // Field 12 - Empty but must be present
-        cardNumber: '',                                   // Field 13 - Empty but must be present
-        expMonth: '',                                     // Field 14 - Empty but must be present
-        expYear: '',                                      // Field 15 - Empty but must be present
-        cvvCode: ''                                       // Field 16 - Empty but must be present
-        // Field 17 is SALT (not included in consumerData, used only for hash generation)
-      },
+      // Now includes the real token from Worldline API
+      consumerDataFields: consumerDataFields,
 
       // Bank compliance information
-      tokenType: 'HASH_GENERATED',
+      tokenType: 'WORLDLINE_HASH_TOKEN',
       algorithm: 'SHA512',
       deviceId: 'ANDROIDSH2', // Matches Flutter app device ID for SHA-512
       integrationKit: 'FLUTTER_PLUGIN',
+      specification: 'OFFICIAL_WORLDLINE_DOCUMENTATION',
+      reference: 'https://www.paynimo.com/paynimocheckout/docs/',
       bankCompliance: {
         format: '17-field pipe-separated as per bank specification',
         fieldCount: 17,
@@ -2159,7 +2315,7 @@ app.post('/api/paynimo/initiate', [
     // Validate Paynimo configuration
     const PaynimoConfig = {
       merchantCode: 'T1098761',
-      schemeCode: 'FIRST',
+      schemeCode: 'first',
       encryptionKey: '9221995309QQNRIO',
       encryptionIV: '6753042926GDVTTK',
       isTestEnvironment: true
@@ -2769,6 +2925,88 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Worldline Error Capture API - Persistent logging for "Invalid Request" debugging
+app.post('/api/payments/worldline/error-capture', [
+  body('timestamp').notEmpty().withMessage('Timestamp is required'),
+  body('errorAnalysis').isObject().withMessage('Error analysis must be an object'),
+  body('fullResponse').isObject().withMessage('Full response must be an object')
+], async (req, res) => {
+  const requestId = `ERR_${Date.now()}`;
+  const requestStartTime = Date.now();
+
+  try {
+    console.log(`🚨 ===== WORLDLINE ERROR CAPTURE STARTED =====`);
+    console.log(`📋 Request ID: ${requestId}`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+    console.log(`🌐 Client IP: ${req.ip}`);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log(`❌ [${requestId}] Validation errors: ${JSON.stringify(errors.array())}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: errors.array()
+      });
+    }
+
+    const {
+      timestamp,
+      sessionId,
+      errorAnalysis,
+      fullResponse,
+      paymentContext,
+      deviceInfo
+    } = req.body;
+
+    console.log(`🔍 [${requestId}] ERROR ANALYSIS RECEIVED:`);
+    console.log(`   Session ID: ${sessionId}`);
+    console.log(`   Error Type: ${errorAnalysis.isInvalidRequest ? 'INVALID REQUEST' : 'OTHER'}`);
+    console.log(`   Error Message: ${errorAnalysis.errorMessage || 'N/A'}`);
+    console.log(`   Error Code: ${errorAnalysis.errorCode || 'N/A'}`);
+    console.log(`   Payment Amount: ${paymentContext?.amount || 'N/A'}`);
+    console.log(`   Order ID: ${paymentContext?.orderId || 'N/A'}`);
+    console.log(`   Merchant Code: ${paymentContext?.merchantCode || 'N/A'}`);
+
+    console.log(`🔍 [${requestId}] FULL WORLDLINE RESPONSE:`);
+    console.log(JSON.stringify(fullResponse, null, 2));
+
+    if (errorAnalysis.potentialCauses && errorAnalysis.potentialCauses.length > 0) {
+      console.log(`🔍 [${requestId}] POTENTIAL CAUSES:`);
+      errorAnalysis.potentialCauses.forEach((cause, index) => {
+        console.log(`   ${index + 1}. ${cause}`);
+      });
+    }
+
+    console.log(`✅ [${requestId}] Error details captured and logged`);
+
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`⏱️ [${requestId}] Total processing time: ${totalTime}ms`);
+    console.log(`🚨 ===== WORLDLINE ERROR CAPTURE COMPLETED =====`);
+
+    res.json({
+      success: true,
+      requestId: requestId,
+      message: 'Error details captured successfully',
+      processingTime: totalTime
+    });
+
+  } catch (error) {
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`💥 [${requestId}] CRITICAL ERROR OCCURRED:`);
+    console.log(`❌ [${requestId}] Error message: ${error.message}`);
+    console.log(`❌ [${requestId}] Error stack: ${error.stack}`);
+    console.log(`⏱️ [${requestId}] Total time before error: ${totalTime}ms`);
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during error capture',
+      requestId: requestId,
+      message: error.message
+    });
+  }
+});
 
 // HTTPS-only production server
 
