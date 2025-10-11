@@ -23,7 +23,7 @@ class SqlServerService {
   static Future<Map<String, dynamic>> testConnection() async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/test-connection'),
+        '$baseUrl/test-connection',
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -90,7 +90,7 @@ class SqlServerService {
       };
 
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/customers'),
+        '$baseUrl/customers',
         headers: headers,
         body: jsonEncode(customerData),
       ).timeout(const Duration(seconds: 30));
@@ -119,7 +119,7 @@ class SqlServerService {
   static Future<Map<String, dynamic>> getCustomerByPhone(String phone) async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/customers/$phone'),
+        '$baseUrl/customers/$phone',
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -153,7 +153,7 @@ class SqlServerService {
   static Future<List<Map<String, dynamic>>> getAllCustomers() async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/customers'),
+        '$baseUrl/customers',
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -188,7 +188,21 @@ class SqlServerService {
     String? gatewayTransactionId,
     String? deviceInfo,
     String? location,
+    Map<String, dynamic>? additionalData,
   }) async {
+    print('');
+    print('🔄🔄🔄 SqlServerService.saveTransaction CALLED 🔄🔄🔄');
+    print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
+    print('🌐 Base URL: $baseUrl');
+    print('📊 Input Parameters:');
+    print('  🆔 Transaction ID: "$transactionId"');
+    print('  📞 Customer Phone: "$customerPhone"');
+    print('  📊 Status: "$status"');
+    print('  💰 Amount: ₹$amount');
+    print('  💳 Payment Method: "$paymentMethod"');
+    print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
+    print('  📋 Additional Data Present: ${additionalData != null}');
+
     try {
       final transactionData = {
         'transaction_id': transactionId,
@@ -203,17 +217,29 @@ class SqlServerService {
         'gateway_transaction_id': gatewayTransactionId,
         'device_info': deviceInfo,
         'location': location,
+        'additional_data': additionalData != null ? jsonEncode(additionalData) : null,
       };
 
+      print('📤 Transaction Data to Send:');
+      print(jsonEncode(transactionData));
+
+      print('🌐 Making HTTP POST request to: $baseUrl/transactions');
+      print('📤 Request Headers: $headers');
+
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/transactions'),
+        '$baseUrl/transactions',
         headers: headers,
         body: jsonEncode(transactionData),
       ).timeout(const Duration(seconds: 30));
 
+      print('📥 HTTP Response Status: ${response.statusCode}');
+      print('📥 HTTP Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('✅ Transaction saved to SQL Server: $transactionId');
+        print('✅✅✅ TRANSACTION SAVED TO SQL SERVER SUCCESSFULLY! ✅✅✅');
+        print('✅ Transaction ID: $transactionId');
+        print('✅ Server Response: $data');
         return data;
       } else {
         final errorData = jsonDecode(response.body);
@@ -251,7 +277,7 @@ class SqlServerService {
       }
 
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/transactions$queryParams'),
+        '$baseUrl/transactions$queryParams',
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 
@@ -338,7 +364,7 @@ class SqlServerService {
   static Future<Map<String, dynamic>> getDashboardData() async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/admin/dashboard'),
+        '$baseUrl/admin/dashboard',
         headers: headers,
       ).timeout(const Duration(seconds: 10));
 

@@ -12,7 +12,12 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const path = require('path');
+
+// SSL Certificate paths - Updated to use local ssl directory
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'ssl', 'certificate.crt');
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || path.join(__dirname, '..', 'ssl', 'private.key');
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, 'logs');
@@ -253,6 +258,7 @@ async function createTablesIfNotExist() {
           device_info NVARCHAR(MAX),
           location NVARCHAR(MAX),
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
+          additional_data NVARCHAR(MAX),
           timestamp DATETIME2(3) DEFAULT SYSDATETIME(),
           created_at DATETIME2(3) DEFAULT SYSDATETIME(),
           updated_at DATETIME2(3) DEFAULT SYSDATETIME()
@@ -263,6 +269,15 @@ async function createTablesIfNotExist() {
         CREATE INDEX IX_transactions_status ON transactions (status)
         CREATE INDEX IX_transactions_business_id ON transactions (business_id)
         PRINT 'Transactions table created with SQL Server 2019 features'
+      END
+    `);
+
+    // Add additional_data column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'additional_data')
+      BEGIN
+        ALTER TABLE transactions ADD additional_data NVARCHAR(MAX)
+        PRINT 'Added additional_data column to transactions table'
       END
     `);
 
@@ -1137,20 +1152,47 @@ app.post('/api/transactions', [
   body('amount').isNumeric().withMessage('Amount must be numeric')
 ], async (req, res) => {
   try {
-    console.log('💰 Transaction request:', req.body.transaction_id);
-    
+    console.log('🎯🎯🎯 TRANSACTION CREATION REQUEST RECEIVED 🎯🎯🎯');
+    console.log('💰 Transaction ID:', req.body.transaction_id);
+    console.log('💰 Customer Phone:', req.body.customer_phone);
+    console.log('💰 Customer Name:', req.body.customer_name);
+    console.log('💰 Amount:', req.body.amount);
+    console.log('💰 Status:', req.body.status);
+    console.log('💰 Payment Method:', req.body.payment_method);
+    console.log('💰 Gateway Transaction ID:', req.body.gateway_transaction_id);
+    console.log('💰 Additional Data Present:', req.body.additional_data ? 'YES' : 'NO');
+
+    if (req.body.additional_data) {
+      console.log('📋 Additional Data Content:', JSON.stringify(req.body.additional_data, null, 2));
+    }
+
+    console.log('💰 Full request body:', JSON.stringify(req.body, null, 2));
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
     const {
       transaction_id, customer_phone, customer_name, type, amount, gold_grams,
       gold_price_per_gram, payment_method, status, gateway_transaction_id,
-      device_info, location
+      device_info, location, additional_data
     } = req.body;
 
     const business_id = 'VMURUGAN_001';
+
+    console.log('💰 Processing transaction data:');
+    console.log('  - Transaction ID:', transaction_id);
+    console.log('  - Customer Phone:', customer_phone);
+    console.log('  - Amount:', amount);
+    console.log('  - Status:', status);
+    console.log('  - Payment Method:', payment_method);
+    console.log('  - Gateway Transaction ID:', gateway_transaction_id);
+    console.log('  - Additional Data:', additional_data ? 'Present' : 'Not provided');
+    if (additional_data) {
+      console.log('  - Additional Data Content:', JSON.stringify(additional_data, null, 2));
+    }
 
     const request = pool.request();
     request.input('transaction_id', sql.NVarChar(100), transaction_id);
@@ -1166,20 +1208,23 @@ app.post('/api/transactions', [
     request.input('device_info', sql.NVarChar(sql.MAX), device_info);
     request.input('location', sql.NVarChar(sql.MAX), location);
     request.input('business_id', sql.NVarChar(50), business_id);
+    request.input('additional_data', sql.NVarChar(sql.MAX), additional_data ? JSON.stringify(additional_data) : null);
 
     await request.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount, gold_grams,
         gold_price_per_gram, payment_method, status, gateway_transaction_id,
-        device_info, location, business_id
+        device_info, location, business_id, additional_data
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
         @gold_price_per_gram, @payment_method, @status, @gateway_transaction_id,
-        @device_info, @location, @business_id
+        @device_info, @location, @business_id, @additional_data
       )
     `);
 
-    console.log('✅ Transaction saved:', transaction_id);
+    console.log('✅ Transaction saved successfully to database:', transaction_id);
+    console.log('✅ Database insert completed with additional_data included');
+
     res.json({
       success: true,
       message: 'Transaction saved successfully',
@@ -1187,8 +1232,10 @@ app.post('/api/transactions', [
     });
 
   } catch (error) {
-    console.error('❌ Error saving transaction:', error.message);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('❌ CRITICAL ERROR saving transaction:', error.message);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Failed transaction data:', JSON.stringify(req.body, null, 2));
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
   }
 });
 
@@ -1206,8 +1253,8 @@ app.get('/api/transaction-history', async (req, res) => {
     request.input('phone', sql.NVarChar(15), phone);
 
     const result = await request.query(`
-      SELECT * FROM transactions 
-      WHERE customer_phone = @phone 
+      SELECT * FROM transactions
+      WHERE customer_phone = @phone
       ORDER BY timestamp DESC
     `);
 
@@ -1223,6 +1270,64 @@ app.get('/api/transaction-history', async (req, res) => {
   }
 });
 
+// Get customer portfolio
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    console.log('📊 Portfolio request for phone:', phone);
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    const request = pool.request();
+    request.input('phone', sql.NVarChar(15), phone);
+
+    // Get portfolio summary from transactions
+    const portfolioResult = await request.query(`
+      SELECT
+        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN amount ELSE 0 END) as total_invested,
+        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN gold_grams ELSE 0 END) as total_gold_grams,
+        COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as total_transactions,
+        MAX(timestamp) as last_transaction_date
+      FROM transactions
+      WHERE customer_phone = @phone
+    `);
+
+    const portfolio = portfolioResult.recordset[0] || {
+      total_invested: 0,
+      total_gold_grams: 0,
+      total_transactions: 0,
+      last_transaction_date: null
+    };
+
+    // Calculate current value (assuming current gold price of ₹6000 per gram)
+    const currentGoldPrice = 6000; // This should come from a gold price API
+    const currentValue = (portfolio.total_gold_grams || 0) * currentGoldPrice;
+    const profitLoss = currentValue - (portfolio.total_invested || 0);
+    const profitLossPercentage = portfolio.total_invested > 0 ? (profitLoss / portfolio.total_invested) * 100 : 0;
+
+    console.log('✅ Portfolio retrieved for phone:', phone);
+    res.json({
+      success: true,
+      portfolio: {
+        total_invested: portfolio.total_invested || 0,
+        total_gold_grams: portfolio.total_gold_grams || 0,
+        total_silver_grams: 0, // Not implemented yet
+        current_value: currentValue,
+        profit_loss: profitLoss,
+        profit_loss_percentage: profitLossPercentage,
+        total_transactions: portfolio.total_transactions || 0,
+        last_updated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Portfolio error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get portfolio', error: error.message });
+  }
+});
+
 // Create scheme endpoint
 app.post('/api/schemes', [
   body('customer_phone').isMobilePhone('en-IN').withMessage('Invalid customer phone'),
@@ -1232,7 +1337,9 @@ app.post('/api/schemes', [
   body('terms_accepted').isBoolean().withMessage('Terms acceptance required')
 ], async (req, res) => {
   try {
-    console.log('📊 Scheme creation request:', req.body);
+    console.log('🎯🎯🎯 SCHEME CREATION REQUEST RECEIVED 🎯🎯🎯');
+    console.log('📊 Request Body:', JSON.stringify(req.body, null, 2));
+    console.log('📊 Request Headers:', JSON.stringify(req.headers, null, 2));
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -2107,6 +2214,29 @@ app.post('/api/payments/worldline/token', [
   }
 });
 
+// Worldline Response Handler (Alternative endpoint)
+app.post('/worldline-response', async (req, res) => {
+  console.log('🔄 Worldline response received at /worldline-response');
+  console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+
+  // Forward to the main verify endpoint
+  try {
+    const response = await fetch(`${req.protocol}://${req.get('host')}/api/payments/worldline/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error forwarding to verify endpoint:', error);
+    res.status(500).json({ success: false, message: 'Error processing payment response' });
+  }
+});
+
 // Worldline Payment Verification API - Following Payment_GateWay.md specifications
 app.post('/api/payments/worldline/verify', async (req, res) => {
   const requestStartTime = Date.now();
@@ -2214,18 +2344,41 @@ app.post('/api/payments/worldline/verify', async (req, res) => {
     if (isVerified) {
       console.log(`✅ [${requestId}] STEP 2: Payment verification SUCCESSFUL`);
 
-      // Update transaction status in database
+      // ENHANCED: Update transaction status with complete gateway response data
       const mappedStatus = (status === 'SUCCESS' || status === '0') ? 'SUCCESS' : 'FAILED';
       console.log(`📊 [${requestId}] Status mapping: "${status}" -> "${mappedStatus}"`);
+
+      // Prepare complete gateway response data for audit trail
+      const gatewayResponseData = {
+        timestamp: new Date().toISOString(),
+        verificationMethod: verificationMethod,
+        originalStatus: status,
+        mappedStatus: mappedStatus,
+        gatewayTransactionId: gatewayTxnId,
+        amount: amount,
+        verificationResult: {
+          isVerified: isVerified,
+          method: verificationMethod,
+          requestId: requestId
+        },
+        fullResponse: responsePayload,
+        processingTime: Date.now() - requestStartTime
+      };
+
+      console.log(`📋 [${requestId}] Saving complete gateway response data to additional_data column`);
 
       const request = pool.request();
       request.input('transaction_id', sql.NVarChar(100), txnId);
       request.input('gateway_transaction_id', sql.NVarChar(100), gatewayTxnId || `WL_${txnId}`);
       request.input('status', sql.NVarChar(20), mappedStatus);
+      request.input('additional_data', sql.NVarChar(sql.MAX), JSON.stringify(gatewayResponseData));
 
       await request.query(`
         UPDATE transactions
-        SET status = @status, gateway_transaction_id = @gateway_transaction_id, updated_at = GETDATE()
+        SET status = @status,
+            gateway_transaction_id = @gateway_transaction_id,
+            additional_data = @additional_data,
+            updated_at = GETDATE()
         WHERE transaction_id = @transaction_id
       `);
 
@@ -2250,6 +2403,48 @@ app.post('/api/payments/worldline/verify', async (req, res) => {
       return res.json(response);
     } else {
       console.log(`❌ [${requestId}] Payment verification FAILED`);
+
+      // ENHANCED: Save failed verification data for audit trail
+      const failedVerificationData = {
+        timestamp: new Date().toISOString(),
+        verificationMethod: verificationMethod,
+        originalStatus: status,
+        mappedStatus: 'FAILED',
+        gatewayTransactionId: gatewayTxnId,
+        amount: amount,
+        verificationResult: {
+          isVerified: false,
+          method: verificationMethod,
+          requestId: requestId,
+          failureReason: 'Hash verification failed'
+        },
+        fullResponse: responsePayload,
+        processingTime: Date.now() - requestStartTime
+      };
+
+      console.log(`📋 [${requestId}] Saving failed verification data to database`);
+
+      try {
+        const failedRequest = pool.request();
+        failedRequest.input('transaction_id', sql.NVarChar(100), txnId);
+        failedRequest.input('gateway_transaction_id', sql.NVarChar(100), gatewayTxnId || `WL_FAILED_${txnId}`);
+        failedRequest.input('status', sql.NVarChar(20), 'FAILED');
+        failedRequest.input('additional_data', sql.NVarChar(sql.MAX), JSON.stringify(failedVerificationData));
+
+        await failedRequest.query(`
+          UPDATE transactions
+          SET status = @status,
+              gateway_transaction_id = @gateway_transaction_id,
+              additional_data = @additional_data,
+              updated_at = GETDATE()
+          WHERE transaction_id = @transaction_id
+        `);
+
+        console.log(`✅ [${requestId}] Failed verification data saved to database`);
+      } catch (dbError) {
+        console.log(`❌ [${requestId}] Error saving failed verification data: ${dbError.message}`);
+      }
+
       const response = { verified: false, valid: false, raw: responsePayload };
       return res.json(response);
     }
@@ -2753,9 +2948,11 @@ app.use('*', (req, res) => {
       '/api/customers/:phone/set-mpin',
       '/api/transactions',
       '/api/transaction-history',
+      '/api/portfolio',
       '/api/schemes/:customerId',
       '/api/payments/worldline/token',
       '/api/payments/worldline/verify',
+      '/worldline-response',
       '/worldline-checkout',
       '/privacy-policy',
       '/terms-of-service',
@@ -2783,9 +2980,9 @@ async function startServer() {
     process.exit(1);
   }
 
-  // Check for SSL certificates
-  const sslKeyPath = process.env.SSL_KEY_PATH || './ssl/private.key';
-  const sslCertPath = process.env.SSL_CERT_PATH || './ssl/certificate.crt';
+  // Check for SSL certificates - VMurugan Jewellery domain (Updated to use local ssl directory)
+  const sslKeyPath = SSL_KEY_PATH;
+  const sslCertPath = SSL_CERT_PATH;
 
   let httpsOptions = {};
 
@@ -2835,20 +3032,21 @@ async function startServer() {
       } else {
         console.error('❌ SSL certificates invalid format!');
         console.error('🔧 To fix this:');
-        console.error('1. Run: node create_proper_ssl_nodejs.js');
-        console.error('2. Copy new ssl/ folder to server location');
+        console.error('1. Run the SSL setup script: .\\setup-vmurugan-ssl.ps1');
+        console.error('2. Ensure certificates are generated at: C:\\Certbot\\live\\api.vmuruganjewellery.co.in\\');
         console.error('3. Restart server');
         process.exit(1);
       }
     } else {
       console.error('❌ SSL certificates not found!');
-      console.error(`   Expected: ${sslKeyPath}`);
-      console.error(`   Expected: ${sslCertPath}`);
+      console.error(`   Expected Key: ${sslKeyPath}`);
+      console.error(`   Expected Cert: ${sslCertPath}`);
       console.error('');
       console.error('🔧 To fix this:');
-      console.error('1. Run: node create_proper_ssl_nodejs.js');
-      console.error('2. Copy ssl/ folder to server location');
-      console.error('3. Restart server');
+      console.error('1. Run the SSL setup script: .\\setup-vmurugan-ssl.ps1');
+      console.error('2. Or run manually: .\\setup-ssl.bat');
+      console.error('3. Ensure domain api.vmuruganjewellery.co.in points to this server');
+      console.error('4. Restart server after SSL certificates are generated');
       process.exit(1);
     }
   } catch (error) {

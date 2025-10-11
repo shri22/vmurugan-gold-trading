@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_border_radius.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/responsive.dart' hide AppSpacing, AppBorderRadius;
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
@@ -44,6 +45,10 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   String? _selectedSchemeId;
   List<dynamic> _availableSchemes = []; // Simplified for now
   bool _isLoading = false;
+
+  // Payment error tracking
+  String? _lastPaymentError;
+  Map<String, dynamic>? _detailedErrorInfo;
 
   @override
   void initState() {
@@ -88,80 +93,313 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final silverQuantity = _currentPrice != null
+        ? _selectedAmount / _currentPrice!.pricePerGram
+        : 0.0;
+
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Buy Silver'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildPriceCard(),
-                    const SizedBox(height: 24),
-                    _buildAmountInput(),
-                    const SizedBox(height: 24),
-                    _buildSchemeSelection(),
-                    const SizedBox(height: 32),
-                    _buildBuyButton(),
-                  ],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Info dialog functionality will be restored in future updates'),
+                  duration: Duration(seconds: 2),
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: Responsive.getPadding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Current Silver Price Card
+            _buildSilverPriceCard(),
+
+            const SizedBox(height: AppSpacing.xl),
+
+            // Amount Selection Section
+            _buildAmountSelectionSection(),
+
+            const SizedBox(height: AppSpacing.xl),
+
+            // Silver Quantity Preview
+            _buildSilverQuantityPreview(silverQuantity),
+
+            const SizedBox(height: AppSpacing.xl),
+
+            // Investment Summary
+            _buildInvestmentSummary(silverQuantity),
+
+            const SizedBox(height: AppSpacing.xxl),
+
+            // Buy Button
+            _buildBuyButton(),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildPriceCard() {
+  Widget _buildSilverPriceCard() {
     if (_currentPrice == null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Center(
-          child: Text('Loading silver price...'),
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(AppSpacing.lg),
+          child: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.grey[300]!, Colors.grey[400]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Current Silver Price',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '₹${_currentPrice!.pricePerGram.toStringAsFixed(2)}/gram',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          if (_currentPrice!.lastUpdated != null) ...[
-            const SizedBox(height: 4),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Current Silver Price',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _currentPrice!.isPositive
+                          ? AppColors.success.withValues(alpha: 0.1)
+                          : _currentPrice!.isNegative
+                              ? AppColors.error.withValues(alpha: 0.1)
+                              : AppColors.grey.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _currentPrice!.isPositive
+                              ? Icons.trending_up
+                              : _currentPrice!.isNegative
+                                  ? Icons.trending_down
+                                  : Icons.trending_flat,
+                          size: 16,
+                          color: _currentPrice!.isPositive
+                              ? AppColors.success
+                              : _currentPrice!.isNegative
+                                  ? AppColors.error
+                                  : AppColors.grey,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Flexible(
+                          child: Text(
+                            _currentPrice!.formattedChange,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: _currentPrice!.isPositive
+                                  ? AppColors.success
+                                  : _currentPrice!.isNegative
+                                      ? AppColors.error
+                                      : AppColors.grey,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
             Text(
-              'Last updated: ${_formatDateTime(_currentPrice!.lastUpdated!)}',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              'Silver Rate',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.silver,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _currentPrice!.formattedPrice,
+              style: AppTypography.titleLarge.copyWith(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'per gram',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.silver,
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAmountSelectionSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Enter Investment Amount',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // Custom Amount Input
+        CustomTextField(
+          label: 'Investment Amount',
+          hint: 'Enter amount in ₹',
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          prefixIcon: Icons.currency_rupee,
+          onChanged: (value) {
+            final amount = double.tryParse(value) ?? 0.0;
+            setState(() {
+              _selectedAmount = amount;
+            });
+          },
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(7), // Max 10 lakh
+          ],
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter an amount';
+            }
+            final amount = double.tryParse(value);
+            if (amount == null) {
+              return 'Please enter a valid amount';
+            }
+
+            // Use dynamic validation based on sandbox mode
+            return ValidationConfig.validatePaymentAmount(amount);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSilverQuantityPreview(double silverQuantity) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        gradient: AppColors.silverGradient,
+        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.silver.withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.diamond,
+            size: 48,
+            color: AppColors.primaryGreen,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'You will get',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.primaryGreen,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '${silverQuantity.toStringAsFixed(4)} grams',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+              color: AppColors.primaryGreen,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'of Digital Silver',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.primaryGreen,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvestmentSummary(double silverQuantity) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Investment Summary',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _buildSummaryRow('Investment Amount', '₹${_selectedAmount.toStringAsFixed(2)}'),
+            _buildSummaryRow('Silver Price', _currentPrice?.formattedPrice ?? '₹0.00'),
+            _buildSummaryRow('Silver Quantity', '${silverQuantity.toStringAsFixed(4)} grams'),
+            const Divider(height: AppSpacing.lg),
+            _buildSummaryRow(
+              'Total Payable',
+              '₹${_selectedAmount.toStringAsFixed(2)}',
+              isTotal: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: isTotal ? AppColors.textPrimary : AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: isTotal ? AppColors.silver : AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );
@@ -277,14 +515,15 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             ),
             child: Row(
               children: [
-                Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
+                Icon(Icons.warning, color: Colors.orange.shade600, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Silver purchases are temporarily unavailable. Please try again later.',
+                    'Purchases unavailable - Silver service not connected',
                     style: TextStyle(
                       color: Colors.orange.shade700,
-                      fontSize: 14,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -292,16 +531,165 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             ),
           ),
         ],
+
+        // Payment Error Display Section
+        if (_lastPaymentError != null) ...[
+          const SizedBox(height: 16),
+          _buildPaymentErrorDisplay(),
+          const SizedBox(height: 16),
+        ],
+
         GradientButton(
           text: canPurchase ? 'Proceed to Payment' : 'Service Unavailable',
           onPressed: (isValidAmount && canPurchase) ? _handleBuySilver : null,
-          gradient: canPurchase ? AppColors.goldGreenGradient : LinearGradient(
+          gradient: canPurchase ? AppColors.silverGreenGradient : LinearGradient(
             colors: [Colors.grey.shade400, Colors.grey.shade500],
           ),
           icon: canPurchase ? Icons.payment : Icons.warning,
           isFullWidth: true,
         ),
       ],
+    );
+  }
+
+  /// Build detailed payment error display widget
+  Widget _buildPaymentErrorDisplay() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border.all(color: Colors.red.shade300, width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Error Header
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red.shade700, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Payment Failed - Detailed Error Information',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              ),
+              // Clear Error Button
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _lastPaymentError = null;
+                    _detailedErrorInfo = null;
+                  });
+                },
+                icon: Icon(Icons.close, color: Colors.red.shade700),
+                tooltip: 'Clear Error',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Basic Error Message
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _lastPaymentError ?? 'Unknown error',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.red.shade800,
+              ),
+            ),
+          ),
+
+          // Detailed Error Information
+          if (_detailedErrorInfo != null) ...[
+            const SizedBox(height: 12),
+
+            // Technical Details Section
+            ExpansionTile(
+              title: Text(
+                'Technical Details (for debugging)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red.shade700,
+                ),
+              ),
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildErrorDetailRow('Timestamp', _detailedErrorInfo!['timestamp']),
+                      _buildErrorDetailRow('Session ID', _detailedErrorInfo!['sessionId']),
+                      _buildErrorDetailRow('Payment Method', _detailedErrorInfo!['paymentMethod']),
+
+                      if (_detailedErrorInfo!['statusCode'] != null)
+                        _buildErrorDetailRow('Status Code', _detailedErrorInfo!['statusCode']),
+
+                      if (_detailedErrorInfo!['statusMessage'] != null)
+                        _buildErrorDetailRow('Status Message', _detailedErrorInfo!['statusMessage']),
+
+                      if (_detailedErrorInfo!['errorCode'] != null)
+                        _buildErrorDetailRow('Error Code', _detailedErrorInfo!['errorCode']),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorDetailRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value?.toString() ?? 'N/A',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -377,6 +765,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       context: context,
       builder: (context) => PaymentOptionsDialog(
         amount: _selectedAmount,
+        description: 'Silver Purchase - ${silverGrams.toStringAsFixed(4)}g',
         metalGrams: silverGrams,
         metalType: 'silver',
         onPaymentComplete: _handlePaymentComplete,
@@ -388,6 +777,15 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
   void _handlePaymentComplete(PaymentResponse response) {
     if (response.status == PaymentStatus.success) {
+      // Clear any previous error information
+      setState(() {
+        _lastPaymentError = null;
+        _detailedErrorInfo = null;
+      });
+
+      // Save transaction to database only after successful payment
+      _saveSuccessfulTransaction(response);
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -400,14 +798,51 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       // Navigate back to portfolio or show success screen
       Navigator.pop(context);
     } else {
-      // Show error message
+      // Capture detailed error information for display
+      setState(() {
+        _lastPaymentError = response.errorMessage;
+        _detailedErrorInfo = response.additionalData;
+      });
+
+      // Show brief error message in snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Payment failed: ${response.message}'),
+          content: Text('Payment failed - see details below'),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _saveSuccessfulTransaction(PaymentResponse response) async {
+    try {
+      if (_currentPrice == null) {
+        print('❌ Cannot save transaction: Silver price not available');
+        return;
+      }
+
+      final silverGrams = _selectedAmount / _currentPrice!.pricePerGram;
+
+      // Save transaction with customer data
+      final success = await CustomerService.saveTransactionWithCustomerData(
+        transactionId: response.transactionId,
+        type: 'BUY',
+        amount: response.amount,
+        goldGrams: silverGrams, // Using goldGrams field for silver grams (backward compatibility)
+        goldPricePerGram: _currentPrice!.pricePerGram,
+        paymentMethod: response.paymentMethod,
+        status: 'SUCCESS',
+        gatewayTransactionId: response.gatewayTransactionId ?? '',
+      );
+
+      if (success) {
+        print('✅ Silver transaction saved successfully: ${response.transactionId}');
+      } else {
+        print('❌ Failed to save silver transaction: ${response.transactionId}');
+      }
+    } catch (e) {
+      print('❌ Error saving silver transaction: $e');
     }
   }
 

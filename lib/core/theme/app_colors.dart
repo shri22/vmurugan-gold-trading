@@ -23,6 +23,11 @@ class AppColors {
   static const Color darkGreen = Color(0xFF0D4E14); // Very Dark Green
   static const Color forestGreen = Color(0xFF228B22); // Forest Green
   static const Color emeraldGreen = Color(0xFF50C878); // Emerald Green
+
+  // Silver Colors
+  static const Color silver = Color(0xFFC0C0C0); // Silver
+  static const Color lightSilver = Color(0xFFE5E5E5); // Light Silver
+  static const Color darkSilver = Color(0xFF808080); // Dark Silver
   
   // Neutral Colors
   static const Color white = Color(0xFFFFFFFF);
@@ -75,6 +80,26 @@ class AppColors {
     end: Alignment.bottomRight,
     colors: [
       Color(0xFFFFD700),
+      Color(0xFF2E7D32),
+      Color(0xFF1B5E20),
+    ],
+  );
+
+  static const LinearGradient silverGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFC0C0C0),
+      Color(0xFFA8A8A8),
+      Color(0xFF808080),
+    ],
+  );
+
+  static const LinearGradient silverGreenGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFFC0C0C0),
       Color(0xFF2E7D32),
       Color(0xFF1B5E20),
     ],

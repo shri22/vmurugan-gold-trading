@@ -49,7 +49,6 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
-
 		<!-- Worldline UPI Intent Support for iOS -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
@@ -58,7 +57,6 @@
 			<string>paytm</string>
 			<string>credpe</string>
 		</array>
-
 		<!-- Background modes for Worldline -->
 		<key>UIBackgroundModes</key>
 		<array>

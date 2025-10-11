@@ -52,7 +52,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
     try {
       // Check if phone number is registered by trying to get customer info
       final response = await SecureHttpClient.get(
-        Uri.parse('https://${SqlServerConfig.serverIP}:3001/api/customers/$phone'),
+        'https://${SqlServerConfig.serverIP}:3001/api/customers/$phone',
         headers: {'Content-Type': 'application/json'},
       );
 

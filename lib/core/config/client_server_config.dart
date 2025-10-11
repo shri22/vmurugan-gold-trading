@@ -33,13 +33,13 @@ class ClientServerConfig {
   static const String verifyOtpEndpoint = '$baseUrl/auth/verify-otp';
 
   // Transaction Management APIs (your Node.js endpoints)
-  static const String transactionCreateEndpoint = '$baseUrl/transactions';
-  static const String transactionUpdateEndpoint = '$baseUrl/transaction-status';
-  static const String transactionHistoryEndpoint = '$baseUrl/transaction-history';
+  static const String transactionCreateEndpoint = '$baseUrl/api/transactions';
+  static const String transactionUpdateEndpoint = '$baseUrl/api/transaction-status';
+  static const String transactionHistoryEndpoint = '$baseUrl/api/transaction-history';
 
   // Portfolio Management APIs (your Node.js endpoints)
-  static const String portfolioGetEndpoint = '$baseUrl/portfolio';
-  static const String portfolioUpdateEndpoint = '$baseUrl/portfolio-update';
+  static const String portfolioGetEndpoint = '$baseUrl/api/portfolio';
+  static const String portfolioUpdateEndpoint = '$baseUrl/api/portfolio-update';
 
   // Scheme Management APIs (your Node.js endpoints) - NEW
   static const String schemeCreateEndpoint = '$baseUrl/schemes';

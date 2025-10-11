@@ -173,8 +173,6 @@ enum NotificationType {
   promotional,
   systemUpdate,
   maintenance,
-  
-  // Admin messages
   adminMessage,
   announcement,
 }

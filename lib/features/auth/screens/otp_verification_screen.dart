@@ -322,6 +322,18 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           await prefs.setString('user_phone', widget.phoneNumber);
           await prefs.setString('user_data', jsonEncode(data['customer']));
 
+          // CRITICAL FIX: Save customer data in the format CustomerService expects
+          final customerData = data['customer'] ?? {};
+          await prefs.setString('customer_phone', widget.phoneNumber);
+          await prefs.setString('customer_name', customerData['name'] ?? 'Customer');
+          await prefs.setString('customer_email', customerData['email'] ?? '');
+          await prefs.setString('customer_address', customerData['address'] ?? '');
+          await prefs.setString('customer_pan_card', customerData['pan_card'] ?? '');
+          await prefs.setString('customer_id', customerData['id']?.toString() ?? '');
+          await prefs.setBool('customer_registered', true);
+
+          print('✅ OTP Verification: Customer data saved in CustomerService format');
+
           // Also save to CustomerService for backward compatibility
           await CustomerService.saveLoginSession(widget.phoneNumber);
 

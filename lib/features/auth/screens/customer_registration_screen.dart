@@ -129,13 +129,26 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           await prefs.setBool('is_logged_in', true);
           await prefs.setString('user_phone', phone);
 
+          // CRITICAL FIX: Save customer data in the format CustomerService expects
+          await prefs.setString('customer_phone', phone);
+          await prefs.setString('customer_name', _nameController.text.trim());
+          await prefs.setString('customer_email', _emailController.text.trim());
+          await prefs.setString('customer_address', _addressController.text.trim());
+          await prefs.setString('customer_pan_card', _panController.text.trim().toUpperCase());
+
+          // Save customer data if available from server response
+          if (result['customer'] != null) {
+            await prefs.setString('user_data', jsonEncode(result['customer']));
+            final customerData = result['customer'];
+            await prefs.setString('customer_id', customerData['id']?.toString() ?? '');
+          }
+
           // IMPORTANT: Mark customer as registered
           await prefs.setBool('customer_registered', true);
 
-          // Save customer data if available
-          if (result['customer'] != null) {
-            await prefs.setString('user_data', jsonEncode(result['customer']));
-          }
+          print('✅ Registration: Customer data saved in CustomerService format');
+          print('  📞 customer_phone: $phone');
+          print('  👤 customer_name: ${_nameController.text.trim()}');
 
           // Also save to CustomerService for backward compatibility
           await CustomerService.saveLoginSession(phone);

@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
-import 'core/utils/responsive.dart';
+import 'core/theme/app_spacing.dart';
+import 'core/theme/app_border_radius.dart';
+import 'core/utils/responsive.dart' as responsive;
+import 'core/services/secure_http_client.dart';
 import 'features/auth/screens/phone_entry_screen.dart';
 import 'features/portfolio/screens/portfolio_screen.dart';
 
 import 'features/schemes/screens/filtered_scheme_selection_screen.dart';
+import 'features/schemes/screens/scheme_details_screen.dart';
 import 'features/schemes/models/enhanced_scheme_model.dart';
 import 'core/theme/app_typography.dart';
 import 'features/gold/services/gold_price_service.dart';
 import 'features/gold/models/gold_price_model.dart';
 import 'features/silver/services/silver_price_service.dart';
 import 'features/silver/models/silver_price_model.dart';
-import 'features/silver/screens/buy_silver_screen.dart';
+
 import 'core/widgets/vmurugan_logo.dart';
 import 'features/profile/screens/profile_screen.dart';
 import 'features/notifications/screens/notifications_screen.dart';
@@ -25,6 +29,7 @@ import 'core/services/notification_service.dart';
 import 'core/services/scheme_management_service.dart';
 import 'core/services/customer_service.dart';
 import 'features/payment/services/worldline_payment_service.dart';
+import 'features/notifications/models/notification_model.dart';
 
 // Global navigator key for auto-logout navigation
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -32,6 +37,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize secure HTTP client for SSL certificate handling
+  SecureHttpClient.initialize();
 
   // Initialize Firebase for free SMS OTP functionality
   await FirebaseInit.initialize();
@@ -453,7 +461,7 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: Responsive.getPadding(context),
+        padding: responsive.Responsive.getPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -703,7 +711,7 @@ class _HomePageState extends State<HomePage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => FilteredSchemeSelectionScreen(
+                                builder: (context) => SchemeDetailsScreen(
                                   customerPhone: '+91 9876543210', // Default for demo
                                   customerName: 'Demo Customer', // Default for demo
                                   metalType: MetalType.gold, // Show only Gold schemes
@@ -819,7 +827,7 @@ class _HomePageState extends State<HomePage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => FilteredSchemeSelectionScreen(
+                                builder: (context) => SchemeDetailsScreen(
                                   customerPhone: '+91 9876543210', // Default for demo
                                   customerName: 'Demo Customer', // Default for demo
                                   metalType: MetalType.silver, // Show only Silver schemes
@@ -852,6 +860,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+
 
 
           ],
@@ -926,7 +935,7 @@ class _HomePageState extends State<HomePage> {
             Text('🕒 Hours: 9 AM - 6 PM (Mon-Sat)'),
             SizedBox(height: 16),
             Text('💡 Quick Help:'),
-            Text('• Buy Gold: Tap "Buy Gold" button'),
+            Text('• Buy Gold/Silver: Tap "View Schemes" → Select scheme → "Join Now"'),
             Text('• View Portfolio: Use bottom navigation'),
             Text('• Transaction History: Check History tab'),
             Text('• Profile: Tap profile icon or tab'),
@@ -1010,8 +1019,8 @@ class _HomePageState extends State<HomePage> {
   void _createTestNotification() async {
     // Create a test notification to demonstrate the system
     await NotificationTemplates.adminMessage(
-      'Welcome to VMurugan Gold Trading! 🎉',
-      'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
+      title: 'Welcome to VMurugan Gold Trading! 🎉',
+      message: 'Thank you for choosing us for your gold investment journey. Start investing with as little as ₹100!',
       priority: NotificationPriority.normal,
     );
 

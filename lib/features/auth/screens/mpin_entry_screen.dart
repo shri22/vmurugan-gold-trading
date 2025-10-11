@@ -81,7 +81,7 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
 
       // Use client's server API for login with secure HTTP client
       final response = await SecureHttpClient.post(
-        Uri.parse('${ClientServerConfig.userLoginEndpoint}'),
+        '${ClientServerConfig.userLoginEndpoint}',
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'phone': widget.phoneNumber,

@@ -1,7 +1,7 @@
 name: digi_gold
 description: "VMurugan - Digital Gold Trading Platform"
 publish_to: 'none'
-version: 1.1.9+11
+version: 1.2.0+12
 
 environment:
   sdk: ^3.8.1
@@ -11,18 +11,18 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.4.0
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
+  firebase_core: ^4.1.1
+  firebase_auth: ^6.1.0
   url_launcher: ^6.2.2
   webview_flutter: ^4.4.2
   shared_preferences: ^2.5.3
   google_fonts: ^6.1.0
   sqflite: ^2.4.2
   path: ^1.9.1
-  flutter_launcher_icons: ^0.14.4
   pdf: ^3.11.1
   path_provider: ^2.1.4
   weipl_checkout_flutter: ^1.2.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
@@ -41,24 +41,15 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/vm_launcher_centered.png"
-  adaptive_icon_background: "#DC143C"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/vm_launcher_centered.png"
   min_sdk_android: 21
   remove_alpha_ios: true
-  android_adaptive_icon_background: "#DC143C"
-  android_adaptive_icon_foreground: "assets/vm_launcher_centered.png"
-  web:
-    generate: true
-    image_path: "assets/vm_launcher_centered.png"
-    background_color: "#DC143C"
 
 # Flutter Native Splash Configuration
 flutter_native_splash:
-  color: "#DC143C"                      # Background color
-  image: "assets/vm_launcher_centered.png" # Circular splash image with transparency
+  color: "#DC143C"                      # Background color (red)
   android: true
   ios: true
   web: false
-  android_gravity: center                # Center image on Android
-  ios_content_mode: scaleAspectFit       # Keep image proportion on iOS
   fullscreen: true                       # Fullscreen splash

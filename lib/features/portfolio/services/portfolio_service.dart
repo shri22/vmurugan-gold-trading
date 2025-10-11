@@ -6,6 +6,7 @@ import '../../schemes/models/scheme_installment_model.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../core/config/client_server_config.dart';
+import '../../../core/services/secure_http_client.dart';
 
 class PortfolioService {
   final DatabaseService _db = DatabaseService();
@@ -290,52 +291,89 @@ class PortfolioService {
   // Get transaction history - SERVER VERSION
   Future<List<Transaction>> getTransactionHistory({int? limit}) async {
     try {
+      print('');
+      print('📊📊📊 PORTFOLIO SERVICE: FETCHING TRANSACTION HISTORY 📊📊📊');
+      print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
+
       final userId = await _getCurrentUserId();
+      print('👤 User ID: $userId');
       if (userId == null) {
+        print('❌ User not logged in');
         throw Exception('User not logged in');
       }
 
-      print('📊 PortfolioService: Fetching transaction history from server');
-
       final userPhone = await _getUserPhone();
+      print('📞 User Phone: $userPhone');
       if (userPhone == null) {
+        print('❌ User phone not found');
         throw Exception('User phone not found');
       }
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/transaction-history?phone=$userPhone&limit=${limit ?? 50}'),
+      final url = '$baseUrl/transaction-history?phone=$userPhone&limit=${limit ?? 50}';
+      print('🌐 Request URL: $url');
+      print('📤 Request Headers: {"Content-Type": "application/json"}');
+      print('🔄 Making HTTP GET request...');
+
+      final response = await SecureHttpClient.get(
+        url,
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
+      print('📥 HTTP Response Status: ${response.statusCode}');
+      print('📥 HTTP Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('📊 Parsed Response Data: $data');
 
         if (data['success'] == true) {
           final transactions = data['transactions'] as List;
-          print('✅ PortfolioService: Transaction history fetched successfully');
+          print('✅✅✅ TRANSACTION HISTORY FETCHED SUCCESSFULLY! ✅✅✅');
+          print('📊 Number of transactions found: ${transactions.length}');
 
-          return transactions.map((txnData) => Transaction.fromMap({
-            'id': txnData['id'],
-            'transaction_id': txnData['transaction_id'],
-            'type': txnData['transaction_type'] ?? 'BUY',
-            'amount': txnData['amount'],
-            'metal_grams': (txnData['gold_grams'] ?? 0.0) + (txnData['silver_grams'] ?? 0.0),
-            'metal_price_per_gram': txnData['gold_price_per_gram'] ?? txnData['silver_price_per_gram'] ?? 0.0,
-            'metal_type': txnData['metal_type'] ?? 'GOLD',
-            'payment_method': txnData['payment_method'] ?? 'NET_BANKING',
-            'status': txnData['status'],
-            'gateway_transaction_id': txnData['gateway_transaction_id'],
-            'created_at': txnData['timestamp'],
-            'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
-          })).toList();
+          if (transactions.isEmpty) {
+            print('⚠️ No transactions found for user: $userPhone');
+            return [];
+          }
+
+          print('📋 Processing transactions...');
+          final processedTransactions = transactions.map((txnData) {
+            print('  🔄 Processing transaction: ${txnData['transaction_id']}');
+            return Transaction.fromMap({
+              'id': txnData['id'],
+              'transaction_id': txnData['transaction_id'],
+              'type': txnData['transaction_type'] ?? 'BUY',
+              'amount': txnData['amount'],
+              'metal_grams': (txnData['gold_grams'] ?? 0.0) + (txnData['silver_grams'] ?? 0.0),
+              'metal_price_per_gram': txnData['gold_price_per_gram'] ?? txnData['silver_price_per_gram'] ?? 0.0,
+              'metal_type': txnData['metal_type'] ?? 'GOLD',
+              'payment_method': txnData['payment_method'] ?? 'NET_BANKING',
+              'status': txnData['status'],
+              'gateway_transaction_id': txnData['gateway_transaction_id'],
+              'created_at': txnData['timestamp'],
+              'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
+            });
+          }).toList();
+
+          print('✅ Successfully processed ${processedTransactions.length} transactions');
+          return processedTransactions;
         } else {
+          print('❌ Server returned success=false: ${data['message']}');
           throw Exception(data['message'] ?? 'Failed to fetch transaction history');
         }
       } else {
+        print('❌ HTTP Error: ${response.statusCode}');
+        print('❌ Response Body: ${response.body}');
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ PortfolioService: Error getting transaction history: $e');
+      print('');
+      print('❌❌❌ PORTFOLIO SERVICE: ERROR GETTING TRANSACTION HISTORY ❌❌❌');
+      print('❌ Error: $e');
+      print('❌ Error Type: ${e.runtimeType}');
+      print('❌ Stack Trace: ${StackTrace.current}');
+      print('❌ Returning empty list');
+      print('');
       return [];
     }
   }

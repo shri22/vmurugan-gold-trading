@@ -65,7 +65,7 @@ class AuthService {
 
       // Use SQL Server endpoint instead of Firebase for better performance
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/customers/$phone'),
+        '$baseUrl/customers/$phone',
         headers: headers,
       ).timeout(const Duration(seconds: 5)); // Reduced timeout for faster response
 
@@ -475,7 +475,7 @@ class AuthService {
 
       // Send to new server API using secure HTTP client
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/customers'),
+        '$baseUrl/customers',
         headers: headers,
         body: jsonEncode(customerData),
       ).timeout(const Duration(seconds: 30));
@@ -492,11 +492,29 @@ class AuthService {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setInt('current_user_id', userData['id']);
 
+          // CRITICAL FIX: Save customer data to SharedPreferences for transaction saving
+          await prefs.setString('customer_phone', phone);
+          await prefs.setString('customer_name', name);
+          await prefs.setString('customer_email', email);
+          await prefs.setString('customer_address', address);
+          await prefs.setString('customer_pan_card', panCard);
+          await prefs.setString('customer_id', userData['id'].toString());
+          await prefs.setBool('customer_registered', true);
+
           print('✅ AuthService: Registration successful for: $phone');
+          print('✅ AuthService: Customer data saved to SharedPreferences');
           return {
             'success': true,
             'message': 'Registration successful',
             'user': userData,
+            'customer': {
+              'phone': phone,
+              'name': name,
+              'email': email,
+              'address': address,
+              'pan_card': panCard,
+              'customer_id': userData['id'].toString(),
+            },
           };
         } else {
           return data;
@@ -536,7 +554,7 @@ class AuthService {
 
       // Send to new server API using secure HTTP client
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/login'),
+        '$baseUrl/login',
         headers: headers,
         body: jsonEncode(loginData),
       ).timeout(const Duration(seconds: 15)); // Reduced timeout for faster response
@@ -553,7 +571,17 @@ class AuthService {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setInt('current_user_id', userData['id']);
 
+          // CRITICAL FIX: Save customer data to SharedPreferences for transaction saving
+          await prefs.setString('customer_phone', phone);
+          await prefs.setString('customer_name', userData['name'] ?? 'Unknown');
+          await prefs.setString('customer_email', userData['email'] ?? '');
+          await prefs.setString('customer_address', userData['address'] ?? '');
+          await prefs.setString('customer_pan_card', userData['pan_card'] ?? '');
+          await prefs.setString('customer_id', userData['id'].toString());
+          await prefs.setBool('customer_registered', true);
+
           print('✅ AuthService: Login successful for: $phone');
+          print('✅ AuthService: Customer data saved to SharedPreferences');
           return {
             'success': true,
             'message': 'Login successful',
@@ -612,7 +640,7 @@ class AuthService {
   static Future<bool> isServerReachable() async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('${ClientServerConfig.healthCheckEndpoint}'),
+        '${ClientServerConfig.healthCheckEndpoint}',
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 5));
 
@@ -659,7 +687,7 @@ class AuthService {
       final url = '${ClientServerConfig.baseUrl}$endpoint';
       final requestBody = body ?? data;
       final response = await SecureHttpClient.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: requestBody != null ? jsonEncode(requestBody) : null,
       );

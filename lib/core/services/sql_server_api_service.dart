@@ -52,10 +52,22 @@ class SqlServerApiService {
     String? gatewayTransactionId,
     String? deviceInfo,
     String? location,
+    Map<String, dynamic>? additionalData,
   }) async {
-    print('SqlServerApiService: Saving transaction to SQL Server database');
-    
-    return await SqlServerService.saveTransaction(
+    print('');
+    print('🔄🔄🔄 SqlServerApiService.saveTransaction CALLED 🔄🔄🔄');
+    print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
+    print('📊 Transaction Data:');
+    print('  🆔 Transaction ID: "$transactionId"');
+    print('  📞 Customer Phone: "$customerPhone"');
+    print('  📊 Status: "$status"');
+    print('  💰 Amount: ₹$amount');
+    print('  💳 Payment Method: "$paymentMethod"');
+    print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
+    print('  📋 Additional Data Present: ${additionalData != null}');
+    print('🔄 Calling SqlServerService.saveTransaction...');
+
+    final result = await SqlServerService.saveTransaction(
       transactionId: transactionId,
       customerPhone: customerPhone,
       customerName: customerName,
@@ -68,7 +80,13 @@ class SqlServerApiService {
       gatewayTransactionId: gatewayTransactionId,
       deviceInfo: deviceInfo,
       location: location,
+      additionalData: additionalData,
     );
+
+    print('📥 SqlServerService.saveTransaction returned: $result');
+    print('');
+
+    return result;
   }
 
   // =============================================================================

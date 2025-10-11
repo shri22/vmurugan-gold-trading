@@ -194,9 +194,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onPressed: _loadDashboardData,
                       ),
                       const SizedBox(width: 16),
-                      const CircleAvatar(
+                      CircleAvatar(
                         backgroundColor: AppColors.primaryGold,
-                        child: Icon(Icons.person, color: Colors.white),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/VM-LOGO1.png',
+                            width: 32,
+                            height: 32,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.person, color: Colors.white);
+                            },
+                          ),
+                        ),
                       ),
                     ],
                   ),

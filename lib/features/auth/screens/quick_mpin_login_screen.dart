@@ -79,7 +79,7 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
         print('🌐 Connecting to: ${ClientServerConfig.userLoginEndpoint}');
 
         final response = await SecureHttpClient.post(
-          Uri.parse('${ClientServerConfig.userLoginEndpoint}'),
+          '${ClientServerConfig.userLoginEndpoint}',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
@@ -106,8 +106,22 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             await prefs.setString('user_phone', _savedPhone!);
             await prefs.setString('user_data', jsonEncode(data['customer']));
 
+            // CRITICAL FIX: Save customer data in the format CustomerService expects
+            final customerData = data['customer'] ?? {};
+            await prefs.setString('customer_phone', _savedPhone!);
+            await prefs.setString('customer_name', customerData['name'] ?? 'Customer');
+            await prefs.setString('customer_email', customerData['email'] ?? '');
+            await prefs.setString('customer_address', customerData['address'] ?? '');
+            await prefs.setString('customer_pan_card', customerData['pan_card'] ?? '');
+            await prefs.setString('customer_id', customerData['id']?.toString() ?? '');
+
             // IMPORTANT: Mark customer as registered
             await prefs.setBool('customer_registered', true);
+
+            print('✅ Customer data saved in CustomerService format:');
+            print('  📞 customer_phone: ${_savedPhone}');
+            print('  👤 customer_name: ${customerData['name']}');
+            print('  📧 customer_email: ${customerData['email']}');
 
             // Also save to CustomerService for backward compatibility
             await CustomerService.saveLoginSession(_savedPhone!);

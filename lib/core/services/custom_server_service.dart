@@ -8,7 +8,7 @@ class CustomServerService {
   static Future<Map<String, dynamic>> saveTransaction(Map<String, dynamic> transaction) async {
     try {
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/api/transaction/create'),
+        '$baseUrl/api/transaction/create',
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(transaction),
       );
@@ -26,7 +26,7 @@ class CustomServerService {
   static Future<Map<String, dynamic>> saveCustomer(Map<String, dynamic> customer) async {
     try {
       final response = await SecureHttpClient.post(
-        Uri.parse('$baseUrl/api/user/register'),
+        '$baseUrl/api/user/register',
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(customer),
       );
@@ -44,7 +44,7 @@ class CustomServerService {
   static Future<void> logAnalytics({required String event, Map<String, dynamic>? data}) async {
     try {
       await SecureHttpClient.post(
-        Uri.parse('$baseUrl/api/analytics'),
+        '$baseUrl/api/analytics',
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'event': event, 'data': data}),
       );
@@ -56,7 +56,7 @@ class CustomServerService {
   static Future<Map<String, dynamic>> getDashboardData({required String adminToken}) async {
     try {
       final response = await SecureHttpClient.get(
-        Uri.parse('$baseUrl/api/admin/dashboard'),
+        '$baseUrl/api/admin/dashboard',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $adminToken',

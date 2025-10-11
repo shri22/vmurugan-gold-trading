@@ -191,17 +191,63 @@ class CustomerService {
     required String paymentMethod,
     required String status,
     required String gatewayTransactionId,
+    Map<String, dynamic>? additionalData,
   }) async {
+    print('');
+    print('🔄🔄🔄 CustomerService.saveTransactionWithCustomerData CALLED 🔄🔄🔄');
+    print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
+    print('📊 Input Parameters:');
+    print('  🆔 Transaction ID: "$transactionId"');
+    print('  📊 Status: "$status"');
+    print('  💰 Amount: ₹$amount');
+    print('  🥇 Gold Grams: $goldGrams');
+    print('  💳 Payment Method: "$paymentMethod"');
+    print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
+    print('  📋 Additional Data Present: ${additionalData != null}');
+
     try {
+      print('🔄 Getting customer info...');
       final customerInfo = await getCustomerInfo();
+      print('👤 Customer Info: $customerInfo');
+
+      // ENHANCED DEBUGGING: Check SharedPreferences directly
+      final prefs = await SharedPreferences.getInstance();
+      print('🔍 DEBUGGING SharedPreferences:');
+      print('  📞 customer_phone: ${prefs.getString('customer_phone')}');
+      print('  👤 customer_name: ${prefs.getString('customer_name')}');
+      print('  📧 customer_email: ${prefs.getString('customer_email')}');
+      print('  🆔 customer_id: ${prefs.getString('customer_id')}');
+      print('  ✅ customer_registered: ${prefs.getBool('customer_registered')}');
+
+      print('🔄 Getting device info...');
       final deviceInfo = await getDeviceInfo();
+      print('📱 Device Info: $deviceInfo');
+
+      print('🔄 Getting location...');
       final location = await getLocation();
+      print('📍 Location: $location');
 
       // Ensure customer is registered
-      if (customerInfo['phone'] == null) {
-        print('Customer not registered - cannot save transaction');
+      if (customerInfo['phone'] == null || customerInfo['phone']!.isEmpty) {
+        print('❌❌❌ CUSTOMER NOT REGISTERED - CANNOT SAVE TRANSACTION ❌❌❌');
+        print('❌ Customer phone is null or empty: "${customerInfo['phone']}"');
+        print('❌ Please ensure user is properly logged in and registered');
         return false;
       }
+
+      // Additional validation
+      if (customerInfo['name'] == null || customerInfo['name']!.isEmpty) {
+        print('⚠️ WARNING: Customer name is null or empty, using fallback');
+        customerInfo['name'] = 'VMurugan Customer';
+      }
+
+      print('✅ Customer registered with phone: ${customerInfo['phone']}');
+
+      print('🔄 Calling ApiService.saveTransaction...');
+      print('📤 Data being sent to ApiService:');
+      print('  📞 Customer Phone: ${customerInfo['phone']}');
+      print('  👤 Customer Name: ${customerInfo['name'] ?? 'Unknown'}');
+      print('  📋 Additional Data: ${additionalData != null ? 'Present' : 'Not provided'}');
 
       final result = await ApiService.saveTransaction(
         transactionId: transactionId,
@@ -216,10 +262,13 @@ class CustomerService {
         gatewayTransactionId: gatewayTransactionId,
         deviceInfo: deviceInfo.toString(),
         location: location?.toString() ?? 'Location not available',
+        additionalData: additionalData,
       );
 
+      print('📥 ApiService.saveTransaction returned: $result');
+
       if (result['success']) {
-        print('Transaction saved to server successfully');
+        print('✅✅✅ TRANSACTION SAVED TO SERVER SUCCESSFULLY! ✅✅✅');
         
         // Log analytics
         await ApiService.logAnalytics(

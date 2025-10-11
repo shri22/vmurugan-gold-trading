@@ -42,8 +42,21 @@ class ApiService {
     required String gatewayTransactionId,
     required String deviceInfo,
     required String location,
+    Map<String, dynamic>? additionalData,
   }) async {
-    print('ApiService: Routing to $mode for transaction save');
+    print('');
+    print('🔄🔄🔄 ApiService.saveTransaction CALLED 🔄🔄🔄');
+    print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
+    print('🎯 Storage Mode: $storageMode');
+    print('📊 Transaction Data:');
+    print('  🆔 Transaction ID: "$transactionId"');
+    print('  📞 Customer Phone: "$customerPhone"');
+    print('  📊 Status: "$status"');
+    print('  💰 Amount: ₹$amount');
+    print('  💳 Payment Method: "$paymentMethod"');
+    print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
+    print('  📋 Additional Data Present: ${additionalData != null}');
+    print('🔄 Routing to $storageMode for transaction save...');
 
     switch (storageMode) {
       case 'firebase':
@@ -105,6 +118,7 @@ class ApiService {
           gatewayTransactionId: gatewayTransactionId,
           deviceInfo: deviceInfo,
           location: location,
+          additionalData: additionalData,
         );
       default:
         return {

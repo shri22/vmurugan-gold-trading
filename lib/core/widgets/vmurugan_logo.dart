@@ -23,7 +23,7 @@ class VMuruganLogo extends StatelessWidget {
       height: size,
       padding: EdgeInsets.all(size * 0.05), // Add 5% padding to prevent cropping
       child: Image.asset(
-        'assets/vm_logo.png',
+        'assets/VM-LOGO1.png',
         width: size * 0.9, // Slightly smaller to ensure no cropping
         height: size * 0.9,
         fit: BoxFit.contain,
@@ -240,7 +240,7 @@ class VMuruganAppBarLogo extends StatelessWidget {
           width: logoSize,
           height: logoSize,
           child: Image.asset(
-            'assets/vm_logo.png',
+            'assets/VM-LOGO1.png',
             width: logoSize,
             height: logoSize,
             fit: BoxFit.contain,

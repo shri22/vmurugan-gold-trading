@@ -234,12 +234,15 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             const SizedBox(height: AppSpacing.xs),
             Text(
               _currentPrice!.formattedPrice,
-              style: AppTypography.amountDisplay,
+              style: AppTypography.titleLarge.copyWith(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'per gram',
-              style: AppTypography.rateInfo.copyWith(
+              style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.primaryGreen, // Ensure dark green for visibility
               ),
             ),
@@ -532,6 +535,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       context: context,
       builder: (context) => PaymentOptionsDialog(
         amount: _selectedAmount,
+        description: 'Gold Purchase - ${goldGrams.toStringAsFixed(4)}g',
         metalGrams: goldGrams,
         metalType: 'gold',
         onPaymentComplete: _handlePaymentComplete,
@@ -547,6 +551,9 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         _detailedErrorInfo = null;
       });
 
+      // Save transaction to database only after successful payment
+      _saveSuccessfulTransaction(response);
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -561,7 +568,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     } else {
       // Capture detailed error information for display
       setState(() {
-        _lastPaymentError = response.message;
+        _lastPaymentError = response.errorMessage;
         _detailedErrorInfo = response.additionalData;
       });
 
@@ -573,6 +580,37 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _saveSuccessfulTransaction(PaymentResponse response) async {
+    try {
+      if (_currentPrice == null) {
+        print('❌ Cannot save transaction: Gold price not available');
+        return;
+      }
+
+      final goldGrams = _selectedAmount / _currentPrice!.pricePerGram;
+
+      // Save transaction with customer data
+      final success = await CustomerService.saveTransactionWithCustomerData(
+        transactionId: response.transactionId,
+        type: 'BUY',
+        amount: response.amount,
+        goldGrams: goldGrams,
+        goldPricePerGram: _currentPrice!.pricePerGram,
+        paymentMethod: response.paymentMethod,
+        status: 'SUCCESS',
+        gatewayTransactionId: response.gatewayTransactionId ?? '',
+      );
+
+      if (success) {
+        print('✅ Transaction saved successfully: ${response.transactionId}');
+      } else {
+        print('❌ Failed to save transaction: ${response.transactionId}');
+      }
+    } catch (e) {
+      print('❌ Error saving transaction: $e');
     }
   }
 

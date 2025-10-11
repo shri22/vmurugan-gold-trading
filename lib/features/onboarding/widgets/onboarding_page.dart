@@ -77,7 +77,7 @@ class OnboardingPage extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(20),
         child: Image.asset(
-          'assets/vm_logo.png',
+          'assets/VM-LOGO1.png',
           width: Responsive.getWidth(context) * 0.5,
           height: Responsive.getHeight(context) * 0.25,
           fit: BoxFit.contain,
