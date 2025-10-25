@@ -1,4 +1,5 @@
 import '../models/scheme_installment_model.dart';
+import '../../../core/enums/metal_type.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/api_service.dart';
 

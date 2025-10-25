@@ -4,6 +4,7 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_spacing.dart';
 import 'core/theme/app_border_radius.dart';
 import 'core/utils/responsive.dart' as responsive;
+import 'core/enums/metal_type.dart';
 import 'core/services/secure_http_client.dart';
 import 'features/auth/screens/phone_entry_screen.dart';
 import 'features/portfolio/screens/portfolio_screen.dart';
@@ -486,10 +487,20 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          'Welcome to VMurugan',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          'Welcome to VMurugan Jewellery',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             color: AppColors.white,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 22,
+                            letterSpacing: 0.8,
+                            fontFamily: 'serif',
+                            shadows: [
+                              Shadow(
+                                offset: const Offset(1, 1),
+                                blurRadius: 3,
+                                color: Colors.black.withOpacity(0.4),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -543,9 +554,9 @@ class _HomePageState extends State<HomePage> {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              goldPrice != null ? '₹${goldPrice.toStringAsFixed(0)}' : '₹9160',
+                              goldPrice != null ? '₹${goldPrice.toStringAsFixed(0)}' : '--',
                               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: AppColors.primaryGold,
+                                color: goldPrice != null ? AppColors.primaryGold : Colors.grey,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -575,7 +586,7 @@ class _HomePageState extends State<HomePage> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.circle, color: Colors.grey, size: 12),
+                              const Icon(Icons.circle, color: Color(0xFF4A5D23), size: 12), // Dark green-silver mix
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
@@ -593,9 +604,9 @@ class _HomePageState extends State<HomePage> {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '₹86',
+                              _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '--',
                               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: Colors.grey[700],
+                                color: _currentSilverPrice != null ? Colors.grey[700] : Colors.grey,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -752,11 +763,7 @@ class _HomePageState extends State<HomePage> {
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.grey[700]!, Colors.grey[500]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppColors.silverGreenGradient,
                 borderRadius: BorderRadius.circular(AppBorderRadius.lg),
               ),
               child: Column(
@@ -837,19 +844,48 @@ class _HomePageState extends State<HomePage> {
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.sm,
+                              horizontal: AppSpacing.lg,
+                              vertical: AppSpacing.md,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                              gradient: const LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  Color(0xFFC0C0C0), // Bright silver
+                                  Color(0xFF757575), // Silver-grey
+                                  Color(0xFF4A5D23), // Dark green-silver mix
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                                BoxShadow(
+                                  color: const Color(0xFF4A5D23).withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Text(
                               'View Schemes',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                letterSpacing: 0.5,
+                                shadows: [
+                                  Shadow(
+                                    offset: Offset(1, 1),
+                                    blurRadius: 2,
+                                    color: Colors.black45,
+                                  ),
+                                ],
                               ),
                             ),
                           ),

@@ -40,32 +40,47 @@ class MjdtaPriceService {
   /// Parse gold price from MJDTA HTML content
   GoldPriceModel? _parseGoldPriceFromHtml(String htmlContent) {
     try {
-      // Look for the gold price pattern in the HTML
-      // The website shows: "1 Gm Gold 22Kt" followed by the price
-      
-      // Pattern 1: Look for "9285.00" or similar price patterns
-      final pricePattern = RegExp(r'(\d{4,5}\.?\d{0,2})\s*\(\)');
-      final matches = pricePattern.allMatches(htmlContent);
-      
+      print('MjdtaPriceService: Parsing gold price from HTML...');
+
       double? gold22KPrice;
-      double? silverPrice;
-      
-      // Extract prices from the matches
-      for (final match in matches) {
+
+      // Method 1: Look for JavaScript setting goldrate_22ct
+      final jsGoldPattern = RegExp(r"goldrate_22ct.*?html.*?(\d{4,5}\.?\d{0,2})");
+      final jsMatches = jsGoldPattern.allMatches(htmlContent);
+
+      for (final match in jsMatches) {
         final priceStr = match.group(1);
         if (priceStr != null) {
           final price = double.tryParse(priceStr);
-          if (price != null) {
-            // First significant price is likely gold 22K
-            if (gold22KPrice == null && price > 5000 && price < 15000) {
-              gold22KPrice = price;
-            }
-            // Silver price is typically much lower (updated range for current market)
-            else if (silverPrice == null && price > 80 && price < 200) {
-              silverPrice = price;
-              print('MjdtaPriceService: Found silver price in gold parsing: ₹$price');
+          if (price != null && price >= 3000.0 && price <= 20000.0) {
+            gold22KPrice = price;
+            print('MjdtaPriceService: ✅ Found gold price via JavaScript: ₹$price per gram');
+            break;
+          }
+        }
+      }
+
+      // Method 2: Look for span with id="goldrate_22ct" or class="gold_rate"
+      if (gold22KPrice == null) {
+        final spanPatterns = [
+          RegExp(r'<span[^>]*id="goldrate_22ct"[^>]*>(\d{4,5}\.?\d{0,2})</span>'),
+          RegExp(r'<span[^>]*class="gold_rate"[^>]*>(\d{4,5}\.?\d{0,2})</span>'),
+        ];
+
+        for (final pattern in spanPatterns) {
+          final matches = pattern.allMatches(htmlContent);
+          for (final match in matches) {
+            final priceStr = match.group(1);
+            if (priceStr != null) {
+              final price = double.tryParse(priceStr);
+              if (price != null && price >= 3000.0 && price <= 20000.0) {
+                gold22KPrice = price;
+                print('MjdtaPriceService: ✅ Found gold price via span: ₹$price per gram');
+                break;
+              }
             }
           }
+          if (gold22KPrice != null) break;
         }
       }
 
@@ -96,9 +111,8 @@ class MjdtaPriceService {
       }
 
       if (gold22KPrice == null) {
-        print('MjdtaPriceService: Could not extract gold price from HTML, using fallback price');
-        gold22KPrice = 6500.0; // Current approximate 22K gold price per gram in India
-        print('MjdtaPriceService: Using fallback gold price: ₹$gold22KPrice per gram');
+        print('MjdtaPriceService: ❌ Could not extract gold price from HTML - no fallback used');
+        return null; // Return null instead of fallback price
       }
 
       // Use 22K gold price directly (as displayed on MJDTA website)
@@ -185,72 +199,99 @@ class MjdtaPriceService {
     }
   }
 
-  /// Parse silver price from MJDTA HTML content - EXACT EXTRACTION
+  /// Parse silver price from MJDTA HTML content - IMPROVED EXTRACTION
   Future<SilverPriceModel?> _parseSilverPriceFromHtml(String htmlContent) async {
     try {
       double? silverPrice;
 
-      print('MjdtaPriceService: Extracting EXACT silver price from HTML...');
+      print('MjdtaPriceService: Extracting silver price from HTML...');
+      print('MjdtaPriceService: HTML content length: ${htmlContent.length}');
 
-      // EXACT METHOD: Look for the specific pattern "126.00" that we found in investigation
-      // This is the exact silver price format from MJDTA
+      // Method 1: Look for span with class="silver_rate" (the visible price)
+      final silverSpanPattern = RegExp(r'<span[^>]*class="silver_rate"[^>]*>(\d{2,3}\.?\d{0,2})</span>');
+      final spanMatches = silverSpanPattern.allMatches(htmlContent);
 
-      // Method 1: Look for exact decimal format XXX.XX (like 126.00)
-      final exactDecimalPattern = RegExp(r'\b(1[0-5][0-9]\.00)\b');
-      final exactMatches = exactDecimalPattern.allMatches(htmlContent);
-
-      for (final match in exactMatches) {
+      for (final match in spanMatches) {
         final priceStr = match.group(1);
         if (priceStr != null) {
           final price = double.tryParse(priceStr);
-          if (price != null && price >= 100.0 && price <= 160.0) {
+          if (price != null && price >= 50.0 && price <= 500.0) {
             silverPrice = price;
-            print('MjdtaPriceService: ✅ Found EXACT silver price: "$priceStr" -> ₹$price per gram');
-            break; // Take the first exact match
+            print('MjdtaPriceService: ✅ Found silver price via span: ₹$price per gram');
+            break;
           }
         }
       }
 
-      // Method 2: If exact format not found, look for other decimal patterns
+      // Method 2: Look for "1 Gm Silver" table row structure
       if (silverPrice == null) {
-        final decimalPattern = RegExp(r'\b(1[0-5][0-9]\.\d{1,2})\b');
-        final decimalMatches = decimalPattern.allMatches(htmlContent);
+        final silverTablePattern = RegExp(r'1\s*Gm\s*Silver.*?(\d{2,3}\.?\d{0,2})', caseSensitive: false, dotAll: true);
+        final tableMatches = silverTablePattern.allMatches(htmlContent);
 
-        for (final match in decimalMatches) {
+        for (final match in tableMatches) {
           final priceStr = match.group(1);
           if (priceStr != null) {
             final price = double.tryParse(priceStr);
-            if (price != null && price >= 100.0 && price <= 160.0) {
+            if (price != null && price >= 50.0 && price <= 500.0) {
               silverPrice = price;
-              print('MjdtaPriceService: ✅ Found silver price with decimals: "$priceStr" -> ₹$price per gram');
+              print('MjdtaPriceService: ✅ Found silver price via table: ₹$price per gram');
               break;
             }
           }
         }
       }
 
-      // Method 3: Look for whole numbers in silver range as fallback
+      // Method 3: Fallback - look for any numbers in reasonable silver price range
       if (silverPrice == null) {
-        final wholePattern = RegExp(r'\b(1[0-5][0-9])\b');
-        final wholeMatches = wholePattern.allMatches(htmlContent);
+        print('MjdtaPriceService: Using fallback method for silver price...');
+        final fallbackPattern = RegExp(r'\b(\d{2,3}\.?\d{0,2})\b');
+        final matches = fallbackPattern.allMatches(htmlContent);
 
-        for (final match in wholeMatches) {
+        // Look for numbers in silver price range, prioritizing those near "silver" text
+        final candidates = <double>[];
+        for (final match in matches) {
           final priceStr = match.group(1);
           if (priceStr != null) {
             final price = double.tryParse(priceStr);
-            if (price != null && price >= 100.0 && price <= 160.0) {
-              silverPrice = price;
-              print('MjdtaPriceService: ✅ Found silver price (whole): "$priceStr" -> ₹$price per gram');
-              break;
+            if (price != null && price >= 50.0 && price <= 500.0) {
+              candidates.add(price);
             }
+          }
+        }
+
+        // If we found candidates, use the most reasonable one (around 100-300 range)
+        if (candidates.isNotEmpty) {
+          candidates.sort();
+          // Prefer prices in the 100-300 range (typical silver prices)
+          final preferredCandidates = candidates.where((p) => p >= 100.0 && p <= 300.0).toList();
+          if (preferredCandidates.isNotEmpty) {
+            silverPrice = preferredCandidates.first;
+            print('MjdtaPriceService: ✅ Found silver price (fallback preferred): ₹$silverPrice per gram');
+          } else {
+            silverPrice = candidates.first;
+            print('MjdtaPriceService: ✅ Found silver price (fallback): ₹$silverPrice per gram');
           }
         }
       }
 
-      // If still no price found, return null to force proper error handling
+      // If still no price found, log detailed debug info and return null
       if (silverPrice == null) {
         print('MjdtaPriceService: ❌ Could not extract silver price from HTML using any pattern');
-        print('MjdtaPriceService: HTML snippet: ${htmlContent.length > 500 ? htmlContent.substring(0, 500) : htmlContent}...');
+        print('MjdtaPriceService: HTML content length: ${htmlContent.length}');
+
+        // Log all numbers found in the HTML for debugging
+        final allNumbers = RegExp(r'\b\d{1,5}\.?\d{0,2}\b').allMatches(htmlContent);
+        final numbersList = allNumbers.map((m) => m.group(0)).take(20).toList();
+        print('MjdtaPriceService: First 20 numbers found in HTML: $numbersList');
+
+        // Log a snippet of the HTML for manual inspection
+        if (htmlContent.length > 1000) {
+          print('MjdtaPriceService: HTML snippet (first 500 chars): ${htmlContent.substring(0, 500)}');
+          print('MjdtaPriceService: HTML snippet (middle 500 chars): ${htmlContent.substring(htmlContent.length ~/ 2 - 250, htmlContent.length ~/ 2 + 250)}');
+        } else {
+          print('MjdtaPriceService: Full HTML content: $htmlContent');
+        }
+
         return null;
       }
 
@@ -287,6 +328,68 @@ class MjdtaPriceService {
 
 
 
+
+  /// Test both gold and silver price fetching with detailed logging
+  Future<Map<String, dynamic>> testPriceFetching() async {
+    print('MjdtaPriceService: 🧪 Starting comprehensive price fetch test...');
+
+    final results = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'gold_result': null,
+      'silver_result': null,
+      'connection_status': 'unknown',
+      'html_received': false,
+      'html_length': 0,
+    };
+
+    try {
+      // Test connection first
+      final response = await http.get(
+        Uri.parse(_baseUrl),
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      ).timeout(_timeout);
+
+      results['connection_status'] = 'success';
+      results['http_status'] = response.statusCode;
+      results['html_received'] = response.statusCode == 200;
+      results['html_length'] = response.body.length;
+
+      if (response.statusCode == 200) {
+        print('MjdtaPriceService: 🧪 Connection successful, HTML length: ${response.body.length}');
+
+        // Test gold price extraction
+        final goldPrice = _parseGoldPriceFromHtml(response.body);
+        results['gold_result'] = goldPrice != null ? {
+          'success': true,
+          'price': goldPrice.pricePerGram,
+          'formatted': goldPrice.formattedPrice,
+        } : {'success': false, 'error': 'Failed to parse gold price'};
+
+        // Test silver price extraction
+        final silverPrice = await _parseSilverPriceFromHtml(response.body);
+        results['silver_result'] = silverPrice != null ? {
+          'success': true,
+          'price': silverPrice.pricePerGram,
+          'formatted': silverPrice.formattedPrice,
+        } : {'success': false, 'error': 'Failed to parse silver price'};
+
+      } else {
+        results['connection_status'] = 'http_error';
+        print('MjdtaPriceService: 🧪 HTTP Error: ${response.statusCode}');
+      }
+
+    } catch (e) {
+      results['connection_status'] = 'error';
+      results['error'] = e.toString();
+      print('MjdtaPriceService: 🧪 Connection failed: $e');
+    }
+
+    print('MjdtaPriceService: 🧪 Test completed: $results');
+    return results;
+  }
 
   /// Get additional information about MJDTA rates
   Map<String, dynamic> getMjdtaInfo() {

@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_service.dart';
+import '../../../core/enums/metal_type.dart';
 import '../models/portfolio_model.dart';
 import '../../gold/models/gold_price_model.dart';
 import '../../schemes/models/scheme_installment_model.dart';

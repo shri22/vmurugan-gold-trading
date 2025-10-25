@@ -99,9 +99,9 @@ class AppColors {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      Color(0xFFC0C0C0),
-      Color(0xFF2E7D32),
-      Color(0xFF1B5E20),
+      Color(0xFF757575), // Silver-grey (start)
+      Color(0xFF4A5D23), // Dark green-silver mix (middle)
+      Color(0xFF2E7D32), // Dark green (end)
     ],
   );
 }

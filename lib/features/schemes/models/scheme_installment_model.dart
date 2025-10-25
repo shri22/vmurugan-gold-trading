@@ -1,5 +1,6 @@
+import '../../../core/enums/metal_type.dart';
+
 enum InstallmentStatus { pending, paid, failed, cancelled }
-enum MetalType { gold, silver }
 
 class SchemeInstallmentModel {
   final String installmentId;

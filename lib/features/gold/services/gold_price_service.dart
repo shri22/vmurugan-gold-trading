@@ -55,30 +55,47 @@ class GoldPriceService {
 
   // Load initial price from MJDTA only
   Future<void> _loadInitialPrice() async {
-    try {
-      print('GoldPriceService: Loading initial price from MJDTA...');
+    int retryCount = 0;
+    const maxRetries = 3;
 
-      final mjdtaPrice = await _mjdtaService.fetchGoldPrice();
-      if (mjdtaPrice != null) {
-        print('GoldPriceService: Successfully loaded price from MJDTA: ${mjdtaPrice.formattedPrice}');
-        _currentPrice = mjdtaPrice;
-        _isMjdtaAvailable = true;
-        _lastMjdtaCheck = DateTime.now();
-        _priceController.add(_currentPrice);
-      } else {
-        print('GoldPriceService: MJDTA unavailable - no price data available');
-        _currentPrice = null;
-        _isMjdtaAvailable = false;
-        _lastMjdtaCheck = DateTime.now();
-        _priceController.add(null);
+    while (retryCount < maxRetries) {
+      try {
+        print('GoldPriceService: Loading initial price from MJDTA (attempt ${retryCount + 1}/$maxRetries)...');
+
+        final mjdtaPrice = await _mjdtaService.fetchGoldPrice();
+        if (mjdtaPrice != null) {
+          print('GoldPriceService: Successfully loaded price from MJDTA: ${mjdtaPrice.formattedPrice}');
+
+          // Validate price is reasonable
+          if (mjdtaPrice.pricePerGram >= 3000.0 && mjdtaPrice.pricePerGram <= 15000.0) {
+            _currentPrice = mjdtaPrice;
+            _isMjdtaAvailable = true;
+            _lastMjdtaCheck = DateTime.now();
+            _priceController.add(_currentPrice);
+            return; // Success, exit retry loop
+          } else {
+            print('GoldPriceService: ⚠️ Price validation failed: ${mjdtaPrice.pricePerGram} is outside reasonable range');
+          }
+        } else {
+          print('GoldPriceService: ❌ MJDTA returned null price (attempt ${retryCount + 1})');
+        }
+      } catch (e) {
+        print('GoldPriceService: Error loading initial price (attempt ${retryCount + 1}): $e');
       }
-    } catch (e) {
-      print('GoldPriceService: Error loading initial price: $e');
-      _currentPrice = null;
-      _isMjdtaAvailable = false;
-      _lastMjdtaCheck = DateTime.now();
-      _priceController.add(null);
+
+      retryCount++;
+      if (retryCount < maxRetries) {
+        print('GoldPriceService: Retrying in 2 seconds...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
+
+    // All retries failed
+    print('GoldPriceService: ❌ All retry attempts failed - no price data available');
+    _currentPrice = null;
+    _isMjdtaAvailable = false;
+    _lastMjdtaCheck = DateTime.now();
+    _priceController.add(null);
   }
 
 

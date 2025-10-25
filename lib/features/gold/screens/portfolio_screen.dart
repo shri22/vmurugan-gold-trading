@@ -207,10 +207,34 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Widget _buildGoldPriceCard() {
     if (_currentPrice == null) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: Center(child: CircularProgressIndicator()),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 32,
+                color: Colors.orange,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Price Unavailable',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Gold price data is currently unavailable.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

@@ -1728,6 +1728,84 @@ app.get('/api/schemes/details/:scheme_id', async (req, res) => {
   }
 });
 
+// Check monthly payment for scheme
+app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
+  try {
+    const { scheme_id } = req.params;
+    const { month, year } = req.query;
+
+    console.log('📊 Checking monthly payment for scheme:', scheme_id, 'Month:', month, 'Year:', year);
+
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        message: 'Month and year parameters required'
+      });
+    }
+
+    // Get scheme details first
+    const schemeRequest = pool.request();
+    schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+
+    const schemeResult = await schemeRequest.query(`
+      SELECT customer_phone, scheme_type FROM schemes
+      WHERE scheme_id = @scheme_id
+    `);
+
+    if (schemeResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Scheme not found' });
+    }
+
+    const customerPhone = schemeResult.recordset[0].customer_phone;
+    const schemeType = schemeResult.recordset[0].scheme_type;
+
+    // For FLEXI schemes, always return false (no monthly restrictions)
+    if (schemeType === 'GOLDFLEXI' || schemeType === 'SILVERFLEXI') {
+      return res.json({
+        success: true,
+        has_payment: false,
+        message: 'No monthly restrictions for flexible schemes'
+      });
+    }
+
+    // Check for successful payments in the specified month
+    const paymentRequest = pool.request();
+    paymentRequest.input('customer_phone', sql.NVarChar(15), customerPhone);
+    paymentRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    paymentRequest.input('month', sql.Int, parseInt(month));
+    paymentRequest.input('year', sql.Int, parseInt(year));
+
+    const paymentResult = await paymentRequest.query(`
+      SELECT COUNT(*) as payment_count
+      FROM transactions
+      WHERE customer_phone = @customer_phone
+        AND payment_method = 'SCHEME_INVESTMENT'
+        AND status = 'SUCCESS'
+        AND MONTH(timestamp) = @month
+        AND YEAR(timestamp) = @year
+        AND (additional_data LIKE '%"scheme_id":"' + @scheme_id + '"%'
+             OR description LIKE '%' + @scheme_id + '%')
+    `);
+
+    const hasPayment = paymentResult.recordset[0].payment_count > 0;
+
+    res.json({
+      success: true,
+      has_payment: hasPayment,
+      payment_count: paymentResult.recordset[0].payment_count,
+      message: hasPayment ? 'Payment found for this month' : 'No payment found for this month'
+    });
+
+  } catch (error) {
+    console.error('❌ Monthly payment check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check monthly payment',
+      error: error.message
+    });
+  }
+});
+
 // =============================================================================
 // HEALTH CHECK ENDPOINT FOR DEBUGGING
 // =============================================================================

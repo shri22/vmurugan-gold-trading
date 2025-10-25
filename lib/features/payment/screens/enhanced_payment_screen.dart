@@ -324,29 +324,42 @@ ${latestLogs.join('\n')}
 
         case PaymentStatus.failed:
           title = '❌ Payment Failed';
-          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} could not be processed.\n\n';
 
-          if (response.errorMessage != null && response.errorMessage!.isNotEmpty) {
-            message += 'Reason: ${response.errorMessage}\n\n';
+          // Use user-friendly error message
+          final userFriendlyMessage = response.getUserFriendlyErrorMessage();
+          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} could not be processed.\n\n';
+          message += '$userFriendlyMessage\n\n';
+
+          // Add technical details if available
+          if (response.gatewayErrorCode != null && response.gatewayErrorCode!.isNotEmpty) {
+            message += 'Error Code: ${response.gatewayErrorCode}\n';
           }
 
-          message += 'Please try again or contact support if the issue persists.';
-
           if (response.transactionId.isNotEmpty) {
-            message += '\n\nReference ID: ${response.transactionId}';
+            message += '\nReference ID: ${response.transactionId}';
           }
 
           icon = Icons.error;
           iconColor = Colors.red;
           backgroundColor = Colors.red.shade50;
 
-          // Show error snackbar
-          _showSnackBar('Payment Failed: ${response.errorMessage ?? "Please try again"}', isError: true);
+          // Show error snackbar with user-friendly message
+          _showSnackBar('Payment Failed: $userFriendlyMessage', isError: true);
           break;
 
         case PaymentStatus.pending:
           title = '⏳ Payment Pending';
-          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} is being processed.\n\nWe will notify you once the payment is confirmed.\n\nTransaction ID: ${response.transactionId}';
+
+          // Use user-friendly message for pending status
+          final userFriendlyMessage = response.getUserFriendlyErrorMessage();
+          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} is being processed.\n\n';
+          message += '$userFriendlyMessage\n\n';
+          message += 'We will notify you once the payment is confirmed.';
+
+          if (response.transactionId.isNotEmpty) {
+            message += '\n\nTransaction ID: ${response.transactionId}';
+          }
+
           icon = Icons.hourglass_empty;
           iconColor = Colors.orange;
           backgroundColor = Colors.orange.shade50;
@@ -582,6 +595,9 @@ ${latestLogs.join('\n')}
               timestamp: DateTime.now(),
               gatewayTransactionId: bankRefId,
               errorMessage: null,
+              gatewayErrorCode: statusCode,
+              gatewayErrorMessage: statusMessage,
+              failureReason: null, // Success case
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -591,6 +607,7 @@ ${latestLogs.join('\n')}
                 'statusMessage': statusMessage,
                 'statusCode': statusCode,
                 'fullResponse': response,
+                'detailedErrorInfo': detailedErrorInfo,
               },
             );
             _statusMessage = 'Payment completed successfully!';
@@ -606,6 +623,9 @@ ${latestLogs.join('\n')}
               timestamp: DateTime.now(),
               gatewayTransactionId: bankRefId,
               errorMessage: null,
+              gatewayErrorCode: statusCode,
+              gatewayErrorMessage: statusMessage,
+              failureReason: 'Payment is being processed. Please wait.',
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -613,6 +633,9 @@ ${latestLogs.join('\n')}
                 'worldlineTransactionId': transactionId,
                 'bankReferenceId': bankRefId,
                 'statusMessage': statusMessage,
+                'statusCode': statusCode,
+                'fullResponse': response,
+                'detailedErrorInfo': detailedErrorInfo,
               },
             );
             _statusMessage = 'Payment initiated - awaiting confirmation';
@@ -625,6 +648,9 @@ ${latestLogs.join('\n')}
             _logToFile('❌ Bank Reference ID: "$bankRefId"');
             _logToFile('❌ This status code is NOT recognized as successful');
             // Failed or other status (0399, 0396, 0392)
+            final failureReason = detailedErrorInfo['failureReason']?.toString() ??
+                                 _generateUserFriendlyFailureReason(statusCode, statusMessage);
+
             paymentResponse = PaymentResponse(
               status: PaymentStatus.failed,
               transactionId: transactionId,
@@ -634,6 +660,9 @@ ${latestLogs.join('\n')}
               timestamp: DateTime.now(),
               gatewayTransactionId: bankRefId,
               errorMessage: statusMessage.isNotEmpty ? statusMessage : 'Payment failed',
+              gatewayErrorCode: statusCode,
+              gatewayErrorMessage: statusMessage,
+              failureReason: failureReason,
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -660,6 +689,8 @@ ${latestLogs.join('\n')}
           print('🔍 Error Code: $errorCode');
           print('🔍 Error Description: $errorDesc');
 
+          final failureReason = _generateUserFriendlyFailureReason(errorCode, errorDesc);
+
           paymentResponse = PaymentResponse(
             status: PaymentStatus.failed,
             transactionId: '',
@@ -668,6 +699,9 @@ ${latestLogs.join('\n')}
             paymentMethod: 'Worldline',
             timestamp: DateTime.now(),
             errorMessage: errorDesc,
+            gatewayErrorCode: errorCode,
+            gatewayErrorMessage: errorDesc,
+            failureReason: failureReason,
             additionalData: {
               'amount': widget.amount,
               'timestamp': DateTime.now().toIso8601String(),
@@ -1661,6 +1695,16 @@ ${latestLogs.join('\n')}
       errorInfo['bankRefId'] = paymentTransaction['bankReferenceIdentifier']?.toString() ?? 'N/A';
       errorInfo['amount'] = paymentTransaction['amount']?.toString() ?? 'N/A';
       errorInfo['errorType'] = 'Payment Transaction Error';
+
+      // Extract gateway-specific error information for PaymentResponse
+      errorInfo['gatewayErrorCode'] = paymentTransaction['statusCode']?.toString();
+      errorInfo['gatewayErrorMessage'] = paymentTransaction['statusMessage']?.toString();
+
+      // Generate user-friendly failure reason
+      errorInfo['failureReason'] = _generateUserFriendlyFailureReason(
+        paymentTransaction['statusCode']?.toString() ?? '',
+        paymentTransaction['statusMessage']?.toString() ?? ''
+      );
     }
 
     // Extract error details if present
@@ -1709,6 +1753,59 @@ ${latestLogs.join('\n')}
     errorInfo['fullResponse'] = response;
 
     return errorInfo;
+  }
+
+  /// Generate user-friendly failure reason from gateway response
+  String _generateUserFriendlyFailureReason(String statusCode, String statusMessage) {
+    final code = statusCode.toLowerCase();
+    final message = statusMessage.toLowerCase();
+
+    // Handle specific Worldline status codes
+    if (code == '0300') {
+      return 'Payment completed successfully!';
+    } else if (code == '0398') {
+      return 'Payment was cancelled by user.';
+    } else if (code == '0399') {
+      return 'Payment failed. Please try again.';
+    } else if (code.startsWith('03')) {
+      // Other 03xx codes are generally success variants
+      return 'Payment completed successfully!';
+    }
+
+    // Handle error patterns in status message
+    if (message.contains('insufficient')) {
+      return 'Insufficient funds in your account. Please check your balance and try again.';
+    } else if (message.contains('declined') || message.contains('reject')) {
+      return 'Your card was declined. Please try with a different card or contact your bank.';
+    } else if (message.contains('expired')) {
+      return 'Your card has expired. Please use a valid card.';
+    } else if (message.contains('cvv') || message.contains('cvc')) {
+      return 'Invalid CVV/CVC. Please check your card details and try again.';
+    } else if (message.contains('network') || message.contains('connection')) {
+      return 'Network error occurred. Please check your internet connection and try again.';
+    } else if (message.contains('timeout')) {
+      return 'Payment timed out. Please try again.';
+    } else if (message.contains('auth')) {
+      return 'Authentication failed. Please verify your credentials and try again.';
+    } else if (message.contains('invalid')) {
+      return 'Invalid payment details. Please check your information and try again.';
+    } else if (message.contains('cancel')) {
+      return 'Payment was cancelled. You can try again when ready.';
+    } else if (message.contains('fail')) {
+      return 'Payment failed. Please try again or contact support.';
+    }
+
+    // If we have a status message, use it as is
+    if (statusMessage.isNotEmpty && statusMessage != 'N/A') {
+      return statusMessage;
+    }
+
+    // Default based on status code patterns
+    if (code.startsWith('0')) {
+      return 'Payment failed. Please try again or contact support.';
+    }
+
+    return 'Payment status unknown. Please contact support.';
   }
 
   /// Enhanced error analysis specifically for Worldline Invalid Request scenarios

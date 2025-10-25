@@ -1,5 +1,5 @@
 class ValidationConfig {
-  static const bool isDemoMode = false; // Production mode
+  static const bool isDemoMode = false; // Production mode - Firebase SMS
 
   // Payment sandbox mode configuration (for Worldline testing)
   static const bool isPaymentSandboxMode = true; // Enable ₹1-₹10 payments

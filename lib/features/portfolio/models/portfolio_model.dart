@@ -1,4 +1,5 @@
 import '../../schemes/models/scheme_installment_model.dart';
+import '../../../core/enums/metal_type.dart';
 
 class Portfolio {
   final int id;

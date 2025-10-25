@@ -55,31 +55,48 @@ class SilverPriceService {
 
   // Load initial price from MJDTA only
   Future<void> _loadInitialPrice() async {
-    try {
-      print('🥈 SilverPriceService: Loading initial price from MJDTA...');
+    int retryCount = 0;
+    const maxRetries = 3;
 
-      final silverPrice = await _mjdtaService.fetchSilverPrice();
-      if (silverPrice != null) {
-        print('🥈 SilverPriceService: ✅ Successfully loaded price from MJDTA: ${silverPrice.formattedPrice}');
-        print('🥈 SilverPriceService: Raw price value: ${silverPrice.pricePerGram}');
-        _currentPrice = silverPrice;
-        _isMjdtaAvailable = true;
-        _lastMjdtaCheck = DateTime.now();
-        _priceController.add(_currentPrice);
-      } else {
-        print('🥈 SilverPriceService: ❌ MJDTA unavailable - no price data available');
-        _currentPrice = null;
-        _isMjdtaAvailable = false;
-        _lastMjdtaCheck = DateTime.now();
-        _priceController.add(null);
+    while (retryCount < maxRetries) {
+      try {
+        print('🥈 SilverPriceService: Loading initial price from MJDTA (attempt ${retryCount + 1}/$maxRetries)...');
+
+        final silverPrice = await _mjdtaService.fetchSilverPrice();
+        if (silverPrice != null) {
+          print('🥈 SilverPriceService: ✅ Successfully loaded price from MJDTA: ${silverPrice.formattedPrice}');
+          print('🥈 SilverPriceService: Raw price value: ${silverPrice.pricePerGram}');
+
+          // Validate price is reasonable
+          if (silverPrice.pricePerGram >= 30.0 && silverPrice.pricePerGram <= 300.0) {
+            _currentPrice = silverPrice;
+            _isMjdtaAvailable = true;
+            _lastMjdtaCheck = DateTime.now();
+            _priceController.add(_currentPrice);
+            return; // Success, exit retry loop
+          } else {
+            print('🥈 SilverPriceService: ⚠️ Price validation failed: ${silverPrice.pricePerGram} is outside reasonable range');
+          }
+        } else {
+          print('🥈 SilverPriceService: ❌ MJDTA returned null price (attempt ${retryCount + 1})');
+        }
+      } catch (e) {
+        print('🥈 SilverPriceService: Error loading initial price (attempt ${retryCount + 1}): $e');
       }
-    } catch (e) {
-      print('SilverPriceService: Error loading initial price: $e');
-      _currentPrice = null;
-      _isMjdtaAvailable = false;
-      _lastMjdtaCheck = DateTime.now();
-      _priceController.add(null);
+
+      retryCount++;
+      if (retryCount < maxRetries) {
+        print('🥈 SilverPriceService: Retrying in 2 seconds...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
+
+    // All retries failed
+    print('🥈 SilverPriceService: ❌ All retry attempts failed - no price data available');
+    _currentPrice = null;
+    _isMjdtaAvailable = false;
+    _lastMjdtaCheck = DateTime.now();
+    _priceController.add(null);
   }
 
   // Update price from MJDTA
@@ -150,6 +167,47 @@ class SilverPriceService {
       print('🥈 SilverPriceService: TEST - ❌ Failed to fetch silver price');
     }
     return result;
+  }
+
+  // Comprehensive test method
+  Future<Map<String, dynamic>> runDiagnostics() async {
+    print('🥈 SilverPriceService: 🔍 Running comprehensive diagnostics...');
+
+    final diagnostics = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'service_status': {
+        'is_mjdta_available': _isMjdtaAvailable,
+        'last_mjdta_check': _lastMjdtaCheck?.toIso8601String(),
+        'current_price': _currentPrice?.toJson(),
+        'can_purchase': canPurchase,
+      },
+      'mjdta_test': null,
+      'price_fetch_test': null,
+    };
+
+    try {
+      // Test MJDTA connection and parsing
+      diagnostics['mjdta_test'] = await _mjdtaService.testPriceFetching();
+
+      // Test direct price fetch
+      final testPrice = await testFetchSilverPrice();
+      diagnostics['price_fetch_test'] = testPrice != null ? {
+        'success': true,
+        'price': testPrice.pricePerGram,
+        'formatted': testPrice.formattedPrice,
+        'timestamp': testPrice.timestamp.toIso8601String(),
+      } : {
+        'success': false,
+        'error': 'Failed to fetch price',
+      };
+
+    } catch (e) {
+      diagnostics['error'] = e.toString();
+      print('🥈 SilverPriceService: 🔍 Diagnostics error: $e');
+    }
+
+    print('🥈 SilverPriceService: 🔍 Diagnostics completed');
+    return diagnostics;
   }
 
 

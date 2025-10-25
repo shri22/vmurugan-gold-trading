@@ -71,10 +71,10 @@ android {
         release {
             // Use release signing configuration for Play Store
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
-            // Disable obfuscation for initial Play Store submission
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Enable obfuscation for Play Store submission with mapping file generation
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 

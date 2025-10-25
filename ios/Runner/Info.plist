@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Digi Gold</string>
+		<string>VMurugan Jewellery</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>digi_gold</string>
+		<string>VMurugan Jewellery</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -63,5 +63,17 @@
 			<string>fetch</string>
 			<string>processing</string>
 		</array>
+		<!-- Network permissions for price fetching -->
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsArbitraryLoads</key>
+			<true/>
+		</dict>
+		<!-- Camera permission for future features -->
+		<key>NSCameraUsageDescription</key>
+		<string>This app needs camera access to scan QR codes for payments</string>
+		<!-- Photo library permission for profile pictures -->
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>This app needs photo access to select profile pictures</string>
 	</dict>
 </plist>

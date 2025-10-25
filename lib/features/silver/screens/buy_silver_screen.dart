@@ -23,9 +23,21 @@ import '../../notifications/models/notification_model.dart';
 import '../../payment/models/payment_response.dart';
 import '../../payment/widgets/payment_options_dialog.dart';
 import '../../../core/config/validation_config.dart';
+import '../../schemes/services/scheme_payment_validation_service.dart';
 
 class BuySilverScreen extends StatefulWidget {
-  const BuySilverScreen({super.key});
+  final double? prefilledAmount;
+  final bool? isFromScheme;
+  final String? schemeId;
+  final String? schemeName;
+
+  const BuySilverScreen({
+    super.key,
+    this.prefilledAmount,
+    this.isFromScheme,
+    this.schemeId,
+    this.schemeName,
+  });
 
   @override
   State<BuySilverScreen> createState() => _BuySilverScreenState();
@@ -53,6 +65,13 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Set prefilled amount if coming from scheme
+    if (widget.prefilledAmount != null) {
+      _selectedAmount = widget.prefilledAmount!;
+      _amountController.text = widget.prefilledAmount!.toStringAsFixed(0);
+    }
+
     _initializeScreen();
   }
 
@@ -149,10 +168,49 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
   Widget _buildSilverPriceCard() {
     if (_currentPrice == null) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(AppSpacing.lg),
-          child: Center(child: CircularProgressIndicator()),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.orange,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Price Unavailable',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Silver price data is currently unavailable.\nPlease try again later.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  setState(() {
+                    _currentPrice = null;
+                  });
+                  await _loadSilverPrice();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[700],
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -259,27 +317,65 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Enter Investment Amount',
+          widget.isFromScheme == true ? 'Monthly Investment Amount' : 'Enter Investment Amount',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
 
+        // Show scheme info if coming from scheme
+        if (widget.isFromScheme == true && widget.schemeName != null) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.silver.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.silver.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.star, color: AppColors.silver),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scheme Investment',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.silver,
+                        ),
+                      ),
+                      Text(
+                        widget.schemeName!,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         // Custom Amount Input
         CustomTextField(
-          label: 'Investment Amount',
-          hint: 'Enter amount in ₹',
+          label: widget.isFromScheme == true ? 'Monthly Investment Amount (Fixed)' : 'Investment Amount',
+          hint: widget.isFromScheme == true ? 'Amount set by scheme' : 'Enter amount in ₹',
           controller: _amountController,
           keyboardType: TextInputType.number,
           prefixIcon: Icons.currency_rupee,
-          onChanged: (value) {
+          enabled: widget.isFromScheme != true, // Disable if from scheme
+          onChanged: widget.isFromScheme == true ? null : (value) {
             final amount = double.tryParse(value) ?? 0.0;
             setState(() {
               _selectedAmount = amount;
             });
           },
-          inputFormatters: [
+          inputFormatters: widget.isFromScheme == true ? [] : [
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(7), // Max 10 lakh
           ],
@@ -694,13 +790,35 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
   }
 
   Future<void> _handleBuySilver() async {
-    // First check if silver service is available
-    if (!_priceService.canPurchase) {
+    // First check if silver service is available and price is loaded
+    if (!_priceService.canPurchase || _currentPrice == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Silver purchases are currently unavailable. Please try again later.'),
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Silver purchases are currently unavailable',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _currentPrice == null
+                    ? 'Price data is not available. Please wait for price to load or try refreshing.'
+                    : 'MJDTA price service is unavailable. Please try again later.',
+              ),
+            ],
+          ),
           backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () async {
+              await _loadSilverPrice();
+            },
+          ),
         ),
       );
       return;
@@ -734,6 +852,31 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           const SnackBar(content: Text('Registration required to buy silver')),
         );
         return;
+      }
+    }
+
+    // If this is a scheme payment, validate scheme payment rules
+    if (widget.isFromScheme == true && widget.schemeId != null) {
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '';
+
+      if (customerPhone.isNotEmpty) {
+        final validationResult = await SchemePaymentValidationService.validateSchemePayment(
+          schemeId: widget.schemeId!,
+          customerPhone: customerPhone,
+          amount: _selectedAmount,
+        );
+
+        if (!validationResult.canPay) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(validationResult.message),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
       }
     }
 

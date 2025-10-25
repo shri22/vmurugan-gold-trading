@@ -240,7 +240,7 @@ class VMuruganAppBarLogo extends StatelessWidget {
           width: logoSize,
           height: logoSize,
           child: Image.asset(
-            'assets/VM-LOGO1.png',
+            'assets/vm_launcher_centered.png',
             width: logoSize,
             height: logoSize,
             fit: BoxFit.contain,
@@ -257,9 +257,19 @@ class VMuruganAppBarLogo extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           'VMurugan Jewellery',
-          style: AppTypography.appBarTitle.copyWith(
+          style: TextStyle(
             fontSize: fontSize,
-            color: AppColors.primaryGold, // Always use gold for premium look
+            fontWeight: FontWeight.w700, // Extra bold
+            color: AppColors.primaryGold,
+            letterSpacing: 0.5, // Slight letter spacing for elegance
+            fontFamily: 'serif', // More elegant serif font
+            shadows: [
+              Shadow(
+                offset: const Offset(1, 1),
+                blurRadius: 2,
+                color: Colors.black.withOpacity(0.3),
+              ),
+            ],
           ),
         ),
       ],

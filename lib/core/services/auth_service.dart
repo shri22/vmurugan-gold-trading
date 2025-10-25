@@ -124,7 +124,7 @@ class AuthService {
         // Clear any previous verification data
         FirebasePhoneAuthService.clearVerificationData();
 
-        // Send OTP via Firebase Phone Authentication
+        // OPTION 1: Use Firebase (FREE SMS)
         final firebaseResult = await FirebasePhoneAuthService.sendOTP(phone);
 
         if (firebaseResult['success'] == true) {
@@ -139,6 +139,15 @@ class AuthService {
           // Return a placeholder since Firebase manages the actual OTP
           return 'FIREBASE_OTP';
         }
+
+        // OPTION 2: Alternative SMS service (if Firebase fails)
+        // Uncomment below to use paid SMS service instead:
+        /*
+        final alternativeResult = await AlternativeSmsService.sendOTP(phone);
+        if (alternativeResult['success'] == true) {
+          return alternativeResult['otp'];
+        }
+        */
       } catch (firebaseError) {
         print('⚠️ AuthService: Firebase error: $firebaseError');
       }
@@ -492,14 +501,12 @@ class AuthService {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setInt('current_user_id', userData['id']);
 
-          // CRITICAL FIX: Save customer data to SharedPreferences for transaction saving
+          // SECURITY FIX: Save only non-sensitive customer data locally
           await prefs.setString('customer_phone', phone);
           await prefs.setString('customer_name', name);
-          await prefs.setString('customer_email', email);
-          await prefs.setString('customer_address', address);
-          await prefs.setString('customer_pan_card', panCard);
           await prefs.setString('customer_id', userData['id'].toString());
           await prefs.setBool('customer_registered', true);
+          // SECURITY: PAN card, email, address NOT stored locally - fetch from server when needed
 
           print('✅ AuthService: Registration successful for: $phone');
           print('✅ AuthService: Customer data saved to SharedPreferences');
