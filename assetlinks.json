@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.vmurugan.digi_gold",
+      "sha256_cert_fingerprints": [
+        "9D:FA:B8:24:A5:0A:D8:A4:F2:86:1A:B5:2A:FC:1A:4F:54:BA:BB:59:35:68:88:A0:5D:B9:3C:03:07:0E:B4:D5"
+      ]
+    }
+  }
+]
