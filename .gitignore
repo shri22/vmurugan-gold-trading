@@ -60,3 +60,13 @@ ios/Flutter/flutter_export_environment.sh
 android/gradlew
 android/gradlew.bat
 android/gradle/wrapper/gradle-wrapper.jar
+
+# SSL certificates and private keys (security-sensitive)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+ssl/
+ssl.7z
+server-cert.pem
