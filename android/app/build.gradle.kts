@@ -46,7 +46,7 @@ android {
         applicationId = "com.vmurugan.digi_gold"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23  // Required by Firebase Auth
+        minSdk = flutter.minSdkVersion  // Required by Firebase Auth
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
