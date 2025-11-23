@@ -61,13 +61,29 @@
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>
-			<string>processing</string>
+		<string>processing</string>
+	</array>
+	<!-- Background task identifiers -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.vmurugan.digigold.refresh</string>
+			<string>com.vmurugan.digigold.processing</string>
 		</array>
 		<!-- Network permissions for price fetching -->
 		<key>NSAppTransportSecurity</key>
 		<dict>
 			<key>NSAllowsArbitraryLoads</key>
-			<true/>
+			<false/>
+			<key>NSExceptionDomains</key>
+			<dict>
+				<key>vmurugan.in</key>
+				<dict>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+					<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+			</dict>
 		</dict>
 		<!-- Camera permission for future features -->
 		<key>NSCameraUsageDescription</key>
@@ -75,5 +91,17 @@
 		<!-- Photo library permission for profile pictures -->
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>This app needs photo access to select profile pictures</string>
+		<!-- Firebase URL Schemes for Phone Authentication -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.286337779819-6frh3mm4ave9bo9hjmd68i00nlhg5a1c</string>
+				</array>
+			</dict>
+		</array>
 	</dict>
 </plist>
