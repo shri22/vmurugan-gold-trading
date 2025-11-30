@@ -2598,25 +2598,21 @@ app.get('/health', (req, res) => {
 // WORLDLINE PAYMENT GATEWAY INTEGRATION - CLEAN SLATE REBUILD
 // =============================================================================
 
-// Worldline configuration (from Payment_GateWay.md) - BANK COMPLIANCE
-const WORLDLINE_CONFIG = {
-  // BACK TO ORIGINAL: Your merchant configuration with enhanced error capture
-  MERCHANT_CODE: "T1098761", // Your original merchant ID
-  SCHEME_CODE: "first", // Your original scheme code (case sensitive)
-  ENCRYPTION_KEY: "9221995309QQNRIO", // Your original SALT key
-  ENCRYPTION_IV: "6753042926GDVTTK",
+// Worldline configuration - PRODUCTION MODE
+// Import production configuration
+const worldlineConfig = require('./worldline_config');
+
+// Legacy WORLDLINE_CONFIG for backward compatibility
+// This will be dynamically set based on metal type
+let WORLDLINE_CONFIG = {
+  MERCHANT_CODE: "779285", // Default to Gold merchant
+  SCHEME_CODE: "first",
+  ENCRYPTION_KEY: "47cdd26963f53e3181f93adcf3af487ec28d7643", // Gold SALT
   WORLDLINE_URL: "https://www.paynimo.com/api/paynimoV2.req",
   MIN_AMOUNT: 1,
-  MAX_AMOUNT: 10, // Sandbox limits
-  IS_TEST_ENVIRONMENT: true,
-  // CRITICAL: Test environment configuration for proper credential entry flow
-  TEST_MODE: "INTERACTIVE", // Ensures test credentials page is displayed
-  FORCE_TEST_CREDENTIALS: true, // Forces test credential entry instead of auto-completion
-
-  // DEBUGGING: Keep demo merchant config for comparison
-  DEMO_MERCHANT_CODE: "L3348",
-  DEMO_SCHEME_CODE: "first",
-  DEMO_ENCRYPTION_KEY: "2476281361GCVLUO"
+  MAX_AMOUNT: 1000000, // Production: 10 lakhs
+  IS_TEST_ENVIRONMENT: false,
+  IS_PRODUCTION: true,
 };
 
 // Generate hash for Worldline - supports both SHA-256 and SHA-512
@@ -2809,8 +2805,18 @@ app.post('/api/payments/worldline/token', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { amount: rawAmount, orderId, customerId } = req.body;
+    const { amount: rawAmount, orderId, customerId, metalType } = req.body;
     const txnId = orderId || Date.now().toString();
+
+    // PRODUCTION: Get merchant configuration based on metal type
+    const merchantConfig = worldlineConfig.getMerchantConfig(metalType || 'gold');
+    console.log(`🏪 [${requestId}] Using merchant: ${merchantConfig.MERCHANT_NAME} (${merchantConfig.MERCHANT_CODE})`);
+    console.log(`🔑 [${requestId}] Metal Type: ${metalType || 'gold'}`);
+
+    // Update WORLDLINE_CONFIG for this request
+    WORLDLINE_CONFIG.MERCHANT_CODE = merchantConfig.MERCHANT_CODE;
+    WORLDLINE_CONFIG.SCHEME_CODE = merchantConfig.SCHEME_CODE;
+    WORLDLINE_CONFIG.ENCRYPTION_KEY = merchantConfig.SALT;
 
     // CRITICAL FIX: Maintain decimal format throughout entire process
     // Worldline requires exact format consistency between server hash and client consumerData
@@ -2821,9 +2827,11 @@ app.post('/api/payments/worldline/token', [
     writeServerLog(`💰 [${requestId}] Raw Amount: ${JSON.stringify(rawAmount)} (${typeof rawAmount})`, 'worldline');
     writeServerLog(`💰 [${requestId}] Processed Amount: ${amount}`, 'worldline');
     writeServerLog(`💰 [${requestId}] Formatted Amount for Hash: "${formattedAmount}"`, 'worldline');
-    writeServerLog(`💰 [${requestId}] ✅ Amount is within test range (1-10): ${amount >= 1 && amount <= 10}`, 'worldline');
+    writeServerLog(`💰 [${requestId}] ✅ Amount is within production range (1-1000000): ${amount >= 1 && amount <= 1000000}`, 'worldline');
     writeServerLog(`🆔 [${requestId}] Transaction ID: ${txnId}`, 'worldline');
     writeServerLog(`👤 [${requestId}] Customer ID: ${customerId}`, 'worldline');
+    writeServerLog(`🏪 [${requestId}] Merchant: ${merchantConfig.MERCHANT_NAME}`, 'worldline');
+    writeServerLog(`🔑 [${requestId}] Merchant Code: ${merchantConfig.MERCHANT_CODE}`, 'worldline');
 
     // Build payload for Worldline API (following Payment_GateWay.md)
     const payload = {

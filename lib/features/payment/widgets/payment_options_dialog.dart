@@ -354,6 +354,7 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
             amount: widget.amount,
             description: widget.description,
             goldGrams: widget.metalGrams ?? 0.0,
+            metalType: widget.metalType, // Pass metal type to determine merchant (779285 for gold, 779295 for silver)
             onPaymentComplete: (PaymentResponse response) {
               // This will be called when payment is actually completed
               widget.onPaymentComplete(response);

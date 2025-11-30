@@ -16,6 +16,7 @@ class EnhancedPaymentScreen extends StatefulWidget {
   final double amount;
   final double goldGrams;
   final String description;
+  final String? metalType; // 'gold' or 'silver' - determines which merchant to use
   final Function(PaymentResponse) onPaymentComplete;
 
   const EnhancedPaymentScreen({
@@ -23,6 +24,7 @@ class EnhancedPaymentScreen extends StatefulWidget {
     required this.amount,
     required this.goldGrams,
     required this.description,
+    this.metalType = 'gold', // Default to gold
     required this.onPaymentComplete,
   });
 
@@ -1116,6 +1118,7 @@ ${latestLogs.join('\n')}
         'amount': amountAsDecimal, // Send amount as decimal string (e.g., "7.00")
         'orderId': 'ORDER_${DateTime.now().millisecondsSinceEpoch}',
         'customerId': customerId,
+        'metalType': widget.metalType ?? 'gold', // PRODUCTION: Determines which merchant (779285 for gold, 779295 for silver)
       };
 
       _logToFile('📤 TOKEN REQUEST: $url');
@@ -1126,6 +1129,7 @@ ${latestLogs.join('\n')}
       _logToFile('💰 Final String: "${amountAsDecimal}" (${amountAsDecimal.runtimeType})');
       _logToFile('💰 String Length: ${amountAsDecimal.length} characters');
       _logToFile('💰 Contains Decimal: ${amountAsDecimal.contains('.')}');
+      _logToFile('🏪 Metal Type: ${widget.metalType ?? 'gold'} (Merchant: ${widget.metalType == 'silver' ? '779295' : '779285'})');
 
       final response = await SecureHttpClient.post(
         url,
