@@ -79,17 +79,23 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(),
-            _buildPaymentMethods(),
+            Flexible(
+              fit: FlexFit.loose,
+              child: _buildPaymentMethods(),
+            ),
             _buildFooter(),
           ],
         ),
@@ -171,67 +177,65 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
   }
 
   Widget _buildPaymentMethods() {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 400),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select a payment method:',
-              style: AppTypography.titleSmall,
-            ),
-            const SizedBox(height: 16),
-            ..._paymentMethods.map((option) => _buildPaymentMethodTile(option)),
-          ],
-        ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Select a payment method:',
+            style: AppTypography.titleSmall,
+          ),
+          const SizedBox(height: 12),
+          ..._paymentMethods.map((option) => _buildPaymentMethodTile(option)),
+        ],
       ),
     );
   }
 
   Widget _buildPaymentMethodTile(PaymentMethodOption option) {
     final isSelected = _selectedMethod == option.method;
-    
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         onTap: _isProcessing ? null : () {
           setState(() {
             _selectedMethod = option.method;
           });
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             border: Border.all(
               color: isSelected ? AppColors.primaryGold : AppColors.lightGrey,
               width: isSelected ? 2 : 1,
             ),
-            borderRadius: BorderRadius.circular(12),
-            color: isSelected 
+            borderRadius: BorderRadius.circular(10),
+            color: isSelected
                 ? AppColors.primaryGold.withOpacity(0.1)
                 : AppColors.white,
           ),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: isSelected 
-                      ? AppColors.primaryGold 
+                  color: isSelected
+                      ? AppColors.primaryGold
                       : AppColors.lightGrey,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   option.icon,
                   color: isSelected ? AppColors.white : AppColors.textSecondary,
-                  size: 24,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,26 +301,31 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             width: double.infinity,
             child: CustomButton(
               text: _isProcessing ? 'Processing...' : 'Proceed to Pay',
-              onPressed: _selectedMethod != null && !_isProcessing 
-                  ? _processPayment 
+              onPressed: _selectedMethod != null && !_isProcessing
+                  ? _processPayment
                   : null,
               type: ButtonType.primary,
               isLoading: _isProcessing,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           TextButton(
             onPressed: _isProcessing ? null : () {
               widget.onCancel?.call();
               Navigator.pop(context);
             },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              minimumSize: const Size(0, 36),
+            ),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(

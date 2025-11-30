@@ -77,6 +77,17 @@
 				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
+			<key>api.vmuruganjewellery.co.in</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.0</string>
+			</dict>
 		</dict>
 	</dict>
 
@@ -130,6 +141,8 @@
 		<key>UIWindowSceneSessionRoleApplication</key>
 		<array>
 			<dict>
+				<key>UISceneConfigurationName</key>
+				<string>Default Configuration</string>
 				<key>UISceneDelegateClassName</key>
 				<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 			</dict>

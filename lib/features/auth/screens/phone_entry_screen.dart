@@ -438,40 +438,38 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   Widget _buildPhoneEntryStep() {
     return Column(
       children: [
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo
-              const VMuruganLogo(
-                size: 80,
-                primaryColor: AppColors.primaryGreen,
-                textColor: AppColors.primaryGold,
-              ),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.1),
 
-              const SizedBox(height: 40),
+        // Logo
+        const VMuruganLogo(
+          size: 80,
+          primaryColor: AppColors.primaryGreen,
+          textColor: AppColors.primaryGold,
+        ),
 
-              // Welcome Text
-              Text(
-                'Welcome to V Murugan Gold Trading',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryGold,
-                ),
-                textAlign: TextAlign.center,
-              ),
+        const SizedBox(height: 40),
 
-              const SizedBox(height: 8),
+        // Welcome Text
+        Text(
+          'Welcome to V Murugan Gold Trading',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryGold,
+          ),
+          textAlign: TextAlign.center,
+        ),
 
-              Text(
-                'Enter your mobile number to continue',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
+        const SizedBox(height: 8),
 
-              const SizedBox(height: 40),
+        Text(
+          'Enter your mobile number to continue',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+
+        const SizedBox(height: 40),
 
               // Phone Number Input
               Container(
@@ -549,29 +547,23 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
 
               const SizedBox(height: 32),
 
-              // Continue Button
-              CustomButton(
-                text: 'Continue',
-                onPressed: _isLoading ? null : _checkPhoneNumber,
-                isLoading: _isLoading,
-                icon: Icons.arrow_forward,
-              ),
-
-
-            ],
-          ),
+        // Continue Button
+        CustomButton(
+          text: 'Continue',
+          onPressed: _isLoading ? null : _checkPhoneNumber,
+          isLoading: _isLoading,
+          icon: Icons.arrow_forward,
         ),
 
+        const SizedBox(height: 32),
+
         // Footer
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            'By continuing, you agree to our Terms & Conditions',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.center,
+        Text(
+          'By continuing, you agree to our Terms & Conditions',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -580,40 +572,38 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   Widget _buildOtpVerificationStep() {
     return Column(
       children: [
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo
-              const VMuruganLogo(
-                size: 60,
-                primaryColor: AppColors.primaryGreen,
-                textColor: AppColors.primaryGold,
-              ),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.1),
 
-              const SizedBox(height: 40),
+        // Logo
+        const VMuruganLogo(
+          size: 60,
+          primaryColor: AppColors.primaryGreen,
+          textColor: AppColors.primaryGold,
+        ),
 
-              // Title
-              Text(
-                'Verify OTP',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryGold,
-                ),
-                textAlign: TextAlign.center,
-              ),
+        const SizedBox(height: 40),
 
-              const SizedBox(height: 8),
+        // Title
+        Text(
+          'Verify OTP',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryGold,
+          ),
+          textAlign: TextAlign.center,
+        ),
 
-              Text(
-                'Enter the 6-digit code sent to\n+91 $_phoneNumber',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
+        const SizedBox(height: 8),
 
-              const SizedBox(height: 40),
+        Text(
+          'Enter the 6-digit code sent to\n+91 $_phoneNumber',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+
+        const SizedBox(height: 40),
 
               // OTP Input Fields
               Row(
@@ -700,44 +690,40 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
 
               const SizedBox(height: 24),
 
-              // Resend OTP
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "Didn't receive the code? ",
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _canResendOtp ? _resendOTP : null,
-                    child: Text(
-                      _canResendOtp ? 'Resend' : 'Resend in ${_resendTimer}s',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: _canResendOtp ? AppColors.primaryGold : AppColors.grey,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+        // Resend OTP
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Didn't receive the code? ",
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
               ),
-            ],
-          ),
+            ),
+            GestureDetector(
+              onTap: _canResendOtp ? _resendOTP : null,
+              child: Text(
+                _canResendOtp ? 'Resend' : 'Resend in ${_resendTimer}s',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: _canResendOtp ? AppColors.primaryGold : AppColors.grey,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
 
+        const SizedBox(height: 32),
+
         // Footer
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            _isRegisteredUser
-                ? 'Existing user - will proceed to MPIN login'
-                : 'New user - will proceed to registration',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.center,
+        Text(
+          _isRegisteredUser
+              ? 'Existing user - will proceed to MPIN login'
+              : 'New user - will proceed to registration',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );

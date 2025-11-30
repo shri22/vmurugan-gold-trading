@@ -236,40 +236,46 @@ class VMuruganAppBarLogo extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: logoSize,
-          height: logoSize,
-          child: Image.asset(
-            'assets/vm_launcher_centered.png',
+        ClipRect(
+          child: Container(
             width: logoSize,
             height: logoSize,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              // Fallback to simple logo if image fails to load
-              return VMuruganSimpleLogo(
-                size: logoSize,
-                backgroundColor: Colors.red,
-                textColor: Colors.white,
-              );
-            },
+            child: Image.asset(
+              'assets/vm_launcher_centered.png',
+              width: logoSize,
+              height: logoSize,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                // Fallback to simple logo if image fails to load
+                return VMuruganSimpleLogo(
+                  size: logoSize,
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          'VMurugan Jewellery',
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700, // Extra bold
-            color: textColor,
-            letterSpacing: 0.5, // Slight letter spacing for elegance
-            fontFamily: 'serif', // More elegant serif font
-            shadows: [
-              Shadow(
-                offset: const Offset(1, 1),
-                blurRadius: 2,
-                color: Colors.black.withOpacity(0.3),
-              ),
-            ],
+        Flexible(
+          child: Text(
+            'VMurugan Jewellery',
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+              letterSpacing: 0.5,
+              fontFamily: 'serif',
+              shadows: [
+                Shadow(
+                  offset: const Offset(1, 1),
+                  blurRadius: 2,
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ],
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ],

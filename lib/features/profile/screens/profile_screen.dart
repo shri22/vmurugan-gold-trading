@@ -236,26 +236,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               : SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     children: [
                       // Profile Header
                       _buildProfileHeader(),
-            
-            const SizedBox(height: AppSpacing.xl),
-            
+
+            const SizedBox(height: AppSpacing.lg),
+
             // Profile Details
             _buildProfileDetails(),
-            
-            const SizedBox(height: AppSpacing.xl),
-            
+
+            const SizedBox(height: AppSpacing.lg),
+
             // Account Actions
             _buildAccountActions(),
-            
-            const SizedBox(height: AppSpacing.xl),
+
+            const SizedBox(height: AppSpacing.lg),
 
             // Settings
             _buildSettings(),
+
+            const SizedBox(height: AppSpacing.md),
           ],
         ),
       ),
@@ -264,7 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileHeader() {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
@@ -280,8 +282,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // Profile Picture
           Container(
-            width: 100,
-            height: 100,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               color: AppColors.primaryGold.withOpacity(0.2),
               shape: BoxShape.circle,
@@ -292,52 +294,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: const Icon(
               Icons.person,
-              size: 50,
+              size: 40,
               color: AppColors.primaryGold,
             ),
           ),
 
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
 
           // Customer ID (prominent display)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.primaryGold.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.primaryGold),
             ),
             child: Text(
               'ID: ${_userProfile['customer_id'] ?? 'Loading...'}',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: AppColors.primaryGold,
               ),
             ),
           ),
 
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
 
           // Name
           Text(
             _userProfile['name'] ?? 'Loading...',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.getTextColor(context),
             ),
           ),
 
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
 
           // Phone
           Text(
             _userProfile['phone'] ?? 'Loading...',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.getSecondaryTextColor(context),
             ),
           ),
-          
-          const SizedBox(height: AppSpacing.md),
+
+          const SizedBox(height: AppSpacing.sm),
           
           // KYC Status
           Container(
@@ -377,7 +379,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileDetails() {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
@@ -394,13 +396,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(
             _currentLanguage == 'ta' ? 'தனிப்பட்ட தகவல்' : 'Personal Information',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.getTextColor(context),
             ),
           ),
 
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
 
           _buildDetailRow(Icons.email, _currentLanguage == 'ta' ? 'மின்னஞ்சல்' : 'Email', _userProfile['email'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
           _buildDetailRow(Icons.location_on, _currentLanguage == 'ta' ? 'முகவரி' : 'Address', _userProfile['address'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
@@ -413,15 +415,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
-            size: 20,
+            size: 18,
             color: AppColors.primaryGold,
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,6 +442,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     fontWeight: FontWeight.w500,
                     color: AppColors.getTextColor(context),
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -450,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildAccountActions() {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
@@ -467,13 +472,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(
             'Account Actions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.getTextColor(context),
             ),
           ),
-          
-          const SizedBox(height: AppSpacing.lg),
+
+          const SizedBox(height: AppSpacing.sm),
           
           _buildActionTile(
             Icons.security,
@@ -519,7 +524,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildSettings() {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
@@ -536,13 +541,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Text(
             _currentLanguage == 'ta' ? 'அமைப்புகள்' : 'Settings',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: AppColors.getTextColor(context),
             ),
           ),
-          
-          const SizedBox(height: AppSpacing.lg),
+
+          const SizedBox(height: AppSpacing.sm),
           
           _buildActionTile(
             Icons.language,

@@ -48,4 +48,7 @@ post_install do |installer|
       File.open(xcconfig_path, "w") { |file| file << xcconfig_mod }
     end
   end
+
+  # TEMPORARILY DISABLED FOR TESTING: Worldline plugin patch
+  # Removed to test if Worldline SDK is causing iOS white screen issue
 end

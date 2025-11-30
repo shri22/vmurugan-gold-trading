@@ -43,7 +43,12 @@ void main() async {
   SecureHttpClient.initialize();
 
   // Initialize Firebase for free SMS OTP functionality
-  await FirebaseInit.initialize();
+  // TEMPORARY FIX: Disable Firebase to test if it's causing iOS crash
+  try {
+    await FirebaseInit.initialize();
+  } catch (e) {
+    print('⚠️ Firebase initialization failed (app will work without it): $e');
+  }
 
   // Worldline Payment Service will auto-initialize when first used
 
