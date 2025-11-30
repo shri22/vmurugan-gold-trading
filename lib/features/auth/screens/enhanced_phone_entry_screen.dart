@@ -571,23 +571,32 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.getBackgroundColor(context),
+      resizeToAvoidBottomInset: true,
       appBar: _currentStep != AuthStep.phoneEntry ? AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.getTextColor(context)),
           onPressed: _goBack,
         ),
         title: Text(
           _getStepTitle(),
-          style: TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: AppColors.getTextColor(context)),
         ),
       ) : null,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(Responsive.getWidth(context) * 0.05),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            left: Responsive.getWidth(context) * 0.05,
+            right: Responsive.getWidth(context) * 0.05,
+            top: Responsive.getWidth(context) * 0.05,
+            bottom: MediaQuery.of(context).viewInsets.bottom + Responsive.getWidth(context) * 0.05,
+          ),
           child: _buildCurrentStep(),
         ),
       ),
@@ -982,12 +991,12 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
             margin: const EdgeInsets.symmetric(horizontal: 30),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.getCardColor(context),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFD700), width: 2),
+              border: Border.all(color: AppColors.primaryGold, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: AppColors.getShadowColor(context),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -1007,7 +1016,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
                 Text(
                   _demoOtp,
                   style: const TextStyle(
-                    color: Color(0xFFFFD700),
+                    color: AppColors.primaryGold,
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 6,
@@ -1079,6 +1088,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
 
   Widget _buildOtpField(int index) {
     final bool hasValue = _otpControllers[index].text.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       height: 50,
@@ -1087,18 +1097,18 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
         maxWidth: 60,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: hasValue
-            ? const Color(0xFFFFD700) // Gold when filled
+            ? AppColors.primaryGold // Gold when filled
             : AppColors.primaryGreen, // Green border
           width: hasValue ? 3 : 2,
         ),
         boxShadow: [
           BoxShadow(
             color: hasValue
-              ? const Color(0xFFFFD700).withOpacity(0.3)
+              ? AppColors.primaryGold.withOpacity(0.3)
               : AppColors.primaryGreen.withOpacity(0.2),
             blurRadius: hasValue ? 8 : 4,
             offset: const Offset(0, 2),
@@ -1114,7 +1124,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
           fontSize: 24,
           fontWeight: FontWeight.bold,
           color: hasValue
-            ? const Color(0xFFFFD700) // Gold when filled
+            ? AppColors.primaryGold // Gold when filled
             : AppColors.primaryGreen, // Green when empty
         ),
         decoration: const InputDecoration(
@@ -1515,6 +1525,8 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
 
   /// Beautiful clean 4-box MPIN input - Same design as OTP
   Widget _buildMpinBoxes(List<TextEditingController> controllers, List<FocusNode> focusNodes, bool obscureText) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: IntrinsicHeight(
@@ -1529,18 +1541,18 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
                     maxWidth: 70,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.getCardColor(context),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: controllers[i].text.isNotEmpty
-                        ? const Color(0xFFFFD700) // Gold when filled
+                        ? AppColors.primaryGold // Gold when filled
                         : AppColors.primaryGreen, // Green border (same as OTP)
                       width: controllers[i].text.isNotEmpty ? 3 : 2,
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: controllers[i].text.isNotEmpty
-                          ? const Color(0xFFFFD700).withOpacity(0.3)
+                          ? AppColors.primaryGold.withOpacity(0.3)
                           : AppColors.primaryGreen.withOpacity(0.2),
                         blurRadius: controllers[i].text.isNotEmpty ? 8 : 4,
                         offset: const Offset(0, 2),
@@ -1558,7 +1570,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: controllers[i].text.isNotEmpty
-                        ? const Color(0xFFFFD700) // Gold when filled
+                        ? AppColors.primaryGold // Gold when filled
                         : AppColors.primaryGreen, // Green when empty (same as OTP)
                     ),
                     decoration: InputDecoration(
@@ -1567,7 +1579,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
                       contentPadding: EdgeInsets.zero,
                       hintText: obscureText ? '●' : '',
                       hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
+                        color: AppColors.getSecondaryTextColor(context),
                         fontSize: 20,
                       ),
                     ),

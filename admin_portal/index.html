@@ -283,6 +283,388 @@
         .btn-small:hover {
             background: #45a049;
         }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid #888;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+
+        .detail-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .detail-section h4 {
+            color: #2E7D32;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #FFD700;
+            padding-bottom: 8px;
+        }
+
+        .detail-row {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .detail-value {
+            color: #333;
+        }
+
+        .scheme-card {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #FFD700;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .scheme-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .scheme-type {
+            font-weight: bold;
+            font-size: 16px;
+            color: #2E7D32;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-completed {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .transaction-row {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .transaction-row:hover {
+            background: #f8f9fa;
+        }
+
+        /* Reports Section Styles */
+        .report-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+        }
+
+        .report-tab {
+            padding: 12px 24px;
+            background: white;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .report-tab:hover {
+            color: #2E7D32;
+            background: #f8f9fa;
+        }
+
+        .report-tab.active {
+            color: #2E7D32;
+            border-bottom-color: #FFD700;
+            font-weight: 600;
+        }
+
+        .report-content {
+            display: none;
+        }
+
+        .report-content.active {
+            display: block;
+        }
+
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-export {
+            background: #FFD700;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-export:hover {
+            background: #FFC700;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .summary-card h4 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .summary-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2E7D32;
+        }
+
+        .summary-card .sub-value {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .report-table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .report-table th {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: #FFD700;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .report-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .report-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .date-preset-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .date-preset-btn {
+            padding: 6px 12px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .date-preset-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .date-preset-btn.active {
+            background: #2E7D32;
+            color: white;
+            border-color: #2E7D32;
+        }
     </style>
 </head>
 <body>
@@ -332,6 +714,7 @@
             <div class="nav-item active" onclick="showSection('overview')">📊 Dashboard</div>
             <div class="nav-item" onclick="showSection('customers')">👥 Customers</div>
             <div class="nav-item" onclick="showSection('transactions')">💳 Transactions</div>
+            <div class="nav-item" onclick="showSection('reports')">📋 Reports</div>
             <div class="nav-item" onclick="showSection('analytics')">📈 Analytics</div>
             <div class="nav-item" onclick="showSection('settings')">⚙️ Settings</div>
         </div>
@@ -413,15 +796,14 @@
                                 <th>Name</th>
                                 <th>Phone</th>
                                 <th>Email</th>
-                                <th>Address</th>
                                 <th>PAN Card</th>
-                                <th>Registration Date</th>
-                                <th>Status</th>
+                                <th>Member Since</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="customersTableBody">
                             <tr>
-                                <td colspan="8" style="text-align: center; padding: 20px;">
+                                <td colspan="7" style="text-align: center; padding: 20px;">
                                     <div style="color: #666;">
                                         📊 Loading customer data from SQL Server...<br>
                                         <small>Real customer registrations will appear here</small>
@@ -501,6 +883,258 @@
                 </div>
             </div>
 
+            <!-- Reports Section -->
+            <div id="reportsSection" style="display: none;">
+                <div class="content-card">
+                    <h2 style="color: #2E7D32; margin-bottom: 20px;">📋 Comprehensive Reports</h2>
+
+                    <!-- Report Tabs -->
+                    <div class="report-tabs">
+                        <button class="report-tab active" onclick="showReportTab('dashboard-analytics')">📊 Dashboard Analytics</button>
+                        <button class="report-tab" onclick="showReportTab('scheme-wise')">🎯 Scheme-wise</button>
+                        <button class="report-tab" onclick="showReportTab('customer-wise')">👤 Customer-wise</button>
+                        <button class="report-tab" onclick="showReportTab('transaction-wise')">💳 Transaction-wise</button>
+                        <button class="report-tab" onclick="showReportTab('date-wise')">📅 Date-wise</button>
+                        <button class="report-tab" onclick="showReportTab('month-wise')">📆 Month-wise</button>
+                        <button class="report-tab" onclick="showReportTab('year-wise')">📈 Year-wise</button>
+                    </div>
+
+                    <!-- Dashboard Analytics Report -->
+                    <div id="dashboard-analytics-report" class="report-content active">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Dashboard Analytics Overview</h3>
+                            <button class="btn-primary" onclick="loadDashboardAnalytics()">🔄 Refresh</button>
+                        </div>
+
+                        <div id="dashboardAnalyticsContent">
+                            <div class="loading-spinner">Loading analytics...</div>
+                        </div>
+                    </div>
+
+                    <!-- Scheme-wise Report -->
+                    <div id="scheme-wise-report" class="report-content">
+                        <h3>Scheme-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="date-preset-buttons">
+                                <button class="date-preset-btn" onclick="setDatePreset('scheme', 'today')">Today</button>
+                                <button class="date-preset-btn" onclick="setDatePreset('scheme', 'week')">Last 7 Days</button>
+                                <button class="date-preset-btn" onclick="setDatePreset('scheme', 'month')">This Month</button>
+                                <button class="date-preset-btn" onclick="setDatePreset('scheme', 'year')">This Year</button>
+                                <button class="date-preset-btn active" onclick="setDatePreset('scheme', 'all')">All Time</button>
+                            </div>
+
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="schemeStartDate">
+                                </div>
+                                <div class="filter-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="schemeEndDate">
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearSchemeFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadSchemeWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportSchemeReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="schemeReportContent">
+                            <div class="no-data">Click "Generate Report" to view scheme analytics</div>
+                        </div>
+                    </div>
+
+                    <!-- Customer-wise Report -->
+                    <div id="customer-wise-report" class="report-content">
+                        <h3>Customer-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Customer ID</label>
+                                    <input type="text" id="customerIdFilter" placeholder="e.g., VM15">
+                                </div>
+                                <div class="filter-group">
+                                    <label>Customer Phone</label>
+                                    <input type="text" id="customerPhoneFilter" placeholder="e.g., 9876543210">
+                                </div>
+                                <div class="filter-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="customerStartDate">
+                                </div>
+                                <div class="filter-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="customerEndDate">
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearCustomerFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadCustomerWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportCustomerReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="customerReportContent">
+                            <div class="no-data">Enter Customer ID or Phone and click "Generate Report"</div>
+                        </div>
+                    </div>
+
+                    <!-- Transaction-wise Report -->
+                    <div id="transaction-wise-report" class="report-content">
+                        <h3>Transaction-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="date-preset-buttons">
+                                <button class="date-preset-btn" onclick="setDatePreset('transaction', 'today')">Today</button>
+                                <button class="date-preset-btn" onclick="setDatePreset('transaction', 'week')">Last 7 Days</button>
+                                <button class="date-preset-btn" onclick="setDatePreset('transaction', 'month')">This Month</button>
+                                <button class="date-preset-btn active" onclick="setDatePreset('transaction', 'all')">All Time</button>
+                            </div>
+
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="txnStartDate">
+                                </div>
+                                <div class="filter-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="txnEndDate">
+                                </div>
+                                <div class="filter-group">
+                                    <label>Status</label>
+                                    <select id="txnStatusFilter">
+                                        <option value="">All</option>
+                                        <option value="SUCCESS">Success</option>
+                                        <option value="PENDING">Pending</option>
+                                        <option value="FAILED">Failed</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Metal Type</label>
+                                    <select id="txnMetalFilter">
+                                        <option value="">All</option>
+                                        <option value="GOLD">Gold</option>
+                                        <option value="SILVER">Silver</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearTransactionFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadTransactionWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportTransactionReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="transactionReportContent">
+                            <div class="no-data">Click "Generate Report" to view transactions</div>
+                        </div>
+                    </div>
+
+                    <!-- Date-wise Report -->
+                    <div id="date-wise-report" class="report-content">
+                        <h3>Date-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="dateWiseStartDate">
+                                </div>
+                                <div class="filter-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="dateWiseEndDate">
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearDateWiseFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadDateWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportDateWiseReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="dateWiseReportContent">
+                            <div class="no-data">Select date range and click "Generate Report"</div>
+                        </div>
+                    </div>
+
+                    <!-- Month-wise Report -->
+                    <div id="month-wise-report" class="report-content">
+                        <h3>Month-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Year</label>
+                                    <select id="monthWiseYear">
+                                        <option value="">All Years</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label>Month</label>
+                                    <select id="monthWiseMonth">
+                                        <option value="">All Months</option>
+                                        <option value="1">January</option>
+                                        <option value="2">February</option>
+                                        <option value="3">March</option>
+                                        <option value="4">April</option>
+                                        <option value="5">May</option>
+                                        <option value="6">June</option>
+                                        <option value="7">July</option>
+                                        <option value="8">August</option>
+                                        <option value="9">September</option>
+                                        <option value="10">October</option>
+                                        <option value="11">November</option>
+                                        <option value="12">December</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearMonthWiseFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadMonthWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportMonthWiseReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="monthWiseReportContent">
+                            <div class="no-data">Click "Generate Report" to view monthly analytics</div>
+                        </div>
+                    </div>
+
+                    <!-- Year-wise Report -->
+                    <div id="year-wise-report" class="report-content">
+                        <h3>Year-wise Report</h3>
+
+                        <div class="filter-section">
+                            <div class="filter-row">
+                                <div class="filter-group">
+                                    <label>Year</label>
+                                    <select id="yearWiseYear">
+                                        <option value="">All Years</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button class="btn-secondary" onclick="clearYearWiseFilters()">Clear</button>
+                                <button class="btn-primary" onclick="loadYearWiseReport()">Generate Report</button>
+                                <button class="btn-export" onclick="exportYearWiseReport()">📥 Export CSV</button>
+                            </div>
+                        </div>
+
+                        <div id="yearWiseReportContent">
+                            <div class="no-data">Click "Generate Report" to view yearly analytics</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Analytics Section -->
             <div id="analyticsSection" style="display: none;">
                 <div class="content-card">
@@ -536,6 +1170,48 @@
                     <p><strong>Admin Token:</strong> VMURUGAN_ADMIN_2025</p>
                     <br>
 
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Details Modal -->
+    <div id="customerDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeCustomerDetails()">&times;</span>
+            <h2 style="color: #2E7D32; margin-bottom: 20px;">Customer Details</h2>
+            <div id="customerDetailsContent">
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    Loading customer details...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheme Closure Modal -->
+    <div id="schemeClosureModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeSchemeClosureModal()">&times;</span>
+            <h2 style="color: #2E7D32; margin-bottom: 20px;">Close Scheme</h2>
+            <div id="schemeClosureContent">
+                <p><strong>Scheme ID:</strong> <span id="closureSchemeId"></span></p>
+                <p><strong>Scheme Type:</strong> <span id="closureSchemeType"></span></p>
+                <p><strong>Total Invested:</strong> ₹<span id="closureTotalInvested"></span></p>
+                <p><strong>Metal Accumulated:</strong> <span id="closureMetalAccumulated"></span> grams</p>
+                <p><strong>Completed Installments:</strong> <span id="closureInstallments"></span></p>
+                <br>
+                <div class="form-group">
+                    <label for="closureRemarks">Closure Remarks:</label>
+                    <textarea id="closureRemarks" rows="4" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit;"></textarea>
+                </div>
+                <br>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeSchemeClosureModal()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button onclick="confirmSchemeClose()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Close Scheme
+                    </button>
                 </div>
             </div>
         </div>
@@ -580,6 +1256,7 @@
                 'overview': 'Dashboard Overview',
                 'customers': 'Customer Management',
                 'transactions': 'Transaction History',
+                'reports': 'Comprehensive Reports',
                 'analytics': 'Business Analytics',
                 'settings': 'System Settings'
             };
@@ -590,6 +1267,9 @@
                 loadTransactionsFromFirebase();
             } else if (section === 'customers') {
                 loadCustomersFromFirebase();
+            } else if (section === 'reports') {
+                // Auto-load dashboard analytics when reports section is opened
+                loadDashboardAnalytics();
             }
         }
 
@@ -911,10 +1591,13 @@
                             <td><strong>${name}</strong></td>
                             <td>${phone}</td>
                             <td>${email}</td>
-                            <td>${address}</td>
                             <td>${panCard}</td>
                             <td>${formattedDate}</td>
-                            <td><span class="status-badge status-verified">Active</span></td>
+                            <td>
+                                <button class="btn-info" onclick="viewCustomerDetails('${phone}')">
+                                    👁️ View Details
+                                </button>
+                            </td>
                         </tr>
                     `;
                 }).join('');
@@ -939,10 +1622,13 @@
                         <td><strong>${name}</strong></td>
                         <td>${phone}</td>
                         <td>${email}</td>
-                        <td>${address}</td>
                         <td>${panCard}</td>
                         <td>${formattedDate}</td>
-                        <td><span class="status-badge status-verified">Active</span></td>
+                        <td>
+                            <button class="btn-info" onclick="viewCustomerDetails('${phone}')">
+                                👁️ View Details
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -963,7 +1649,7 @@
             const tbody = document.getElementById('customersTableBody');
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" style="text-align: center; padding: 30px;">
+                    <td colspan="7" style="text-align: center; padding: 30px;">
                         <div style="color: #666; line-height: 1.6;">
                             <h3 style="color: #2E7D32; margin-bottom: 15px;">🔍 No Customer Data Found</h3>
 
@@ -1603,6 +2289,896 @@
 
         // Stop auto-refresh when user leaves page
         window.addEventListener('beforeunload', stopAutoRefresh);
+
+        // Customer Details Functions
+        let currentSchemeForClosure = null;
+
+        async function viewCustomerDetails(phone) {
+            console.log('👤 Loading details for customer:', phone);
+            const modal = document.getElementById('customerDetailsModal');
+            const content = document.getElementById('customerDetailsContent');
+
+            modal.style.display = 'block';
+            content.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Loading customer details...</div>';
+
+            try {
+                const apiUrl = 'https://api.vmuruganjewellery.co.in:3001/api/admin/customers/' + phone;
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load customer details');
+                }
+
+                const data = await response.json();
+                if (data.success) {
+                    displayCustomerDetails(data);
+                } else {
+                    content.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc3545;">Failed to load customer details</div>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading customer details:', error);
+                content.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc3545;">Error: ' + error.message + '</div>';
+            }
+        }
+
+        function displayCustomerDetails(data) {
+            const { customer, schemes, transactions, summary } = data;
+
+            const formatDate = (dateStr) => {
+                if (!dateStr) return 'N/A';
+                return new Date(dateStr).toLocaleDateString('en-IN');
+            };
+
+            const formatGrams = (grams) => {
+                if (!grams) return '0.000';
+                const rounded = Math.round(grams * 1000) / 1000;
+                return rounded.toFixed(3);
+            };
+
+            let html = `
+                <!-- Customer Basic Info -->
+                <div class="detail-section">
+                    <h4>📋 Customer Information</h4>
+                    <div class="detail-row">
+                        <div class="detail-label">Customer ID:</div>
+                        <div class="detail-value">${customer.customer_id || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Name:</div>
+                        <div class="detail-value">${customer.name || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Phone:</div>
+                        <div class="detail-value">${customer.phone || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Email:</div>
+                        <div class="detail-value">${customer.email || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">PAN Card:</div>
+                        <div class="detail-value">${customer.pan_card || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Address:</div>
+                        <div class="detail-value">${customer.address || 'N/A'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Member Since:</div>
+                        <div class="detail-value">${formatDate(customer.registration_date || customer.created_at)}</div>
+                    </div>
+                </div>
+
+                <!-- Holdings Summary -->
+                <div class="detail-section">
+                    <h4>💰 Holdings Summary</h4>
+                    <div class="detail-row">
+                        <div class="detail-label">Total Gold Holdings:</div>
+                        <div class="detail-value" style="color: #FFD700; font-weight: bold;">${formatGrams(customer.total_gold_grams)} grams</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Total Silver Holdings:</div>
+                        <div class="detail-value" style="color: #C0C0C0; font-weight: bold;">${formatGrams(customer.total_silver_grams)} grams</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Total Invested:</div>
+                        <div class="detail-value" style="color: #2E7D32; font-weight: bold;">₹${(customer.total_invested || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Active Schemes:</div>
+                        <div class="detail-value">${summary.active_schemes} / ${summary.total_schemes}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Total Transactions:</div>
+                        <div class="detail-value">${summary.total_transactions} (${summary.successful_transactions} successful)</div>
+                    </div>
+                </div>
+
+                <!-- Schemes -->
+                <div class="detail-section">
+                    <h4>📊 Schemes (${schemes.length})</h4>
+            `;
+
+            if (schemes.length === 0) {
+                html += '<p style="color: #666; text-align: center; padding: 20px;">No schemes enrolled</p>';
+            } else {
+                schemes.forEach(scheme => {
+                    const statusClass = scheme.status === 'ACTIVE' ? 'status-active' :
+                                      scheme.status === 'COMPLETED' ? 'status-completed' : 'status-cancelled';
+                    const canClose = (scheme.status === 'ACTIVE') &&
+                                   ((scheme.scheme_type === 'GOLDFLEXI' || scheme.scheme_type === 'SILVERFLEXI') ||
+                                    (scheme.completed_installments >= 12));
+
+                    html += `
+                        <div class="scheme-card">
+                            <div class="scheme-header">
+                                <div class="scheme-type">${scheme.scheme_type}</div>
+                                <span class="status-badge ${statusClass}">${scheme.status}</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                                <div><strong>Scheme ID:</strong> ${scheme.scheme_id}</div>
+                                <div><strong>Metal Type:</strong> ${scheme.metal_type}</div>
+                                <div><strong>Monthly Amount:</strong> ₹${scheme.monthly_amount.toFixed(2)}</div>
+                                <div><strong>Installments:</strong> ${scheme.completed_installments}${scheme.duration_months ? '/' + scheme.duration_months : ''}</div>
+                                <div><strong>Total Invested:</strong> ₹${scheme.total_invested.toFixed(2)}</div>
+                                <div><strong>Metal Accumulated:</strong> ${formatGrams(scheme.total_metal_accumulated)} g</div>
+                                <div><strong>Start Date:</strong> ${formatDate(scheme.start_date)}</div>
+                                <div><strong>End Date:</strong> ${formatDate(scheme.end_date)}</div>
+                            </div>
+                            ${scheme.closure_remarks ? `<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px;"><strong>Closure Remarks:</strong> ${scheme.closure_remarks}</div>` : ''}
+                            ${canClose ? `
+                                <div style="margin-top: 10px;">
+                                    <button class="btn-danger" onclick='openSchemeClosureModal(${JSON.stringify(scheme)})'>
+                                        🔒 Close Scheme
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+
+            html += `</div>`;
+
+            // Transactions
+            html += `
+                <div class="detail-section">
+                    <h4>💳 Recent Transactions (${transactions.length})</h4>
+            `;
+
+            if (transactions.length === 0) {
+                html += '<p style="color: #666; text-align: center; padding: 20px;">No transactions found</p>';
+            } else {
+                html += '<div style="max-height: 400px; overflow-y: auto;">';
+                transactions.slice(0, 20).forEach(txn => {
+                    const statusClass = txn.status === 'SUCCESS' ? 'status-verified' : 'status-pending';
+                    html += `
+                        <div class="transaction-row">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>${txn.transaction_id}</strong>
+                                    <span class="status-badge ${statusClass}" style="margin-left: 10px;">${txn.status}</span>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold; color: #2E7D32;">₹${txn.amount.toFixed(2)}</div>
+                                    <div style="font-size: 12px; color: #666;">${formatDate(txn.timestamp)}</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                                ${txn.type} |
+                                ${txn.gold_grams > 0 ? `Gold: ${formatGrams(txn.gold_grams)}g` : ''}
+                                ${txn.silver_grams > 0 ? `Silver: ${formatGrams(txn.silver_grams)}g` : ''} |
+                                ${txn.payment_method}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            html += `</div>`;
+
+            document.getElementById('customerDetailsContent').innerHTML = html;
+        }
+
+        function closeCustomerDetails() {
+            document.getElementById('customerDetailsModal').style.display = 'none';
+        }
+
+        // Scheme Closure Functions
+        function openSchemeClosureModal(scheme) {
+            currentSchemeForClosure = scheme;
+
+            document.getElementById('closureSchemeId').textContent = scheme.scheme_id;
+            document.getElementById('closureSchemeType').textContent = scheme.scheme_type;
+            document.getElementById('closureTotalInvested').textContent = scheme.total_invested.toFixed(2);
+            document.getElementById('closureMetalAccumulated').textContent = (Math.round(scheme.total_metal_accumulated * 1000) / 1000).toFixed(3);
+            document.getElementById('closureInstallments').textContent = scheme.completed_installments + (scheme.duration_months ? '/' + scheme.duration_months : '');
+            document.getElementById('closureRemarks').value = '';
+
+            document.getElementById('schemeClosureModal').style.display = 'block';
+        }
+
+        function closeSchemeClosureModal() {
+            document.getElementById('schemeClosureModal').style.display = 'none';
+            currentSchemeForClosure = null;
+        }
+
+        async function confirmSchemeClose() {
+            if (!currentSchemeForClosure) return;
+
+            const remarks = document.getElementById('closureRemarks').value.trim();
+
+            if (!confirm(`Are you sure you want to close scheme ${currentSchemeForClosure.scheme_id}?`)) {
+                return;
+            }
+
+            try {
+                const apiUrl = `https://api.vmuruganjewellery.co.in:3001/api/schemes/${currentSchemeForClosure.scheme_id}/close`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        closure_remarks: remarks || 'Scheme closed by admin'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Scheme closed successfully!');
+                    closeSchemeClosureModal();
+                    closeCustomerDetails();
+                    // Refresh customer list
+                    loadCustomersFromFirebase();
+                } else {
+                    alert('❌ Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error closing scheme:', error);
+                alert('❌ Error closing scheme: ' + error.message);
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const customerModal = document.getElementById('customerDetailsModal');
+            const closureModal = document.getElementById('schemeClosureModal');
+
+            if (event.target == customerModal) {
+                closeCustomerDetails();
+            }
+            if (event.target == closureModal) {
+                closeSchemeClosureModal();
+            }
+        }
+
+        // ==================== REPORTING FUNCTIONS ====================
+
+        // Report Tab Navigation
+        function showReportTab(tabName) {
+            // Hide all report contents
+            document.querySelectorAll('.report-content').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.report-tab').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Show selected report content
+            document.getElementById(tabName + '-report').classList.add('active');
+
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+
+            // Auto-load dashboard analytics when tab is opened
+            if (tabName === 'dashboard-analytics') {
+                loadDashboardAnalytics();
+            }
+        }
+
+        // Initialize year dropdowns
+        function initializeYearDropdowns() {
+            const currentYear = new Date().getFullYear();
+            const years = [];
+            for (let year = currentYear; year >= currentYear - 10; year--) {
+                years.push(year);
+            }
+
+            const monthWiseYearSelect = document.getElementById('monthWiseYear');
+            const yearWiseYearSelect = document.getElementById('yearWiseYear');
+
+            years.forEach(year => {
+                const option1 = document.createElement('option');
+                option1.value = year;
+                option1.textContent = year;
+                monthWiseYearSelect.appendChild(option1);
+
+                const option2 = document.createElement('option');
+                option2.value = year;
+                option2.textContent = year;
+                yearWiseYearSelect.appendChild(option2);
+            });
+        }
+
+        // Call on page load
+        initializeYearDropdowns();
+
+        // Date Preset Functions
+        function setDatePreset(reportType, preset) {
+            const today = new Date();
+            let startDate, endDate;
+
+            switch (preset) {
+                case 'today':
+                    startDate = endDate = today.toISOString().split('T')[0];
+                    break;
+                case 'week':
+                    startDate = new Date(today.setDate(today.getDate() - 7)).toISOString().split('T')[0];
+                    endDate = new Date().toISOString().split('T')[0];
+                    break;
+                case 'month':
+                    startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+                    endDate = new Date().toISOString().split('T')[0];
+                    break;
+                case 'year':
+                    startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+                    endDate = new Date().toISOString().split('T')[0];
+                    break;
+                case 'all':
+                    startDate = endDate = '';
+                    break;
+            }
+
+            // Update date inputs based on report type
+            if (reportType === 'scheme') {
+                document.getElementById('schemeStartDate').value = startDate;
+                document.getElementById('schemeEndDate').value = endDate;
+            } else if (reportType === 'transaction') {
+                document.getElementById('txnStartDate').value = startDate;
+                document.getElementById('txnEndDate').value = endDate;
+            }
+
+            // Update active button
+            const container = event.target.parentElement;
+            container.querySelectorAll('.date-preset-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // Dashboard Analytics
+        async function loadDashboardAnalytics() {
+            const contentDiv = document.getElementById('dashboardAnalyticsContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Loading analytics...</div>';
+
+            try {
+                const response = await fetch('https://api.vmuruganjewellery.co.in:3001/api/admin/analytics/dashboard');
+                const data = await response.json();
+
+                if (data.success) {
+                    const { customers, transactions, schemes, monthlyTrend } = data.analytics;
+
+                    let html = `
+                        <div class="summary-cards">
+                            <div class="summary-card">
+                                <h4>Total Customers</h4>
+                                <div class="value">${customers.total_customers || 0}</div>
+                                <div class="sub-value">+${customers.new_customers_this_month || 0} this month</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Total Revenue</h4>
+                                <div class="value">₹${formatCurrency(transactions.total_revenue || 0)}</div>
+                                <div class="sub-value">₹${formatCurrency(transactions.revenue_this_month || 0)} this month</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Total Transactions</h4>
+                                <div class="value">${transactions.total_transactions || 0}</div>
+                                <div class="sub-value">${transactions.transactions_this_month || 0} this month</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Active Schemes</h4>
+                                <div class="value">${schemes.active_schemes || 0}</div>
+                                <div class="sub-value">of ${schemes.total_schemes || 0} total</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Gold Sold</h4>
+                                <div class="value">${formatGrams(transactions.total_gold_sold || 0)} g</div>
+                                <div class="sub-value">Direct purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Silver Sold</h4>
+                                <div class="value">${formatGrams(transactions.total_silver_sold || 0)} g</div>
+                                <div class="sub-value">Direct purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Gold in Schemes</h4>
+                                <div class="value">${formatGrams(schemes.total_gold_accumulated || 0)} g</div>
+                                <div class="sub-value">Accumulated</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Silver in Schemes</h4>
+                                <div class="value">${formatGrams(schemes.total_silver_accumulated || 0)} g</div>
+                                <div class="sub-value">Accumulated</div>
+                            </div>
+                        </div>
+
+                        <div class="report-table-container">
+                            <h4>Scheme Distribution</h4>
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Scheme Type</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Gold Plus</td>
+                                        <td>${schemes.goldplus_count || 0}</td>
+                                        <td>${((schemes.goldplus_count || 0) / (schemes.total_schemes || 1) * 100).toFixed(1)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Gold Flexi</td>
+                                        <td>${schemes.goldflexi_count || 0}</td>
+                                        <td>${((schemes.goldflexi_count || 0) / (schemes.total_schemes || 1) * 100).toFixed(1)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Silver Plus</td>
+                                        <td>${schemes.silverplus_count || 0}</td>
+                                        <td>${((schemes.silverplus_count || 0) / (schemes.total_schemes || 1) * 100).toFixed(1)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Silver Flexi</td>
+                                        <td>${schemes.silverflexi_count || 0}</td>
+                                        <td>${((schemes.silverflexi_count || 0) / (schemes.total_schemes || 1) * 100).toFixed(1)}%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">Failed to load analytics</div>';
+                }
+            } catch (error) {
+                console.error('Error loading dashboard analytics:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading analytics</div>';
+            }
+        }
+
+        // Scheme-wise Report
+        async function loadSchemeWiseReport() {
+            const contentDiv = document.getElementById('schemeReportContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            const startDate = document.getElementById('schemeStartDate').value;
+            const endDate = document.getElementById('schemeEndDate').value;
+
+            try {
+                let url = 'https://api.vmuruganjewellery.co.in:3001/api/admin/reports/scheme-wise';
+                if (startDate && endDate) {
+                    url += `?start_date=${startDate}&end_date=${endDate}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success && data.report.length > 0) {
+                    let html = '<div class="report-table-container"><table class="report-table"><thead><tr>';
+                    html += '<th>Scheme Type</th><th>Metal</th><th>Total</th><th>Active</th><th>Completed</th>';
+                    html += '<th>Cancelled</th><th>Investment</th><th>Metal Accumulated</th><th>Avg Monthly</th></tr></thead><tbody>';
+
+                    data.report.forEach(row => {
+                        html += `<tr>
+                            <td>${row.scheme_type}</td>
+                            <td>${row.metal_type}</td>
+                            <td>${row.total_schemes}</td>
+                            <td>${row.active_count}</td>
+                            <td>${row.completed_count}</td>
+                            <td>${row.cancelled_count}</td>
+                            <td>₹${formatCurrency(row.total_investment)}</td>
+                            <td>${formatGrams(row.total_metal_accumulated)} g</td>
+                            <td>₹${formatCurrency(row.avg_monthly_amount)}</td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No data found for selected filters</div>';
+                }
+            } catch (error) {
+                console.error('Error loading scheme report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearSchemeFilters() {
+            document.getElementById('schemeStartDate').value = '';
+            document.getElementById('schemeEndDate').value = '';
+        }
+
+        function exportSchemeReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Customer-wise Report
+        async function loadCustomerWiseReport() {
+            const contentDiv = document.getElementById('customerReportContent');
+            const customerId = document.getElementById('customerIdFilter').value.trim();
+            const customerPhone = document.getElementById('customerPhoneFilter').value.trim();
+
+            if (!customerId && !customerPhone) {
+                alert('Please enter Customer ID or Phone number');
+                return;
+            }
+
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            try {
+                let url = 'https://api.vmuruganjewellery.co.in:3001/api/admin/reports/customer-wise?';
+                if (customerId) url += `customer_id=${customerId}`;
+                if (customerPhone) url += `customer_phone=${customerPhone}`;
+
+                const startDate = document.getElementById('customerStartDate').value;
+                const endDate = document.getElementById('customerEndDate').value;
+                if (startDate && endDate) {
+                    url += `&start_date=${startDate}&end_date=${endDate}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    const { customer, schemes, transactions } = data;
+
+                    let html = `
+                        <div class="summary-cards">
+                            <div class="summary-card">
+                                <h4>Customer ID</h4>
+                                <div class="value">${customer.customer_id}</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Total Investment</h4>
+                                <div class="value">₹${formatCurrency(customer.total_scheme_investment + customer.total_transaction_amount)}</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Gold Holdings</h4>
+                                <div class="value">${formatGrams(customer.total_gold_grams + customer.total_gold_purchased)} g</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Silver Holdings</h4>
+                                <div class="value">${formatGrams(customer.total_silver_grams + customer.total_silver_purchased)} g</div>
+                            </div>
+                        </div>
+
+                        <div class="detail-section">
+                            <h4>Customer Information</h4>
+                            <div class="detail-row"><div class="detail-label">Name:</div><div class="detail-value">${customer.name}</div></div>
+                            <div class="detail-row"><div class="detail-label">Phone:</div><div class="detail-value">${customer.phone}</div></div>
+                            <div class="detail-row"><div class="detail-label">Email:</div><div class="detail-value">${customer.email || 'N/A'}</div></div>
+                            <div class="detail-row"><div class="detail-label">Member Since:</div><div class="detail-value">${formatDate(customer.member_since)}</div></div>
+                        </div>
+
+                        <div class="report-table-container">
+                            <h4>Schemes (${schemes.length})</h4>
+                            <table class="report-table">
+                                <thead>
+                                    <tr><th>Scheme ID</th><th>Type</th><th>Status</th><th>Monthly</th><th>Invested</th><th>Metal</th><th>Installments</th></tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    schemes.forEach(scheme => {
+                        html += `<tr>
+                            <td>${scheme.scheme_id}</td>
+                            <td>${scheme.scheme_type}</td>
+                            <td><span class="status-badge status-${scheme.status.toLowerCase()}">${scheme.status}</span></td>
+                            <td>₹${formatCurrency(scheme.monthly_amount)}</td>
+                            <td>₹${formatCurrency(scheme.total_invested)}</td>
+                            <td>${formatGrams(scheme.total_metal_accumulated)} g</td>
+                            <td>${scheme.completed_installments}${scheme.duration_months ? '/' + scheme.duration_months : ''}</td>
+                        </tr>`;
+                    });
+
+                    html += `</tbody></table></div>`;
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">Customer not found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading customer report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearCustomerFilters() {
+            document.getElementById('customerIdFilter').value = '';
+            document.getElementById('customerPhoneFilter').value = '';
+            document.getElementById('customerStartDate').value = '';
+            document.getElementById('customerEndDate').value = '';
+        }
+
+        function exportCustomerReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Transaction-wise Report
+        async function loadTransactionWiseReport() {
+            const contentDiv = document.getElementById('transactionReportContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            const startDate = document.getElementById('txnStartDate').value;
+            const endDate = document.getElementById('txnEndDate').value;
+            const status = document.getElementById('txnStatusFilter').value;
+            const metalType = document.getElementById('txnMetalFilter').value;
+
+            try {
+                let url = 'https://api.vmuruganjewellery.co.in:3001/api/admin/reports/transaction-wise?';
+                const params = [];
+                if (startDate && endDate) {
+                    params.push(`start_date=${startDate}&end_date=${endDate}`);
+                }
+                if (status) params.push(`status=${status}`);
+                if (metalType) params.push(`metal_type=${metalType}`);
+                url += params.join('&');
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success && data.transactions.length > 0) {
+                    const { transactions, summary } = data;
+
+                    let html = `
+                        <div class="summary-cards">
+                            <div class="summary-card">
+                                <h4>Total Transactions</h4>
+                                <div class="value">${summary.total_transactions}</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Total Amount</h4>
+                                <div class="value">₹${formatCurrency(summary.total_amount)}</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Gold Sold</h4>
+                                <div class="value">${formatGrams(summary.total_gold_grams)} g</div>
+                            </div>
+                            <div class="summary-card">
+                                <h4>Silver Sold</h4>
+                                <div class="value">${formatGrams(summary.total_silver_grams)} g</div>
+                            </div>
+                        </div>
+
+                        <div class="report-table-container">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Transaction ID</th>
+                                        <th>Customer ID</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Metal</th>
+                                        <th>Grams</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    transactions.forEach(txn => {
+                        const statusClass = txn.status === 'SUCCESS' ? 'status-verified' : 'status-pending';
+                        html += `<tr>
+                            <td>${txn.transaction_id}</td>
+                            <td>${txn.customer_id || 'N/A'}</td>
+                            <td>${txn.transaction_type}</td>
+                            <td>₹${formatCurrency(txn.amount)}</td>
+                            <td>${txn.metal_type}</td>
+                            <td>${formatGrams(txn.metal_grams)} g</td>
+                            <td><span class="status-badge ${statusClass}">${txn.status}</span></td>
+                            <td>${formatDate(txn.created_at)}</td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No transactions found for selected filters</div>';
+                }
+            } catch (error) {
+                console.error('Error loading transaction report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearTransactionFilters() {
+            document.getElementById('txnStartDate').value = '';
+            document.getElementById('txnEndDate').value = '';
+            document.getElementById('txnStatusFilter').value = '';
+            document.getElementById('txnMetalFilter').value = '';
+        }
+
+        function exportTransactionReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Date-wise Report
+        async function loadDateWiseReport() {
+            const contentDiv = document.getElementById('dateWiseReportContent');
+            const startDate = document.getElementById('dateWiseStartDate').value;
+            const endDate = document.getElementById('dateWiseEndDate').value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            try {
+                const url = `https://api.vmuruganjewellery.co.in:3001/api/admin/reports/date-wise?start_date=${startDate}&end_date=${endDate}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    const { transactions, customers, schemes } = data;
+
+                    let html = '<div class="report-table-container"><h4>Daily Transaction Summary</h4><table class="report-table"><thead><tr>';
+                    html += '<th>Date</th><th>Transactions</th><th>Revenue</th><th>Gold Sold</th><th>Silver Sold</th><th>Success Rate</th></tr></thead><tbody>';
+
+                    transactions.forEach(row => {
+                        const successRate = (row.successful_transactions / row.total_transactions * 100).toFixed(1);
+                        html += `<tr>
+                            <td>${formatDate(row.transaction_date)}</td>
+                            <td>${row.total_transactions}</td>
+                            <td>₹${formatCurrency(row.total_revenue)}</td>
+                            <td>${formatGrams(row.total_gold_sold)} g</td>
+                            <td>${formatGrams(row.total_silver_sold)} g</td>
+                            <td>${successRate}%</td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No data found for selected date range</div>';
+                }
+            } catch (error) {
+                console.error('Error loading date-wise report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearDateWiseFilters() {
+            document.getElementById('dateWiseStartDate').value = '';
+            document.getElementById('dateWiseEndDate').value = '';
+        }
+
+        function exportDateWiseReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Month-wise Report
+        async function loadMonthWiseReport() {
+            const contentDiv = document.getElementById('monthWiseReportContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            const year = document.getElementById('monthWiseYear').value;
+            const month = document.getElementById('monthWiseMonth').value;
+
+            try {
+                let url = 'https://api.vmuruganjewellery.co.in:3001/api/admin/reports/month-wise?';
+                const params = [];
+                if (year) params.push(`year=${year}`);
+                if (month) params.push(`month=${month}`);
+                url += params.join('&');
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success && data.transactions.length > 0) {
+                    let html = '<div class="report-table-container"><h4>Monthly Summary</h4><table class="report-table"><thead><tr>';
+                    html += '<th>Month</th><th>Transactions</th><th>Revenue</th><th>Gold Sold</th><th>Silver Sold</th><th>Avg Transaction</th></tr></thead><tbody>';
+
+                    data.transactions.forEach(row => {
+                        html += `<tr>
+                            <td>${row.month_year}</td>
+                            <td>${row.total_transactions}</td>
+                            <td>₹${formatCurrency(row.total_revenue)}</td>
+                            <td>${formatGrams(row.total_gold_sold)} g</td>
+                            <td>${formatGrams(row.total_silver_sold)} g</td>
+                            <td>₹${formatCurrency(row.avg_transaction_amount)}</td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No data found for selected filters</div>';
+                }
+            } catch (error) {
+                console.error('Error loading month-wise report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearMonthWiseFilters() {
+            document.getElementById('monthWiseYear').value = '';
+            document.getElementById('monthWiseMonth').value = '';
+        }
+
+        function exportMonthWiseReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Year-wise Report
+        async function loadYearWiseReport() {
+            const contentDiv = document.getElementById('yearWiseReportContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Generating report...</div>';
+
+            const year = document.getElementById('yearWiseYear').value;
+
+            try {
+                let url = 'https://api.vmuruganjewellery.co.in:3001/api/admin/reports/year-wise';
+                if (year) url += `?year=${year}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success && data.transactions.length > 0) {
+                    let html = '<div class="report-table-container"><h4>Yearly Summary</h4><table class="report-table"><thead><tr>';
+                    html += '<th>Year</th><th>Transactions</th><th>Revenue</th><th>Gold Sold</th><th>Silver Sold</th><th>Avg Transaction</th>';
+                    if (data.growth.length > 0) html += '<th>Revenue Growth</th>';
+                    html += '</tr></thead><tbody>';
+
+                    data.transactions.forEach((row, index) => {
+                        const growth = data.growth.find(g => g.year === row.year);
+                        html += `<tr>
+                            <td>${row.year}</td>
+                            <td>${row.total_transactions}</td>
+                            <td>₹${formatCurrency(row.total_revenue)}</td>
+                            <td>${formatGrams(row.total_gold_sold)} g</td>
+                            <td>${formatGrams(row.total_silver_sold)} g</td>
+                            <td>₹${formatCurrency(row.avg_transaction_amount)}</td>
+                            ${growth ? `<td style="color: ${growth.revenue_growth >= 0 ? 'green' : 'red'}">${growth.revenue_growth}%</td>` : '<td>-</td>'}
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No data found for selected year</div>';
+                }
+            } catch (error) {
+                console.error('Error loading year-wise report:', error);
+                contentDiv.innerHTML = '<div class="no-data">Error loading report</div>';
+            }
+        }
+
+        function clearYearWiseFilters() {
+            document.getElementById('yearWiseYear').value = '';
+        }
+
+        function exportYearWiseReport() {
+            alert('📥 CSV export functionality will be implemented');
+        }
+
+        // Utility function for currency formatting
+        function formatCurrency(value) {
+            return parseFloat(value || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
     </script>
 </body>
 </html>

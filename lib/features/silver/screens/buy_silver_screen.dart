@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_border_radius.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/responsive.dart' hide AppSpacing, AppBorderRadius;
+import '../../../core/utils/number_formatter.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../services/silver_price_service.dart';
 import '../models/silver_price_model.dart';
 import '../../../core/services/auto_logout_service.dart';
+import '../../../core/services/secure_http_client.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
@@ -28,7 +31,9 @@ import '../../schemes/services/scheme_payment_validation_service.dart';
 class BuySilverScreen extends StatefulWidget {
   final double? prefilledAmount;
   final bool? isFromScheme;
-  final String? schemeId;
+  final String? schemeId; // Will be null initially, created after payment
+  final String? schemeType; // SILVERPLUS, SILVERFLEXI, etc.
+  final double? monthlyAmount; // For PLUS schemes
   final String? schemeName;
 
   const BuySilverScreen({
@@ -36,6 +41,8 @@ class BuySilverScreen extends StatefulWidget {
     this.prefilledAmount,
     this.isFromScheme,
     this.schemeId,
+    this.schemeType,
+    this.monthlyAmount,
     this.schemeName,
   });
 
@@ -428,7 +435,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '${silverQuantity.toStringAsFixed(4)} grams',
+            '${NumberFormatter.formatToThreeDecimals(silverQuantity)} grams',
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
               color: AppColors.primaryGreen,
               fontWeight: FontWeight.bold,
@@ -463,7 +470,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
             const SizedBox(height: AppSpacing.md),
             _buildSummaryRow('Investment Amount', '₹${_selectedAmount.toStringAsFixed(2)}'),
             _buildSummaryRow('Silver Price', _currentPrice?.formattedPrice ?? '₹0.00'),
-            _buildSummaryRow('Silver Quantity', '${silverQuantity.toStringAsFixed(4)} grams'),
+            _buildSummaryRow('Silver Quantity', '${NumberFormatter.formatToThreeDecimals(silverQuantity)} grams'),
             const Divider(height: AppSpacing.lg),
             _buildSummaryRow(
               'Total Payable',
@@ -545,7 +552,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'You will get: ${(_selectedAmount / _currentPrice!.pricePerGram).toStringAsFixed(3)} grams of silver',
+              'You will get: ${NumberFormatter.formatToThreeDecimals(_selectedAmount / _currentPrice!.pricePerGram)} grams of silver',
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
@@ -857,17 +864,29 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
     // If this is a scheme payment, validate scheme payment rules
     if (widget.isFromScheme == true && widget.schemeId != null) {
+      print('🔍 BUY SILVER: This is a scheme payment');
+      print('🔍 BUY SILVER: Scheme ID: ${widget.schemeId}');
+      print('🔍 BUY SILVER: Scheme Name: ${widget.schemeName}');
+      print('🔍 BUY SILVER: Amount: $_selectedAmount');
+
       final customerInfo = await CustomerService.getCustomerInfo();
       final customerPhone = customerInfo['phone'] ?? '';
 
+      print('🔍 BUY SILVER: Customer phone: $customerPhone');
+
       if (customerPhone.isNotEmpty) {
+        print('🔍 BUY SILVER: Starting validation...');
+
         final validationResult = await SchemePaymentValidationService.validateSchemePayment(
           schemeId: widget.schemeId!,
           customerPhone: customerPhone,
           amount: _selectedAmount,
         );
 
+        print('🔍 BUY SILVER: Validation result: ${validationResult.toString()}');
+
         if (!validationResult.canPay) {
+          print('❌ BUY SILVER: Validation failed: ${validationResult.message}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(validationResult.message),
@@ -877,6 +896,8 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           );
           return;
         }
+
+        print('✅ BUY SILVER: Validation passed, proceeding to payment');
       }
     }
 
@@ -918,7 +939,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
 
 
-  void _handlePaymentComplete(PaymentResponse response) {
+  void _handlePaymentComplete(PaymentResponse response) async {
     if (response.status == PaymentStatus.success) {
       // Clear any previous error information
       setState(() {
@@ -927,12 +948,30 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       });
 
       // Save transaction to database only after successful payment
-      _saveSuccessfulTransaction(response);
+      await _saveSuccessfulTransaction(response);
+
+      // If this is a scheme payment, create the scheme AFTER payment success
+      if (widget.isFromScheme == true && widget.schemeType != null) {
+        print('🎯 PAYMENT SUCCESS: Creating scheme after payment...');
+        await _createSchemeAfterPayment(response);
+      }
+
+      // Get customer ID for success message
+      String successMessage = 'Silver purchase successful! Transaction ID: ${response.transactionId}';
+      try {
+        final customerInfo = await CustomerService.getCustomerInfo();
+        final customerId = customerInfo['customer_id'];
+        if (customerId != null) {
+          successMessage = 'Silver purchase successful!\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+        }
+      } catch (e) {
+        print('❌ Error getting customer ID: $e');
+      }
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Silver purchase successful! Transaction ID: ${response.transactionId}'),
+          content: Text(successMessage),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 5),
         ),
@@ -955,6 +994,136 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+    }
+  }
+
+  Future<void> _createSchemeAfterPayment(PaymentResponse response) async {
+    try {
+      print('🎯 CREATE SCHEME AFTER PAYMENT: Starting...');
+      print('🎯 Scheme Type: ${widget.schemeType}');
+      print('🎯 Monthly Amount: ${widget.monthlyAmount}');
+      print('🎯 Transaction ID: ${response.transactionId}');
+
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '';
+      final customerName = customerInfo['name'] ?? '';
+
+      if (customerPhone.isEmpty) {
+        print('❌ CREATE SCHEME: Customer phone is empty');
+        return;
+      }
+
+      final requestBody = {
+        'customer_phone': customerPhone,
+        'customer_name': customerName,
+        'scheme_type': widget.schemeType,
+        'monthly_amount': widget.monthlyAmount ?? 0.0,
+        'transaction_id': response.transactionId,
+      };
+
+      print('🔍 CREATE SCHEME: Request body: $requestBody');
+
+      final apiResponse = await SecureHttpClient.post(
+        'https://api.vmuruganjewellery.co.in:3001/api/schemes/create-after-payment',
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      print('🔍 CREATE SCHEME: Response status: ${apiResponse.statusCode}');
+      print('🔍 CREATE SCHEME: Response body: ${apiResponse.body}');
+
+      if (apiResponse.statusCode == 200) {
+        final data = jsonDecode(apiResponse.body);
+        if (data['success'] == true) {
+          final schemeId = data['scheme_id'];
+          final isNew = data['is_new'] ?? false;
+
+          print('✅ CREATE SCHEME: Success! Scheme ID: $schemeId, Is New: $isNew');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isNew
+                ? 'Scheme created successfully! ID: $schemeId'
+                : 'Using existing scheme: $schemeId'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          print('❌ CREATE SCHEME: API returned success=false: ${data['message']}');
+        }
+      } else if (apiResponse.statusCode == 400) {
+        // Handle monthly payment restriction error
+        final data = jsonDecode(apiResponse.body);
+        final errorCode = data['error_code'];
+
+        if (errorCode == 'MONTHLY_PAYMENT_ALREADY_MADE') {
+          final message = data['message'] ?? 'You have already paid for this month';
+          print('⏰ MONTHLY PAYMENT RESTRICTION: $message');
+
+          // Show user-friendly error dialog
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.calendar_today, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Monthly Payment Limit'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    SizedBox(height: 16),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'PLUS schemes allow only one payment per calendar month.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('OK', style: TextStyle(fontSize: 16)),
+                  ),
+                ],
+              ),
+            );
+          }
+        } else {
+          print('❌ CREATE SCHEME: HTTP 400 error: ${data['message']}');
+        }
+      } else {
+        print('❌ CREATE SCHEME: HTTP error ${apiResponse.statusCode}');
+      }
+    } catch (e) {
+      print('❌ CREATE SCHEME: Exception: $e');
     }
   }
 

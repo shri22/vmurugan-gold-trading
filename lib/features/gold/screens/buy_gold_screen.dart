@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
+import '../../../core/utils/number_formatter.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/theme/app_typography.dart';
@@ -12,6 +14,7 @@ import '../services/gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
 
 import '../../../core/config/server_config.dart';
+import '../../../core/services/secure_http_client.dart';
 import '../../schemes/services/scheme_management_service.dart';
 import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
@@ -32,7 +35,9 @@ import '../../schemes/services/scheme_payment_validation_service.dart';
 class BuyGoldScreen extends StatefulWidget {
   final double? prefilledAmount;
   final bool? isFromScheme;
-  final String? schemeId;
+  final String? schemeId; // Will be null initially, created after payment
+  final String? schemeType; // GOLDPLUS, GOLDFLEXI, etc.
+  final double? monthlyAmount; // For PLUS schemes
   final String? schemeName;
 
   const BuyGoldScreen({
@@ -40,6 +45,8 @@ class BuyGoldScreen extends StatefulWidget {
     this.prefilledAmount,
     this.isFromScheme,
     this.schemeId,
+    this.schemeType,
+    this.monthlyAmount,
     this.schemeName,
   });
 
@@ -430,7 +437,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '${goldQuantity.toStringAsFixed(4)} grams',
+            '${NumberFormatter.formatToThreeDecimals(goldQuantity)} grams',
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
               color: AppColors.primaryGreen, // Changed from white to dark green
               fontWeight: FontWeight.bold,
@@ -465,7 +472,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
             const SizedBox(height: AppSpacing.md),
             _buildSummaryRow('Investment Amount', '₹${_selectedAmount.toStringAsFixed(2)}'),
             _buildSummaryRow('Gold Price', _currentPrice?.formattedPrice ?? '₹0.00'),
-            _buildSummaryRow('Gold Quantity', '${goldQuantity.toStringAsFixed(4)} grams'),
+            _buildSummaryRow('Gold Quantity', '${NumberFormatter.formatToThreeDecimals(goldQuantity)} grams'),
             const Divider(height: AppSpacing.lg),
             _buildSummaryRow(
               'Total Payable', 
@@ -635,17 +642,29 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
     // If this is a scheme payment, validate scheme payment rules
     if (widget.isFromScheme == true && widget.schemeId != null) {
+      print('🔍 BUY GOLD: This is a scheme payment');
+      print('🔍 BUY GOLD: Scheme ID: ${widget.schemeId}');
+      print('🔍 BUY GOLD: Scheme Name: ${widget.schemeName}');
+      print('🔍 BUY GOLD: Amount: $_selectedAmount');
+
       final customerInfo = await CustomerService.getCustomerInfo();
       final customerPhone = customerInfo['phone'] ?? '';
 
+      print('🔍 BUY GOLD: Customer phone: $customerPhone');
+
       if (customerPhone.isNotEmpty) {
+        print('🔍 BUY GOLD: Starting validation...');
+
         final validationResult = await SchemePaymentValidationService.validateSchemePayment(
           schemeId: widget.schemeId!,
           customerPhone: customerPhone,
           amount: _selectedAmount,
         );
 
+        print('🔍 BUY GOLD: Validation result: ${validationResult.toString()}');
+
         if (!validationResult.canPay) {
+          print('❌ BUY GOLD: Validation failed: ${validationResult.message}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(validationResult.message),
@@ -655,6 +674,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
           );
           return;
         }
+
+        print('✅ BUY GOLD: Validation passed, proceeding to payment');
       }
     }
 
@@ -694,7 +715,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     );
   }
 
-  void _handlePaymentComplete(PaymentResponse response) {
+  void _handlePaymentComplete(PaymentResponse response) async {
     if (response.status == PaymentStatus.success) {
       // Clear any previous error information
       setState(() {
@@ -703,12 +724,30 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       });
 
       // Save transaction to database only after successful payment
-      _saveSuccessfulTransaction(response);
+      await _saveSuccessfulTransaction(response);
+
+      // If this is a scheme payment, create the scheme AFTER payment success
+      if (widget.isFromScheme == true && widget.schemeType != null) {
+        print('🎯 PAYMENT SUCCESS: Creating scheme after payment...');
+        await _createSchemeAfterPayment(response);
+      }
+
+      // Get customer ID for success message
+      String successMessage = 'Gold purchase successful! Transaction ID: ${response.transactionId}';
+      try {
+        final customerInfo = await CustomerService.getCustomerInfo();
+        final customerId = customerInfo['customer_id'];
+        if (customerId != null) {
+          successMessage = 'Gold purchase successful!\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+        }
+      } catch (e) {
+        print('❌ Error getting customer ID: $e');
+      }
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gold purchase successful! Transaction ID: ${response.transactionId}'),
+          content: Text(successMessage),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 5),
         ),
@@ -762,6 +801,136 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       }
     } catch (e) {
       print('❌ Error saving transaction: $e');
+    }
+  }
+
+  Future<void> _createSchemeAfterPayment(PaymentResponse response) async {
+    try {
+      print('🎯 CREATE SCHEME AFTER PAYMENT: Starting...');
+      print('🎯 Scheme Type: ${widget.schemeType}');
+      print('🎯 Monthly Amount: ${widget.monthlyAmount}');
+      print('🎯 Transaction ID: ${response.transactionId}');
+
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '';
+      final customerName = customerInfo['name'] ?? '';
+
+      if (customerPhone.isEmpty) {
+        print('❌ CREATE SCHEME: Customer phone is empty');
+        return;
+      }
+
+      final requestBody = {
+        'customer_phone': customerPhone,
+        'customer_name': customerName,
+        'scheme_type': widget.schemeType,
+        'monthly_amount': widget.monthlyAmount ?? 0.0,
+        'transaction_id': response.transactionId,
+      };
+
+      print('🔍 CREATE SCHEME: Request body: $requestBody');
+
+      final apiResponse = await SecureHttpClient.post(
+        'https://api.vmuruganjewellery.co.in:3001/api/schemes/create-after-payment',
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      );
+
+      print('🔍 CREATE SCHEME: Response status: ${apiResponse.statusCode}');
+      print('🔍 CREATE SCHEME: Response body: ${apiResponse.body}');
+
+      if (apiResponse.statusCode == 200) {
+        final data = jsonDecode(apiResponse.body);
+        if (data['success'] == true) {
+          final schemeId = data['scheme_id'];
+          final isNew = data['is_new'] ?? false;
+
+          print('✅ CREATE SCHEME: Success! Scheme ID: $schemeId, Is New: $isNew');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isNew
+                ? 'Scheme created successfully! ID: $schemeId'
+                : 'Using existing scheme: $schemeId'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          print('❌ CREATE SCHEME: API returned success=false: ${data['message']}');
+        }
+      } else if (apiResponse.statusCode == 400) {
+        // Handle monthly payment restriction error
+        final data = jsonDecode(apiResponse.body);
+        final errorCode = data['error_code'];
+
+        if (errorCode == 'MONTHLY_PAYMENT_ALREADY_MADE') {
+          final message = data['message'] ?? 'You have already paid for this month';
+          print('⏰ MONTHLY PAYMENT RESTRICTION: $message');
+
+          // Show user-friendly error dialog
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.calendar_today, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Monthly Payment Limit'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: TextStyle(fontSize: 16),
+                    ),
+                    SizedBox(height: 16),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'PLUS schemes allow only one payment per calendar month.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('OK', style: TextStyle(fontSize: 16)),
+                  ),
+                ],
+              ),
+            );
+          }
+        } else {
+          print('❌ CREATE SCHEME: HTTP 400 error: ${data['message']}');
+        }
+      } else {
+        print('❌ CREATE SCHEME: HTTP error ${apiResponse.statusCode}');
+      }
+    } catch (e) {
+      print('❌ CREATE SCHEME: Exception: $e');
     }
   }
 

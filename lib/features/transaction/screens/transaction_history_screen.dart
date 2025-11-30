@@ -3,6 +3,7 @@ import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/custom_button.dart';
+import '../../../core/services/customer_service.dart';
 import '../../gold/models/gold_scheme_model.dart';
 import '../../gold/services/gold_scheme_service.dart';
 import '../../portfolio/services/portfolio_service.dart';
@@ -19,17 +20,38 @@ class TransactionHistoryScreen extends StatefulWidget {
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   final GoldSchemeService _schemeService = GoldSchemeService();
   final PortfolioService _portfolioService = PortfolioService();
-  List<SchemePayment> _allTransactions = [];
   List<Transaction> _realTransactions = [];
   String _selectedFilter = 'All';
   final List<String> _filterOptions = ['All', 'Completed', 'Pending', 'Failed'];
+  String _selectedSchemeType = 'All';
+  final List<String> _schemeTypeOptions = [
+    'All',
+    'Regular',
+    'Gold Plus',
+    'Gold Flexi',
+    'Silver Plus',
+    'Silver Flexi',
+  ];
   bool _isLoading = false;
-  bool _useRealData = true; // Flag to switch between real and mock data
+  String? _customerId; // Store customer ID
 
   @override
   void initState() {
     super.initState();
+    _loadCustomerData();
     _loadTransactions();
+  }
+
+  Future<void> _loadCustomerData() async {
+    try {
+      final customerInfo = await CustomerService.getCustomerInfo();
+      setState(() {
+        _customerId = customerInfo['customer_id'];
+      });
+      print('📋 Customer ID loaded: $_customerId');
+    } catch (e) {
+      print('❌ Error loading customer ID: $e');
+    }
   }
 
   Future<void> _loadTransactions() async {
@@ -37,77 +59,69 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
     try {
       print('🔄 Loading transaction history...');
+      print('📊 Fetching real transactions from database...');
 
-      if (_useRealData) {
-        // Load real transactions from database
-        print('📊 Fetching real transactions from database...');
-        final realTransactions = await _portfolioService.getTransactionHistory(limit: 100);
-        print('✅ Loaded ${realTransactions.length} real transactions');
+      final realTransactions = await _portfolioService.getTransactionHistory(limit: 100);
+      print('✅ Loaded ${realTransactions.length} real transactions');
 
-        setState(() {
-          _realTransactions = realTransactions;
-        });
-      } else {
-        // Fallback to mock data
-        print('📊 Loading mock transactions from schemes...');
-        _schemeService.initialize();
-        final schemes = _schemeService.getUserSchemes();
-
-        // Collect all payments from all schemes
-        final allPayments = <SchemePayment>[];
-        for (final scheme in schemes) {
-          allPayments.addAll(scheme.payments);
-        }
-
-        // Sort by date (newest first)
-        allPayments.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
-
-        setState(() {
-          _allTransactions = allPayments;
-        });
-      }
+      setState(() {
+        _realTransactions = realTransactions;
+      });
     } catch (e) {
       print('❌ Error loading transactions: $e');
-      // Fallback to mock data on error
-      setState(() => _useRealData = false);
-      _loadTransactions();
+      setState(() {
+        _realTransactions = [];
+      });
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   List<SchemePayment> get _filteredTransactions {
-    if (_useRealData) {
-      // Convert real transactions to SchemePayment format for display
-      final convertedTransactions = _realTransactions.map((transaction) {
-        return SchemePayment(
-          id: transaction.id?.toString() ?? transaction.transactionId,
-          schemeId: 'REAL_TRANSACTION_${transaction.transactionId}',
-          transactionId: transaction.transactionId,
-          amount: transaction.amount,
-          goldQuantity: transaction.metalGrams,
-          goldPrice: transaction.metalPricePerGram,
-          paymentDate: transaction.createdAt,
-          status: _mapTransactionStatus(transaction.status),
-          paymentMethod: transaction.paymentMethod.toString().split('.').last,
-        );
-      }).toList();
+    // Convert real transactions to SchemePayment format for display
+    var convertedTransactions = _realTransactions.map((transaction) {
+      return SchemePayment(
+        id: transaction.id?.toString() ?? transaction.transactionId,
+        schemeId: transaction.schemeId ?? 'REGULAR',
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        goldQuantity: transaction.metalGrams,
+        goldPrice: transaction.metalPricePerGram,
+        paymentDate: transaction.createdAt,
+        status: _mapTransactionStatus(transaction.status),
+        paymentMethod: transaction.paymentMethod.toString().split('.').last,
+      );
+    }).toList();
 
-      if (_selectedFilter == 'All') {
-        return convertedTransactions;
-      }
-      return convertedTransactions.where((transaction) {
-        return transaction.status.toLowerCase() == _selectedFilter.toLowerCase();
-      }).toList();
-    } else {
-      // Use mock data
-      if (_selectedFilter == 'All') {
-        return _allTransactions;
-      }
-      return _allTransactions.where((transaction) {
+    // Filter by status
+    if (_selectedFilter != 'All') {
+      convertedTransactions = convertedTransactions.where((transaction) {
         return transaction.status.toLowerCase() == _selectedFilter.toLowerCase();
       }).toList();
     }
+
+    // Filter by scheme type
+    if (_selectedSchemeType != 'All') {
+      convertedTransactions = convertedTransactions.where((transaction) {
+        final schemeId = transaction.schemeId;
+        switch (_selectedSchemeType) {
+          case 'Regular':
+            return schemeId == 'REGULAR' || schemeId.startsWith('REAL_TRANSACTION');
+          case 'Gold Plus':
+            return schemeId.startsWith('GP_');
+          case 'Gold Flexi':
+            return schemeId.startsWith('GF_');
+          case 'Silver Plus':
+            return schemeId.startsWith('SP_');
+          case 'Silver Flexi':
+            return schemeId.startsWith('SF_');
+          default:
+            return true;
+        }
+      }).toList();
+    }
+
+    return convertedTransactions;
   }
 
   String _mapTransactionStatus(TransactionStatus status) {
@@ -128,23 +142,17 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.getBackgroundColor(context),
       appBar: AppBar(
-        title: Text(_useRealData ? 'Transaction History (Live)' : 'Transaction History (Demo)'),
+        title: const Text('Transaction History'),
+        backgroundColor: AppColors.primaryGreen, // Dark Green
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadTransactions,
             tooltip: 'Refresh',
-          ),
-          IconButton(
-            icon: Icon(_useRealData ? Icons.cloud : Icons.cloud_off),
-            onPressed: () {
-              setState(() {
-                _useRealData = !_useRealData;
-              });
-              _loadTransactions();
-            },
-            tooltip: _useRealData ? 'Switch to Demo Data' : 'Switch to Live Data',
           ),
           IconButton(
             icon: const Icon(Icons.filter_list),
@@ -158,8 +166,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       ),
       body: Column(
         children: [
-          // Filter Chips
+          // Status Filter Chips
           _buildFilterChips(),
+
+          // Scheme Type Filter Chips
+          _buildSchemeTypeFilterChips(),
 
           // Transaction Summary
           _buildTransactionSummary(),
@@ -212,6 +223,41 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               checkmarkColor: AppColors.primaryGold,
               labelStyle: TextStyle(
                 color: isSelected ? AppColors.primaryGold : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSchemeTypeFilterChips() {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _schemeTypeOptions.length,
+        itemBuilder: (context, index) {
+          final schemeType = _schemeTypeOptions[index];
+          final isSelected = _selectedSchemeType == schemeType;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: FilterChip(
+              label: Text(schemeType),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  _selectedSchemeType = schemeType;
+                });
+              },
+              backgroundColor: AppColors.lightGrey,
+              selectedColor: AppColors.primaryGreen.withValues(alpha: 0.2),
+              checkmarkColor: AppColors.primaryGreen,
+              labelStyle: TextStyle(
+                color: isSelected ? AppColors.primaryGreen : AppColors.textSecondary,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -593,6 +639,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_customerId != null) ...[
+                      _buildDetailRow('Customer ID', _customerId!),
+                      const Divider(height: 24),
+                    ],
                     _buildDetailRow('Transaction ID', transaction.transactionId),
                     _buildDetailRow('Amount', transaction.formattedAmount),
                     _buildDetailRow('Gold Quantity', transaction.formattedGoldQuantity),

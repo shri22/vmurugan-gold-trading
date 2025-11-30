@@ -182,18 +182,26 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.getBackgroundColor(context),
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: Responsive.getPadding(context),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            left: Responsive.getPadding(context).left,
+            right: Responsive.getPadding(context).right,
+            top: Responsive.getPadding(context).top,
+            bottom: MediaQuery.of(context).viewInsets.bottom + Responsive.getPadding(context).bottom,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: AppSpacing.xxl),
-              
+
               // Logo
               const VMuruganLogo(size: 80),
               const SizedBox(height: AppSpacing.xl),
-              
+
               // Welcome back message
               Text(
                 'Welcome Back!',
@@ -204,7 +212,7 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.sm),
-              
+
               // Phone number display
               if (_savedPhone != null) ...[
                 Container(
@@ -238,17 +246,17 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
               ],
-              
+
               // MPIN Input
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.getCardColor(context),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: AppColors.getShadowColor(context),
                       blurRadius: 10,
                       offset: const Offset(0, 2),
                     ),
@@ -331,26 +339,33 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
 
   /// Beautiful 4-box MPIN input with dark green and gold theme
   Widget _buildMpinBoxes() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(4, (index) {
+        final hasFocus = _mpinFocusNodes[index].hasFocus;
+        final hasValue = _mpinControllers[index].text.isNotEmpty;
+
         return Container(
           width: 60,
           height: 70,
           decoration: BoxDecoration(
-            color: const Color(0xFF1B4332), // Dark green background
+            color: AppColors.getCardColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: _mpinFocusNodes[index].hasFocus
-                ? const Color(0xFFFFD700) // Gold when focused
-                : const Color(0xFF2D5A3D), // Lighter green when not focused
-              width: 2,
+              color: hasFocus || hasValue
+                ? AppColors.primaryGold // Gold when focused or filled
+                : AppColors.primaryGreen, // Green when not focused
+              width: hasFocus || hasValue ? 3 : 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFFD700).withOpacity(0.2), // Gold glow
-                blurRadius: _mpinFocusNodes[index].hasFocus ? 8 : 0,
-                spreadRadius: _mpinFocusNodes[index].hasFocus ? 1 : 0,
+                color: hasFocus
+                  ? AppColors.primaryGold.withOpacity(0.3)
+                  : AppColors.getShadowColor(context),
+                blurRadius: hasFocus ? 8 : 4,
+                spreadRadius: hasFocus ? 1 : 0,
               ),
             ],
           ),
@@ -361,17 +376,17 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             maxLength: 1,
             textAlign: TextAlign.center,
             obscureText: _obscureText,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Color(0xFFFFD700), // Gold text
+              color: hasValue ? AppColors.primaryGold : AppColors.primaryGreen,
             ),
             decoration: InputDecoration(
               counterText: '',
               border: InputBorder.none,
               hintText: _obscureText ? '•' : '',
-              hintStyle: const TextStyle(
-                color: Color(0xFF95A99C), // Light green hint
+              hintStyle: TextStyle(
+                color: AppColors.getSecondaryTextColor(context),
                 fontSize: 24,
               ),
             ),

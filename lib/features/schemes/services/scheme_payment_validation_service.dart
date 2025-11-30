@@ -16,15 +16,25 @@ class SchemePaymentValidationService {
     required double amount,
   }) async {
     try {
+      print('🔍 VALIDATION: Starting validation for scheme_id: $schemeId');
+      print('🔍 VALIDATION: Customer phone: $customerPhone');
+      print('🔍 VALIDATION: Amount: $amount');
+
       // Get scheme details first
       final schemeDetails = await _getSchemeDetails(schemeId);
+
+      print('🔍 VALIDATION: Scheme details result: $schemeDetails');
+
       if (schemeDetails == null) {
+        print('❌ VALIDATION: Scheme not found for scheme_id: $schemeId');
         return SchemePaymentValidationResult(
           canPay: false,
-          message: 'Scheme not found',
+          message: 'Scheme not found for ID: $schemeId',
           errorType: ValidationErrorType.schemeNotFound,
         );
       }
+
+      print('✅ VALIDATION: Scheme found, type: ${schemeDetails['scheme_type']}');
 
       final schemeType = schemeDetails['scheme_type'] as String;
       
@@ -130,21 +140,32 @@ class SchemePaymentValidationService {
   /// Get scheme details
   static Future<Map<String, dynamic>?> _getSchemeDetails(String schemeId) async {
     try {
+      final url = '$_baseUrl/api/schemes/details/$schemeId';
+      print('🔍 GET SCHEME DETAILS: Calling URL: $url');
+
       final response = await http.get(
-        Uri.parse('$_baseUrl/api/schemes/details/$schemeId'),
+        Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
       );
+
+      print('🔍 GET SCHEME DETAILS: Response status: ${response.statusCode}');
+      print('🔍 GET SCHEME DETAILS: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
+          print('✅ GET SCHEME DETAILS: Scheme found');
           return data['scheme'];
+        } else {
+          print('❌ GET SCHEME DETAILS: Success=false, message: ${data['message']}');
         }
+      } else {
+        print('❌ GET SCHEME DETAILS: HTTP error ${response.statusCode}');
       }
 
       return null;
     } catch (e) {
-      print('Error getting scheme details: $e');
+      print('❌ GET SCHEME DETAILS: Exception: $e');
       return null;
     }
   }

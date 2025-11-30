@@ -384,7 +384,12 @@ class FirebaseService {
     required String gatewayTransactionId,
     required String deviceInfo,
     required String location,
-    String? schemeId, // Optional scheme ID for scheme-based transactions
+    Map<String, dynamic>? additionalData,
+    String? schemeType,
+    String? schemeId,
+    int? installmentNumber,
+    double? silverGrams,
+    double? silverPricePerGram,
   }) async {
     // Validate Firebase configuration
     final configCheck = _validateConfig();

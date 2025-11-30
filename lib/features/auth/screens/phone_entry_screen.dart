@@ -383,82 +383,34 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
     );
   }
 
-  void _showDebugDialog(Map<String, dynamic> testResult) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Phone Formatting Debug'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDebugRow('Original', testResult['original'] ?? 'N/A'),
-              _buildDebugRow('Cleaned', testResult['cleaned'] ?? 'N/A'),
-              _buildDebugRow('Formatted', testResult['formatted'] ?? 'N/A'),
-              _buildDebugRow('Is Valid', testResult['isValid']?.toString() ?? 'N/A'),
-              _buildDebugRow('Length', testResult['length']?.toString() ?? 'N/A'),
-              _buildDebugRow('Expected Length', testResult['expectedLength']?.toString() ?? 'N/A'),
-              _buildDebugRow('Has Country Code', testResult['startsWithCountryCode']?.toString() ?? 'N/A'),
-              _buildDebugRow('First Digit', testResult['firstDigitAfterCountryCode'] ?? 'N/A'),
-              if (testResult['error'] != null)
-                _buildDebugRow('Error', testResult['error']),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildDebugRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackgroundColor(context),
+      resizeToAvoidBottomInset: true,
       appBar: _currentStep != AuthStep.phoneEntry ? AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.getTextColor(context)),
           onPressed: _goBack,
         ),
         title: Text(
           _getStepTitle(),
-          style: const TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: AppColors.getTextColor(context)),
         ),
       ) : null,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
           child: _buildCurrentStep(),
         ),
       ),
@@ -605,48 +557,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
                 icon: Icons.arrow_forward,
               ),
 
-              // Debug Section (only in debug mode)
-              if (kDebugMode) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Debug: Phone Formatting Test',
-                        style: TextStyle(
-                          color: Colors.blue[700],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          final phoneNumber = _phoneController.text.trim();
-                          if (phoneNumber.isNotEmpty) {
-                            final testResult = FirebasePhoneAuthService.testPhoneFormatting(phoneNumber);
-                            _showDebugDialog(testResult);
-                          } else {
-                            _showError('Enter a phone number first');
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        ),
-                        child: const Text('Test Phone Format', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+
             ],
           ),
         ),
@@ -712,17 +623,17 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
                     width: 45,
                     height: 55,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.getCardColor(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _otpControllers[index].text.isNotEmpty
                             ? AppColors.primaryGold
-                            : AppColors.grey.withOpacity(0.3),
+                            : AppColors.getBorderColor(context),
                         width: 2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: AppColors.getShadowColor(context),
                           blurRadius: 5,
                           offset: const Offset(0, 2),
                         ),
@@ -734,10 +645,10 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       maxLength: 1,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: AppColors.getTextColor(context),
                       ),
                       decoration: const InputDecoration(
                         counterText: '',

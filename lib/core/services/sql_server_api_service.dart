@@ -53,6 +53,11 @@ class SqlServerApiService {
     String? deviceInfo,
     String? location,
     Map<String, dynamic>? additionalData,
+    String? schemeType,
+    String? schemeId,
+    int? installmentNumber,
+    double? silverGrams,
+    double? silverPricePerGram,
   }) async {
     print('');
     print('🔄🔄🔄 SqlServerApiService.saveTransaction CALLED 🔄🔄🔄');
@@ -65,6 +70,9 @@ class SqlServerApiService {
     print('  💳 Payment Method: "$paymentMethod"');
     print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
     print('  📋 Additional Data Present: ${additionalData != null}');
+    print('  📋 Scheme Type: "$schemeType"');
+    print('  📋 Scheme ID: "$schemeId"');
+    print('  📋 Installment Number: $installmentNumber');
     print('🔄 Calling SqlServerService.saveTransaction...');
 
     final result = await SqlServerService.saveTransaction(
@@ -81,6 +89,11 @@ class SqlServerApiService {
       deviceInfo: deviceInfo,
       location: location,
       additionalData: additionalData,
+      schemeType: schemeType,
+      schemeId: schemeId,
+      installmentNumber: installmentNumber,
+      silverGrams: silverGrams,
+      silverPricePerGram: silverPricePerGram,
     );
 
     print('📥 SqlServerService.saveTransaction returned: $result');

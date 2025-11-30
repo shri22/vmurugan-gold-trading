@@ -222,153 +222,158 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.getBackgroundColor(context),
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.getTextColor(context)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
           child: Column(
             children: [
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Logo
-                    const VMuruganLogo(
-                      size: 70,
-                      primaryColor: AppColors.primaryGreen,
-                      textColor: AppColors.primaryGold,
-                    ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+              // Logo
+              const VMuruganLogo(
+                size: 70,
+                primaryColor: AppColors.primaryGreen,
+                textColor: AppColors.primaryGold,
+              ),
 
-                    const SizedBox(height: 32),
-                    
-                    // Title
-                    Text(
-                      'Enter MPIN',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryGold,
+              const SizedBox(height: 32),
+
+              // Title
+              Text(
+                'Enter MPIN',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryGold,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Phone number display
+              Text(
+                '+91 ${widget.phoneNumber}',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.getSecondaryTextColor(context),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Enter your 4-digit MPIN to login',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.getSecondaryTextColor(context),
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 40),
+
+              // MPIN Input Boxes
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(4, (index) {
+                  return Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppColors.getCardColor(context),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _focusNodes[index].hasFocus
+                          ? AppColors.primaryGold
+                          : AppColors.getBorderColor(context),
+                        width: 2,
                       ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    // Phone number display
-                    Text(
-                      '+91 ${widget.phoneNumber}',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    Text(
-                      'Enter your 4-digit MPIN to login',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    
-                    const SizedBox(height: 40),
-                    
-                    // MPIN Input Boxes
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(4, (index) {
-                        return Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _focusNodes[index].hasFocus 
-                                ? AppColors.primaryGold 
-                                : Colors.grey.shade300,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _mpinControllers[index],
-                            focusNode: _focusNodes[index],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            obscureText: true,
-                            maxLength: 1,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              counterText: '',
-                            ),
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                            onChanged: (value) => _onMpinChanged(value, index),
-                          ),
-                        );
-                      }),
-                    ),
-                    
-                    if (_errorMessage.isNotEmpty) ...[
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.getShadowColor(context),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.error_outline, color: AppColors.error, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMessage,
-                                style: TextStyle(
-                                  color: AppColors.error,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ],
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _mpinControllers[index],
+                      focusNode: _focusNodes[index],
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      obscureText: true,
+                      maxLength: 1,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        counterText: '',
+                      ),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      onChanged: (value) => _onMpinChanged(value, index),
+                    ),
+                  );
+                }),
+              ),
+
+              if (_errorMessage.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Login Button
-                    CustomButton(
-                      text: 'Login',
-                      onPressed: _isLoading ? null : _loginWithMpin,
-                      isLoading: _isLoading,
-                      icon: Icons.login,
-                    ),
-                  ],
+                  ),
                 ),
+              ],
+
+              const SizedBox(height: 32),
+
+              // Login Button
+              CustomButton(
+                text: 'Login',
+                onPressed: _isLoading ? null : _loginWithMpin,
+                isLoading: _isLoading,
+                icon: Icons.login,
               ),
-              
+
+              const SizedBox(height: 16),
+
               // Use different number option
               TextButton(
                 onPressed: () {

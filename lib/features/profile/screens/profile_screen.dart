@@ -20,6 +20,7 @@ import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/screens/notification_preferences_screen.dart';
 import 'change_mpin_screen.dart';
 import '../../onboarding/screens/onboarding_screen.dart';
+import '../../reports/screens/reports_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -55,59 +56,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // First try new authentication data
       final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
       final userPhone = prefs.getString('user_phone');
-      final userDataString = prefs.getString('user_data');
 
-      Map<String, dynamic>? userData;
-      if (userDataString != null) {
-        try {
-          userData = jsonDecode(userDataString);
-        } catch (e) {
-          print('Error parsing user data: $e');
-        }
-      }
+      // CRITICAL FIX: Fetch fresh data from API instead of using cached data
+      if (isLoggedIn && userPhone != null) {
+        print('🔄 Profile: Fetching fresh customer data from API for phone: $userPhone');
 
-      // If new auth data exists, use it
-      if (isLoggedIn && userPhone != null && userData != null) {
-        // Format the registration date
-        String formattedJoinDate = 'Recently';
-        if (userData['registration_date'] != null) {
-          try {
-            final regDate = DateTime.parse(userData['registration_date']);
-            formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
-          } catch (e) {
-            formattedJoinDate = 'Recently';
+        // Fetch fresh data from API
+        final apiResult = await ApiService.getCustomerByPhone(userPhone);
+
+        if (apiResult['success'] == true && apiResult['customer'] != null) {
+          final userData = apiResult['customer'];
+          print('✅ Profile: Fresh customer data fetched successfully');
+          print('   Customer ID: ${userData['customer_id']}');
+          print('   Address: ${userData['address']}');
+          print('   PAN Card: ${userData['pan_card']}');
+          // Format the registration date
+          String formattedJoinDate = 'Recently';
+          if (userData['registration_date'] != null) {
+            try {
+              final regDate = DateTime.parse(userData['registration_date']);
+              formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
+            } catch (e) {
+              formattedJoinDate = 'Recently';
+            }
           }
+
+          // Determine KYC status based on actual data
+          String kycStatus = 'Pending';
+          if (userData['address'] != null && userData['address'].toString().isNotEmpty &&
+              userData['address'] != 'Not Available' &&
+              userData['pan_card'] != null && userData['pan_card'].toString().isNotEmpty &&
+              userData['pan_card'] != 'Not Available') {
+            kycStatus = 'Verified';
+          }
+
+          // Use customer_id from API (VM1, VM2, etc.)
+          String customerId = userData['customer_id']?.toString() ??
+                             userData['business_id']?.toString() ??
+                             'N/A';
+
+          setState(() {
+            _userProfile = {
+              'name': userData['name'] ?? 'User',
+              'phone': userPhone,
+              'email': userData['email'] ?? 'Not Available',
+              'customer_id': customerId,
+              'address': userData['address'] ?? 'Not Available',
+              'pan': userData['pan_card'] ?? 'Not Available',
+              'joinDate': formattedJoinDate,
+              'kycStatus': kycStatus,
+            };
+            _isLoading = false;
+          });
+
+          // Update cached data with fresh data
+          await prefs.setString('user_data', jsonEncode(userData));
+          print('✅ Profile: Cached data updated with fresh API data');
+          return;
+        } else {
+          print('⚠️ Profile: Failed to fetch fresh data, falling back to cached data');
         }
-
-        // Determine KYC status based on actual data
-        String kycStatus = 'Pending';
-        if (userData['address'] != null && userData['address'].toString().isNotEmpty &&
-            userData['address'] != 'Not Available' &&
-            userData['pan_card'] != null && userData['pan_card'].toString().isNotEmpty &&
-            userData['pan_card'] != 'Not Available') {
-          kycStatus = 'Verified';
-        }
-
-        // Use business_id as Customer ID if available, otherwise use customer_id or id
-        String customerId = userData['business_id']?.toString() ??
-                           userData['customer_id']?.toString() ??
-                           userData['id']?.toString() ??
-                           'CUST${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
-        setState(() {
-          _userProfile = {
-            'name': userData!['name'] ?? 'User',
-            'phone': userPhone,
-            'email': userData['email'] ?? 'Not Available',
-            'customer_id': customerId,
-            'address': userData['address'] ?? 'Not Available',
-            'pan': userData['pan_card'] ?? 'Not Available',
-            'joinDate': formattedJoinDate,
-            'kycStatus': kycStatus,
-          };
-          _isLoading = false;
-        });
-        return;
       }
 
       // Fallback to old customer service data
@@ -175,11 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const VMuruganAppBarLogo(
           logoSize: 28,
           fontSize: 16,
-          textColor: Colors.black,
+          textColor: AppColors.primaryGreen,  // ✅ Changed to Green
         ),
         backgroundColor: AppColors.primaryGold,
-        foregroundColor: Colors.black,
+        foregroundColor: AppColors.primaryGreen,  // ✅ Changed to Green
         elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.primaryGreen),  // ✅ Changed to Green
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -257,11 +266,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: AppColors.getShadowColor(context),
             spreadRadius: 1,
             blurRadius: 10,
           ),
@@ -287,9 +296,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: AppColors.primaryGold,
             ),
           ),
-          
+
           const SizedBox(height: AppSpacing.md),
-          
+
           // Customer ID (prominent display)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -314,6 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _userProfile['name'] ?? 'Loading...',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
+              color: AppColors.getTextColor(context),
             ),
           ),
 
@@ -323,7 +333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             _userProfile['phone'] ?? 'Loading...',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
+              color: AppColors.getSecondaryTextColor(context),
             ),
           ),
           
@@ -369,11 +379,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: AppColors.getShadowColor(context),
             spreadRadius: 1,
             blurRadius: 10,
           ),
@@ -386,11 +396,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _currentLanguage == 'ta' ? 'தனிப்பட்ட தகவல்' : 'Personal Information',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
+              color: AppColors.getTextColor(context),
             ),
           ),
-          
+
           const SizedBox(height: AppSpacing.lg),
-          
+
           _buildDetailRow(Icons.email, _currentLanguage == 'ta' ? 'மின்னஞ்சல்' : 'Email', _userProfile['email'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
           _buildDetailRow(Icons.location_on, _currentLanguage == 'ta' ? 'முகவரி' : 'Address', _userProfile['address'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
           _buildDetailRow(Icons.credit_card, _currentLanguage == 'ta' ? 'பான் கார்டு' : 'PAN Card', _userProfile['pan'] ?? (_currentLanguage == 'ta' ? 'கிடைக்கவில்லை' : 'Not Available')),
@@ -418,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.getSecondaryTextColor(context),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -426,6 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w500,
+                    color: AppColors.getTextColor(context),
                   ),
                 ),
               ],
@@ -440,11 +452,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: AppColors.getShadowColor(context),
             spreadRadius: 1,
             blurRadius: 10,
           ),
@@ -457,6 +469,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Account Actions',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
+              color: AppColors.getTextColor(context),
             ),
           ),
           
@@ -492,6 +505,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Get your transaction statements',
             _showDownloadStatements,
           ),
+
+          _buildActionTile(
+            Icons.assessment,
+            'Reports & Analytics',
+            'View detailed reports and analytics',
+            _navigateToReports,
+          ),
         ],
       ),
     );
@@ -501,11 +521,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: AppColors.getShadowColor(context),
             spreadRadius: 1,
             blurRadius: 10,
           ),
@@ -518,6 +538,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _currentLanguage == 'ta' ? 'அமைப்புகள்' : 'Settings',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
+              color: AppColors.getTextColor(context),
             ),
           ),
           
@@ -690,6 +711,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       SnackBar(
         content: Text('$feature feature coming soon!'),
         backgroundColor: AppColors.info,
+      ),
+    );
+  }
+
+  void _navigateToReports() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReportsScreen(
+          customerPhone: _userProfile['phone'],
+        ),
       ),
     );
   }

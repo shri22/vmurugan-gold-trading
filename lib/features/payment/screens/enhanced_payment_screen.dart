@@ -8,13 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:weipl_checkout_flutter/weipl_checkout_flutter.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
 import '../models/payment_response.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/secure_http_client.dart';
-import '../../notifications/services/notification_service.dart';
-import '../../notifications/models/notification_model.dart';
-// Removed problematic imports
 
 class EnhancedPaymentScreen extends StatefulWidget {
   final double amount;
@@ -45,31 +41,20 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
   final ScrollController _mainScrollController = ScrollController();
   bool _isAutoScrolling = false;
 
-  // Worldline Flutter Plugin instance
-  WeiplCheckoutFlutter wlCheckoutFlutter = WeiplCheckoutFlutter();
-
-  // Debug logger instance
-  // Debug logger removed for now
+  // Worldline Flutter Plugin instance - LAZY INITIALIZATION
+  WeiplCheckoutFlutter? _wlCheckoutFlutter;
+  bool _isSDKInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    // Initialize debug logger
-    _initializeDebugLogger();
-
     _logToFile('🔍 WORLDLINE FLUTTER PLUGIN - initState() called');
     _logToFile('🔍 Amount: ₹${widget.amount.round()} (converted from ${widget.amount})');
     _logToFile('🔍 Description: ${widget.description}');
+    _logToFile('⚠️ SDK will be initialized ONLY when user clicks "Start Payment"');
 
-    // Setup Worldline event listeners
-    _setupWorldlineEventListeners();
-  }
-
-  Future<void> _initializeDebugLogger() async {
-    // Debug logger removed for now
-    _logToFile('Enhanced Payment Screen Initialized');
+    // DO NOT initialize Worldline SDK here - wait for user action
   }
 
   // Log to file function with better accessibility AND add to UI
@@ -116,8 +101,16 @@ class _EnhancedPaymentScreenState extends State<EnhancedPaymentScreen> {
   }
 
   void _setupWorldlineEventListeners() {
-    _logToFile('🔧 Setting up Worldline event listeners...');
-    wlCheckoutFlutter.on(WeiplCheckoutFlutter.wlResponse, _handleWorldlineResponse);
+    if (_isSDKInitialized) {
+      _logToFile('⚠️ SDK already initialized, skipping...');
+      return;
+    }
+
+    _logToFile('🔧 Initializing Worldline SDK for the first time...');
+    _wlCheckoutFlutter = WeiplCheckoutFlutter();
+    _wlCheckoutFlutter!.on(WeiplCheckoutFlutter.wlResponse, _handleWorldlineResponse);
+    _isSDKInitialized = true;
+    _logToFile('✅ Worldline SDK initialized and event listeners set up');
   }
 
   void _addDebugLog(String message) {
@@ -294,204 +287,6 @@ ${latestLogs.join('\n')}
     }
   }
 
-  /// Show immediate user feedback for payment result
-  Future<void> _showPaymentResultToUser(PaymentResponse response) async {
-    try {
-      _logToFile('📱 Showing payment result dialog to user...');
-
-      if (!mounted) {
-        _logToFile('❌ Widget not mounted, skipping user feedback');
-        return;
-      }
-
-      String title;
-      String message;
-      IconData icon;
-      Color iconColor;
-      Color backgroundColor;
-
-      switch (response.status) {
-        case PaymentStatus.success:
-          title = '✅ Payment Successful!';
-          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} has been processed successfully.\n\nTransaction ID: ${response.transactionId}';
-          icon = Icons.check_circle;
-          iconColor = Colors.green;
-          backgroundColor = Colors.green.shade50;
-
-          // Show success snackbar
-          _showSnackBar('Payment Successful! ₹${response.amount.toStringAsFixed(2)}', isError: false);
-          break;
-
-        case PaymentStatus.failed:
-          title = '❌ Payment Failed';
-
-          // Use user-friendly error message
-          final userFriendlyMessage = response.getUserFriendlyErrorMessage();
-          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} could not be processed.\n\n';
-          message += '$userFriendlyMessage\n\n';
-
-          // Add technical details if available
-          if (response.gatewayErrorCode != null && response.gatewayErrorCode!.isNotEmpty) {
-            message += 'Error Code: ${response.gatewayErrorCode}\n';
-          }
-
-          if (response.transactionId.isNotEmpty) {
-            message += '\nReference ID: ${response.transactionId}';
-          }
-
-          icon = Icons.error;
-          iconColor = Colors.red;
-          backgroundColor = Colors.red.shade50;
-
-          // Show error snackbar with user-friendly message
-          _showSnackBar('Payment Failed: $userFriendlyMessage', isError: true);
-          break;
-
-        case PaymentStatus.pending:
-          title = '⏳ Payment Pending';
-
-          // Use user-friendly message for pending status
-          final userFriendlyMessage = response.getUserFriendlyErrorMessage();
-          message = 'Your payment of ₹${response.amount.toStringAsFixed(2)} is being processed.\n\n';
-          message += '$userFriendlyMessage\n\n';
-          message += 'We will notify you once the payment is confirmed.';
-
-          if (response.transactionId.isNotEmpty) {
-            message += '\n\nTransaction ID: ${response.transactionId}';
-          }
-
-          icon = Icons.hourglass_empty;
-          iconColor = Colors.orange;
-          backgroundColor = Colors.orange.shade50;
-
-          // Show pending snackbar
-          _showSnackBar('Payment Pending - Processing...', isError: false);
-          break;
-
-        default:
-          title = '❓ Payment Status Unknown';
-          message = 'The payment status is unclear. Please check your transaction history or contact support.\n\nTransaction ID: ${response.transactionId}';
-          icon = Icons.help;
-          iconColor = Colors.grey;
-          backgroundColor = Colors.grey.shade50;
-
-          // Show unknown status snackbar
-          _showSnackBar('Payment Status Unknown', isError: true);
-          break;
-      }
-
-      _logToFile('📱 Showing dialog: $title');
-
-      // Show detailed dialog
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            backgroundColor: backgroundColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 32),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: iconColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  if (response.status == PaymentStatus.failed && response.additionalData != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade300),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Technical Details:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            if (response.additionalData!.containsKey('statusCode'))
-                              Text('Status Code: ${response.additionalData!['statusCode']}'),
-                            if (response.additionalData!.containsKey('errorCode'))
-                              Text('Error Code: ${response.additionalData!['errorCode']}'),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _logToFile('📱 User dismissed payment result dialog');
-                },
-                child: Text(
-                  response.status == PaymentStatus.failed ? 'Try Again' : 'OK',
-                  style: TextStyle(
-                    color: iconColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              if (response.status == PaymentStatus.failed)
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pop(); // Close payment screen
-                    _logToFile('📱 User closed payment screen after failure');
-                  },
-                  child: const Text(
-                    'Close',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-            ],
-          );
-        },
-      );
-
-      _logToFile('✅ Payment result dialog completed');
-    } catch (e) {
-      _logToFile('❌ Error showing payment result to user: $e');
-      // Fallback: show simple snackbar
-      if (mounted) {
-        _showSnackBar(
-          response.status == PaymentStatus.success
-            ? 'Payment Successful!'
-            : 'Payment ${response.status.name}: ${response.errorMessage ?? "Please check transaction history"}',
-          isError: response.status != PaymentStatus.success,
-        );
-      }
-    }
-  }
-
   @override
   void dispose() {
     _logScrollController.dispose();
@@ -501,37 +296,16 @@ ${latestLogs.join('\n')}
   }
 
   /// Handle Worldline payment response according to official documentation
-  void _handleWorldlineResponse(Map<dynamic, dynamic> response) async {
-    _logToFile('');
-    _logToFile('🎯🎯🎯 WORLDLINE RESPONSE RECEIVED 🎯🎯🎯');
-    _logToFile('📅 Timestamp: ${DateTime.now().toIso8601String()}');
-    _logToFile('🔍 Response Type: ${response.runtimeType}');
-    _logToFile('🔍 Response Keys: ${response.keys.toList()}');
-    _logToFile('🔍 Full Response JSON: ${jsonEncode(response)}');
+  void _handleWorldlineResponse(Map<dynamic, dynamic> response) {
+    // Log to file instead of on-screen display
+    _logToFile('🎯 WORLDLINE RESPONSE RECEIVED: $response');
+    _logToFile('🔍 RESPONSE KEYS: ${response.keys.toList()}');
+    _logToFile('🔍 RESPONSE TYPE: ${response.runtimeType}');
 
-    // CRITICAL DEBUG: Log the exact response structure
-    _logToFile('');
-    _logToFile('🔍🔍🔍 DETAILED RESPONSE ANALYSIS 🔍🔍🔍');
+    // Debug each key-value pair
     response.forEach((key, value) {
-      _logToFile('  📋 Key: "$key" (${key.runtimeType}) = Value: "$value" (${value.runtimeType})');
+      _logToFile('🔍 $key: $value (${value.runtimeType})');
     });
-    _logToFile('');
-
-    // Debug each key-value pair in detail
-    _logToFile('🔍 DETAILED KEY-VALUE ANALYSIS:');
-    response.forEach((key, value) {
-      _logToFile('  🔑 $key: $value (Type: ${value.runtimeType})');
-      if (value is Map) {
-        _logToFile('    📋 Nested Map Keys: ${value.keys.toList()}');
-        value.forEach((nestedKey, nestedValue) {
-          _logToFile('      🔸 $nestedKey: $nestedValue (Type: ${nestedValue.runtimeType})');
-        });
-      }
-    });
-    _logToFile('');
-
-    // Enhanced error analysis for Invalid Request
-    _analyzeWorldlineError(response);
 
     // Extract detailed error information for display
     final detailedErrorInfo = _extractDetailedErrorInfo(response);
@@ -544,16 +318,12 @@ ${latestLogs.join('\n')}
       PaymentResponse paymentResponse;
 
       try {
-        _logToFile('🔄 PARSING WORLDLINE RESPONSE...');
-
         // Parse response according to official Flutter documentation format
         // Expected format: response.paymentMethod.paymentTransaction.statusCode
         if (response.containsKey('paymentMethod') &&
             response['paymentMethod'] != null &&
             response['paymentMethod'].containsKey('paymentTransaction') &&
             response['paymentMethod']['paymentTransaction'] != null) {
-
-          _logToFile('✅ STANDARD FORMAT DETECTED: response.paymentMethod.paymentTransaction');
 
           var paymentMethod = response['paymentMethod'];
           var paymentTransaction = paymentMethod['paymentTransaction'];
@@ -564,40 +334,22 @@ ${latestLogs.join('\n')}
           String bankRefId = paymentTransaction['bankReferenceIdentifier']?.toString() ?? '';
           String amount = paymentTransaction['amount']?.toString() ?? '';
 
-          _logToFile('📊 EXTRACTED PAYMENT DATA:');
-          _logToFile('  🔢 Status Code: "$statusCode"');
-          _logToFile('  💬 Status Message: "$statusMessage"');
-          _logToFile('  🆔 Transaction ID: "$transactionId"');
-          _logToFile('  🏦 Bank Reference ID: "$bankRefId"');
-          _logToFile('  💰 Amount: "$amount"');
+          _logToFile('🔍 Status Code: $statusCode');
+          _logToFile('🔍 Status Message: $statusMessage');
+          _logToFile('🔍 Transaction ID: $transactionId');
+          _logToFile('🔍 Bank Reference ID: $bankRefId');
+          _logToFile('🔍 Amount: $amount');
 
-          // ENHANCED SUCCESS DETECTION: Handle multiple success status codes
-          _logToFile('');
-          _logToFile('🔍🔍🔍 CHECKING SUCCESS STATUS CODE 🔍🔍🔍');
-          _logToFile('📥 Status Code to Check: "$statusCode"');
-          _logToFile('📥 Status Message: "$statusMessage"');
-          _logToFile('📥 Transaction ID: "$transactionId"');
-          _logToFile('📥 Bank Reference ID: "$bankRefId"');
-
-          final isSuccess = _isSuccessStatusCode(statusCode);
-          _logToFile('🎯 SUCCESS CHECK RESULT: $isSuccess');
-
-          if (isSuccess) {
-            _logToFile('');
-            _logToFile('🎉🎉🎉 SUCCESS DETECTED! 🎉🎉🎉');
-            _logToFile('✅ Status code "$statusCode" is considered successful');
+          if (statusCode == '0300') {
+            // Success - according to official docs
             paymentResponse = PaymentResponse(
               status: PaymentStatus.success,
-              transactionId: transactionId,
               amount: widget.amount,
               currency: 'INR',
               paymentMethod: 'Worldline',
               timestamp: DateTime.now(),
+              transactionId: transactionId,
               gatewayTransactionId: bankRefId,
-              errorMessage: null,
-              gatewayErrorCode: statusCode,
-              gatewayErrorMessage: statusMessage,
-              failureReason: null, // Success case
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -605,27 +357,19 @@ ${latestLogs.join('\n')}
                 'worldlineTransactionId': transactionId,
                 'bankReferenceId': bankRefId,
                 'statusMessage': statusMessage,
-                'statusCode': statusCode,
-                'fullResponse': response,
-                'detailedErrorInfo': detailedErrorInfo,
               },
             );
             _statusMessage = 'Payment completed successfully!';
           } else if (statusCode == '0398') {
-            _logToFile('⏳ PENDING STATUS DETECTED: Status code 0398 (Initiated)');
             // Initiated - according to official docs
             paymentResponse = PaymentResponse(
               status: PaymentStatus.pending,
-              transactionId: transactionId,
               amount: widget.amount,
               currency: 'INR',
               paymentMethod: 'Worldline',
               timestamp: DateTime.now(),
+              transactionId: transactionId,
               gatewayTransactionId: bankRefId,
-              errorMessage: null,
-              gatewayErrorCode: statusCode,
-              gatewayErrorMessage: statusMessage,
-              failureReason: 'Payment is being processed. Please wait.',
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -633,36 +377,20 @@ ${latestLogs.join('\n')}
                 'worldlineTransactionId': transactionId,
                 'bankReferenceId': bankRefId,
                 'statusMessage': statusMessage,
-                'statusCode': statusCode,
-                'fullResponse': response,
-                'detailedErrorInfo': detailedErrorInfo,
               },
             );
             _statusMessage = 'Payment initiated - awaiting confirmation';
           } else {
-            _logToFile('');
-            _logToFile('❌❌❌ FAILURE DETECTED! ❌❌❌');
-            _logToFile('❌ Status code "$statusCode" is NOT in success list');
-            _logToFile('❌ Status message: "$statusMessage"');
-            _logToFile('❌ Transaction ID: "$transactionId"');
-            _logToFile('❌ Bank Reference ID: "$bankRefId"');
-            _logToFile('❌ This status code is NOT recognized as successful');
             // Failed or other status (0399, 0396, 0392)
-            final failureReason = detailedErrorInfo['failureReason']?.toString() ??
-                                 _generateUserFriendlyFailureReason(statusCode, statusMessage);
-
             paymentResponse = PaymentResponse(
               status: PaymentStatus.failed,
-              transactionId: transactionId,
               amount: widget.amount,
               currency: 'INR',
               paymentMethod: 'Worldline',
               timestamp: DateTime.now(),
+              transactionId: transactionId,
               gatewayTransactionId: bankRefId,
               errorMessage: statusMessage.isNotEmpty ? statusMessage : 'Payment failed',
-              gatewayErrorCode: statusCode,
-              gatewayErrorMessage: statusMessage,
-              failureReason: failureReason,
               additionalData: {
                 'amount': widget.amount,
                 'timestamp': DateTime.now().toIso8601String(),
@@ -689,19 +417,14 @@ ${latestLogs.join('\n')}
           print('🔍 Error Code: $errorCode');
           print('🔍 Error Description: $errorDesc');
 
-          final failureReason = _generateUserFriendlyFailureReason(errorCode, errorDesc);
-
           paymentResponse = PaymentResponse(
             status: PaymentStatus.failed,
-            transactionId: '',
             amount: widget.amount,
             currency: 'INR',
             paymentMethod: 'Worldline',
             timestamp: DateTime.now(),
+            transactionId: '',
             errorMessage: errorDesc,
-            gatewayErrorCode: errorCode,
-            gatewayErrorMessage: errorDesc,
-            failureReason: failureReason,
             additionalData: {
               'amount': widget.amount,
               'timestamp': DateTime.now().toIso8601String(),
@@ -721,9 +444,9 @@ ${latestLogs.join('\n')}
 
           // Check for legacy format (msg/merchant_code) as fallback
           if (response.containsKey('msg')) {
-            _logToFile('🔄 LEGACY RESPONSE FORMAT DETECTED');
+            _logToFile('🔍 LEGACY RESPONSE FORMAT DETECTED');
             String msg = response['msg'] ?? '';
-            _logToFile('📝 Raw msg content: "$msg"');
+            _logToFile('🔍 Raw msg content: $msg');
 
             List<String> msgParts = msg.split('|');
             _logToFile('🔍 Split into ${msgParts.length} parts: $msgParts');
@@ -753,20 +476,16 @@ ${latestLogs.join('\n')}
                 _logToFile('🔍 Extracted error code: $errorCode');
               }
 
-              // ENHANCED SUCCESS DETECTION: Handle multiple success status codes
-              _logToFile('🔍 CHECKING SUCCESS STATUS CODE (Legacy Format)...');
-              if (_isSuccessStatusCode(statusCode)) {
-                _logToFile('🎉🎉🎉 SUCCESS DETECTED (Legacy Format)! 🎉🎉🎉');
-                _logToFile('✅ Status code "$statusCode" is considered successful');
+              if (statusCode == '0300') {
+                // Success
                 paymentResponse = PaymentResponse(
                   status: PaymentStatus.success,
-                  transactionId: transactionId,
                   amount: widget.amount,
                   currency: 'INR',
                   paymentMethod: 'Worldline',
                   timestamp: DateTime.now(),
+                  transactionId: transactionId,
                   gatewayTransactionId: gatewayTxnId.isNotEmpty ? gatewayTxnId : bankRefId,
-                  errorMessage: null,
                   additionalData: {
                     'amount': widget.amount,
                     'timestamp': DateTime.now().toIso8601String(),
@@ -783,13 +502,6 @@ ${latestLogs.join('\n')}
                 );
                 _statusMessage = 'Payment completed successfully!';
               } else {
-                _logToFile('');
-                _logToFile('❌❌❌ FAILURE DETECTED (Legacy Format)! ❌❌❌');
-                _logToFile('❌ Status code "$statusCode" is NOT in success list');
-                _logToFile('❌ Error Code: "$errorCode"');
-                _logToFile('❌ Error Description: "$errorDescription"');
-                _logToFile('❌ Transaction ID: "$transactionId"');
-                _logToFile('❌ This status code is NOT recognized as successful');
                 // Failed or other status (0399, 0396, 0392)
                 String failureMessage = errorCode != null
                     ? '$errorDescription (Code: $errorCode)'
@@ -801,11 +513,11 @@ ${latestLogs.join('\n')}
 
                 paymentResponse = PaymentResponse(
                   status: PaymentStatus.failed,
-                  transactionId: transactionId,
                   amount: widget.amount,
                   currency: 'INR',
                   paymentMethod: 'Worldline',
                   timestamp: DateTime.now(),
+                  transactionId: transactionId,
                   gatewayTransactionId: gatewayTxnId.isNotEmpty ? gatewayTxnId : bankRefId,
                   errorMessage: failureMessage,
                   additionalData: {
@@ -850,11 +562,11 @@ ${latestLogs.join('\n')}
         print('🔍 Original response: $response');
         paymentResponse = PaymentResponse(
           status: PaymentStatus.failed,
-          transactionId: '',
           amount: widget.amount,
           currency: 'INR',
           paymentMethod: 'Worldline',
           timestamp: DateTime.now(),
+          transactionId: '',
           errorMessage: 'Error processing payment response: ${e.toString()}',
           additionalData: {
             'amount': widget.amount,
@@ -869,31 +581,8 @@ ${latestLogs.join('\n')}
 
       setState(() {});
 
-      // CRITICAL: Save ALL transactions to database for record keeping and debugging
-      _logToFile('');
-      _logToFile('🔄🔄🔄 ABOUT TO SAVE TRANSACTION TO DATABASE 🔄🔄🔄');
-      _logToFile('📅 Timestamp: ${DateTime.now().toIso8601String()}');
-      _logToFile('📊 Payment Response Status: ${paymentResponse.status}');
-      _logToFile('🆔 Transaction ID: ${paymentResponse.transactionId}');
-      _logToFile('💰 Amount: ₹${paymentResponse.amount}');
-
-      await _saveAllTransactionsToDatabase(paymentResponse);
-
-      _logToFile('✅ Database save operation completed');
-
-      // Create notification for the transaction
-      _logToFile('🔔 Creating transaction notification...');
-      await _createTransactionNotification(paymentResponse);
-      _logToFile('✅ Notification creation completed');
-
-      // CRITICAL FIX: Show immediate user feedback based on payment status
-      _logToFile('📱 Showing user feedback for payment result...');
-      await _showPaymentResultToUser(paymentResponse);
-
       // Complete the payment flow
-      _logToFile('🏁 Completing payment flow...');
       widget.onPaymentComplete(paymentResponse);
-      _logToFile('✅ Payment flow completed');
 
       // DO NOT auto-close the payment screen - let user review error details
       // User will manually close using the back button or close button
@@ -913,14 +602,6 @@ ${latestLogs.join('\n')}
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          // Debug logs button (disabled for now)
-          // IconButton(
-          //   icon: const Icon(Icons.bug_report),
-          //   onPressed: () {
-          //     // Debug screen removed
-          //   },
-          //   tooltip: 'View Debug Logs',
-          // ),
           // Scroll to top button
           IconButton(
             icon: const Icon(Icons.keyboard_arrow_up),
@@ -1414,17 +1095,6 @@ ${latestLogs.join('\n')}
           ],
         ),
       ),
-      // Debug floating action button disabled for now
-      // floatingActionButton: FloatingActionButton.extended(
-      //   onPressed: () {
-      //     // Debug screen removed
-      //   },
-      //   icon: const Icon(Icons.bug_report),
-      //   label: const Text('Debug Logs'),
-      //   backgroundColor: const Color(0xFFDC143C),
-      //   foregroundColor: Colors.white,
-      //   tooltip: 'View comprehensive payment debug logs',
-      // ),
     );
   }
 
@@ -1450,19 +1120,17 @@ ${latestLogs.join('\n')}
 
       _logToFile('📤 TOKEN REQUEST: $url');
       _logToFile('📤 Payload: ${jsonEncode(payload)}');
-      _logToFile('� SSL Certificate: Development mode - accepting self-signed certificates');
-      _logToFile('�💰 AMOUNT CONVERSION DEBUG:');
+      _logToFile('💰 AMOUNT CONVERSION DEBUG:');
       _logToFile('💰 Original Amount: ₹${widget.amount} (${widget.amount.runtimeType})');
       _logToFile('💰 Decimal Amount: ${widget.amount.toStringAsFixed(2)} (decimal format)');
       _logToFile('💰 Final String: "${amountAsDecimal}" (${amountAsDecimal.runtimeType})');
       _logToFile('💰 String Length: ${amountAsDecimal.length} characters');
       _logToFile('💰 Contains Decimal: ${amountAsDecimal.contains('.')}');
 
-      // Use SecureHttpClient for SSL certificate handling
       final response = await SecureHttpClient.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: payload,
+        body: jsonEncode(payload),
       );
 
       _logToFile('📥 TOKEN RESPONSE: Status ${response.statusCode}');
@@ -1486,6 +1154,14 @@ ${latestLogs.join('\n')}
   /// Start payment process - Official Worldline Flutter Plugin
   Future<void> _startPayment() async {
     _logToFile('🚀 STARTING WORLDLINE PAYMENT - Official Flutter Plugin');
+
+    // CRITICAL FIX: Initialize SDK only when user clicks "Start Payment"
+    if (!_isSDKInitialized) {
+      _logToFile('🔧 Initializing Worldline SDK now (user clicked Start Payment)...');
+      _setupWorldlineEventListeners();
+      // Wait for SDK to be ready
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
 
     setState(() {
       _isProcessing = true;
@@ -1573,7 +1249,7 @@ ${latestLogs.join('\n')}
 
           "items": [
             {
-              "itemId": "first", // CRITICAL: Scheme code for TID T1098761 as per Worldline support (CASE SENSITIVE)
+              "itemId": "GOLD_PURCHASE",
               "amount": consumerData['amount'], // CRITICAL: Use exact same amount from server
               "comAmt": "0"
             }
@@ -1586,12 +1262,6 @@ ${latestLogs.join('\n')}
           }
         }
       };
-
-      // Log payload structure (debug logger removed)
-      _logToFile('Complete Worldline Payment Payload logged');
-
-      // Log detailed payload analysis
-      await _logPayloadStructureAnalysis(paymentOptions, consumerData);
 
       _logToFile('📤 Payment Options: ${jsonEncode(paymentOptions)}');
 
@@ -1619,58 +1289,29 @@ ${latestLogs.join('\n')}
       });
 
       _logToFile('🚀 CALLING WORLDLINE FLUTTER PLUGIN...');
-      _logToFile('🔧 Plugin Method: wlCheckoutFlutter.open()');
+      _logToFile('🔧 Plugin Method: _wlCheckoutFlutter.open()');
       _logToFile('📋 Final Payment Options: ${jsonEncode(paymentOptions)}');
 
+      // CRITICAL FIX: Delay Worldline SDK presentation to avoid "presentation in progress" error
+      // Wait for Flutter view to be fully presented before opening Worldline
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      _logToFile('⏳ Delayed 800ms to ensure Flutter view is ready');
+
+      // Ensure SDK is initialized
+      if (_wlCheckoutFlutter == null) {
+        _logToFile('❌ CRITICAL ERROR: Worldline SDK not initialized!');
+        throw Exception('Worldline SDK not initialized');
+      }
+
       // Open Worldline checkout using official plugin
-      wlCheckoutFlutter.open(paymentOptions);
+      _wlCheckoutFlutter!.open(paymentOptions);
 
       _logToFile('✅ Worldline checkout opened successfully - waiting for response...');
 
     } catch (e) {
       _logToFile('❌ Error initializing Worldline payment: $e');
       throw Exception('Failed to initialize payment: $e');
-    }
-  }
-
-  /// Send error details to server for persistent logging
-  Future<void> _sendErrorToServer(Map<String, dynamic> errorAnalysis, Map<dynamic, dynamic> response) async {
-    try {
-      final serverUrl = 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/error-capture';
-
-      final payload = {
-        'timestamp': DateTime.now().toIso8601String(),
-        'sessionId': _sessionId,
-        'errorAnalysis': errorAnalysis,
-        'fullResponse': response,
-        'paymentContext': {
-          'amount': widget.amount,
-          'orderId': _sessionId, // Use session ID as order ID
-          'customerId': _sessionId, // Use session ID as customer ID
-          'merchantCode': 'T1098761', // Back to your original merchant
-        },
-        'deviceInfo': {
-          'platform': 'Flutter',
-          'version': '1.0.0',
-        }
-      };
-
-      _logToFile('📤 Sending error details to server...');
-
-      final httpResponse = await SecureHttpClient.post(
-        serverUrl,
-        headers: {'Content-Type': 'application/json'},
-        body: payload,
-      );
-
-      if (httpResponse.statusCode == 200) {
-        _logToFile('✅ Error details sent to server successfully');
-      } else {
-        _logToFile('❌ Failed to send error to server: ${httpResponse.statusCode}');
-        _logToFile('❌ Server response: ${httpResponse.body}');
-      }
-    } catch (e) {
-      _logToFile('❌ Exception sending error to server: $e');
     }
   }
 
@@ -1695,16 +1336,6 @@ ${latestLogs.join('\n')}
       errorInfo['bankRefId'] = paymentTransaction['bankReferenceIdentifier']?.toString() ?? 'N/A';
       errorInfo['amount'] = paymentTransaction['amount']?.toString() ?? 'N/A';
       errorInfo['errorType'] = 'Payment Transaction Error';
-
-      // Extract gateway-specific error information for PaymentResponse
-      errorInfo['gatewayErrorCode'] = paymentTransaction['statusCode']?.toString();
-      errorInfo['gatewayErrorMessage'] = paymentTransaction['statusMessage']?.toString();
-
-      // Generate user-friendly failure reason
-      errorInfo['failureReason'] = _generateUserFriendlyFailureReason(
-        paymentTransaction['statusCode']?.toString() ?? '',
-        paymentTransaction['statusMessage']?.toString() ?? ''
-      );
     }
 
     // Extract error details if present
@@ -1753,453 +1384,6 @@ ${latestLogs.join('\n')}
     errorInfo['fullResponse'] = response;
 
     return errorInfo;
-  }
-
-  /// Generate user-friendly failure reason from gateway response
-  String _generateUserFriendlyFailureReason(String statusCode, String statusMessage) {
-    final code = statusCode.toLowerCase();
-    final message = statusMessage.toLowerCase();
-
-    // Handle specific Worldline status codes
-    if (code == '0300') {
-      return 'Payment completed successfully!';
-    } else if (code == '0398') {
-      return 'Payment was cancelled by user.';
-    } else if (code == '0399') {
-      return 'Payment failed. Please try again.';
-    } else if (code.startsWith('03')) {
-      // Other 03xx codes are generally success variants
-      return 'Payment completed successfully!';
-    }
-
-    // Handle error patterns in status message
-    if (message.contains('insufficient')) {
-      return 'Insufficient funds in your account. Please check your balance and try again.';
-    } else if (message.contains('declined') || message.contains('reject')) {
-      return 'Your card was declined. Please try with a different card or contact your bank.';
-    } else if (message.contains('expired')) {
-      return 'Your card has expired. Please use a valid card.';
-    } else if (message.contains('cvv') || message.contains('cvc')) {
-      return 'Invalid CVV/CVC. Please check your card details and try again.';
-    } else if (message.contains('network') || message.contains('connection')) {
-      return 'Network error occurred. Please check your internet connection and try again.';
-    } else if (message.contains('timeout')) {
-      return 'Payment timed out. Please try again.';
-    } else if (message.contains('auth')) {
-      return 'Authentication failed. Please verify your credentials and try again.';
-    } else if (message.contains('invalid')) {
-      return 'Invalid payment details. Please check your information and try again.';
-    } else if (message.contains('cancel')) {
-      return 'Payment was cancelled. You can try again when ready.';
-    } else if (message.contains('fail')) {
-      return 'Payment failed. Please try again or contact support.';
-    }
-
-    // If we have a status message, use it as is
-    if (statusMessage.isNotEmpty && statusMessage != 'N/A') {
-      return statusMessage;
-    }
-
-    // Default based on status code patterns
-    if (code.startsWith('0')) {
-      return 'Payment failed. Please try again or contact support.';
-    }
-
-    return 'Payment status unknown. Please contact support.';
-  }
-
-  /// Enhanced error analysis specifically for Worldline Invalid Request scenarios
-  Future<void> _analyzeWorldlineError(Map<dynamic, dynamic> response) async {
-    try {
-      final errorAnalysis = <String, dynamic>{
-        'timestamp': DateTime.now().toIso8601String(),
-        'responseType': response.runtimeType.toString(),
-        'responseKeys': response.keys.toList(),
-        'responseSize': response.length,
-      };
-
-      // Check for Invalid Request indicators
-      bool isInvalidRequest = false;
-      String? errorMessage;
-      String? errorCode;
-
-      // Check various error formats
-      if (response.containsKey('msg')) {
-        final msg = response['msg']?.toString() ?? '';
-        if (msg.toLowerCase().contains('invalid') ||
-            msg.toLowerCase().contains('error') ||
-            msg.contains('TPPGE')) {
-          isInvalidRequest = true;
-          errorMessage = msg;
-
-          // Extract error code if present
-          final errorCodeMatch = RegExp(r'ERROR CODE (\w+)').firstMatch(msg);
-          if (errorCodeMatch != null) {
-            errorCode = errorCodeMatch.group(1);
-          }
-        }
-        errorAnalysis['msgField'] = msg;
-      }
-
-      if (response.containsKey('error')) {
-        isInvalidRequest = true;
-        errorMessage = response['error']?.toString();
-        errorAnalysis['errorField'] = errorMessage;
-      }
-
-      if (response.containsKey('paymentTransaction')) {
-        final paymentTransaction = response['paymentTransaction'];
-        if (paymentTransaction is Map) {
-          final statusCode = paymentTransaction['statusCode']?.toString();
-          final statusMessage = paymentTransaction['statusMessage']?.toString();
-
-          if (statusCode != '0300') { // 0300 is success
-            isInvalidRequest = true;
-            errorMessage = statusMessage;
-            errorCode = statusCode;
-          }
-
-          errorAnalysis['paymentTransaction'] = {
-            'statusCode': statusCode,
-            'statusMessage': statusMessage,
-            'identifier': paymentTransaction['identifier'],
-            'amount': paymentTransaction['amount'],
-          };
-        }
-      }
-
-      errorAnalysis['isInvalidRequest'] = isInvalidRequest;
-      errorAnalysis['errorMessage'] = errorMessage;
-      errorAnalysis['errorCode'] = errorCode;
-
-      // Analyze potential causes for Invalid Request
-      if (isInvalidRequest) {
-        final potentialCauses = <String>[];
-
-        if (errorCode == 'TPPGE161') {
-          potentialCauses.add('Hash validation failed - check hash generation algorithm');
-        }
-
-        if (errorMessage?.contains('merchant') == true) {
-          potentialCauses.add('Merchant configuration issue - check merchant ID and credentials');
-        }
-
-        if (errorMessage?.contains('amount') == true) {
-          potentialCauses.add('Amount format issue - check decimal formatting and currency');
-        }
-
-        if (errorMessage?.contains('token') == true) {
-          potentialCauses.add('Token validation failed - check token generation and expiry');
-        }
-
-        if (errorMessage?.contains('scheme') == true) {
-          potentialCauses.add('Scheme code issue - verify "FIRST" scheme code for merchant T1098761');
-        }
-
-        errorAnalysis['potentialCauses'] = potentialCauses;
-
-        // Log specific error analysis (debug logger removed)
-        _logToFile('Worldline Invalid Request Detected: ${jsonEncode(errorAnalysis)}');
-
-        // CRITICAL: Send error to server for persistent logging
-        await _sendErrorToServer(errorAnalysis, response);
-      }
-
-      // Always log the analysis for debugging (debug logger removed)
-      _logToFile('Worldline Response Analysis: ${jsonEncode(errorAnalysis)}');
-
-    } catch (e) {
-      _logToFile('Failed to analyze Worldline error: $e');
-    }
-  }
-
-  /// Log detailed payload structure analysis for debugging
-  Future<void> _logPayloadStructureAnalysis(
-    Map<String, dynamic> paymentOptions,
-    Map<String, dynamic> consumerData,
-  ) async {
-    try {
-      final analysis = <String, dynamic>{
-        'timestamp': DateTime.now().toIso8601String(),
-        'payloadStructure': {
-          'hasFeatures': paymentOptions.containsKey('features'),
-          'hasConsumerData': paymentOptions.containsKey('consumerData'),
-          'featuresCount': paymentOptions['features']?.length ?? 0,
-          'consumerDataFieldsCount': paymentOptions['consumerData']?.length ?? 0,
-        },
-        'consumerDataAnalysis': {
-          'hasToken': consumerData.containsKey('token'),
-          'hasMerchantId': consumerData.containsKey('merchantId'),
-          'hasAmount': consumerData.containsKey('amount'),
-          'hasTxnId': consumerData.containsKey('txnId'),
-          'hasConsumerId': consumerData.containsKey('consumerId'),
-          'hasSchemeCode': true, // Always FIRST for our merchant
-        },
-        'criticalFields': {
-          'merchantId': consumerData['merchantId']?.toString(),
-          'txnId': consumerData['txnId']?.toString(),
-          'amount': consumerData['amount']?.toString(),
-          'consumerId': consumerData['consumerId']?.toString(),
-          'currency': 'INR',
-          'schemeCode': 'first',
-        },
-        'hashValidationFields': {
-          'merchantId': consumerData['merchantId']?.toString(),
-          'txnId': consumerData['txnId']?.toString(),
-          'amount': consumerData['amount']?.toString(),
-          'accountNo': consumerData['accountNo']?.toString(),
-          'consumerId': consumerData['consumerId']?.toString(),
-          'consumerMobileNo': consumerData['consumerMobileNo']?.toString(),
-          'consumerEmailId': consumerData['consumerEmailId']?.toString(),
-          'debitStartDate': consumerData['debitStartDate']?.toString(),
-          'debitEndDate': consumerData['debitEndDate']?.toString(),
-          'maxAmount': consumerData['maxAmount']?.toString(),
-          'amountType': consumerData['amountType']?.toString(),
-          'frequency': consumerData['frequency']?.toString(),
-          'cardNumber': consumerData['cardNumber']?.toString(),
-          'expMonth': consumerData['expMonth']?.toString(),
-          'expYear': consumerData['expYear']?.toString(),
-          'cvvCode': consumerData['cvvCode']?.toString(),
-        },
-        'itemsAnalysis': {
-          'itemCount': paymentOptions['consumerData']?['items']?.length ?? 0,
-          'firstItem': paymentOptions['consumerData']?['items']?[0],
-          'schemeCodeCorrect': paymentOptions['consumerData']?['items']?[0]?['itemId'] == 'first',
-        },
-        'amountValidation': {
-          'originalAmount': widget.amount,
-          'consumerDataAmount': consumerData['amount'],
-          'itemAmount': paymentOptions['consumerData']?['items']?[0]?['amount'],
-          'amountConsistency': consumerData['amount'] == paymentOptions['consumerData']?['items']?[0]?['amount'],
-        },
-      };
-
-      // Check for potential issues
-      final issues = <String>[];
-
-      if (consumerData['merchantId'] != 'T1098761') {
-        issues.add('Merchant ID mismatch - expected T1098761');
-      }
-
-      if (paymentOptions['consumerData']?['items']?[0]?['itemId'] != 'first') {
-        issues.add('Scheme code mismatch - expected FIRST');
-      }
-
-      if (consumerData['amount'] != paymentOptions['consumerData']?['items']?[0]?['amount']) {
-        issues.add('Amount inconsistency between consumerData and items');
-      }
-
-      // Check currency if present in consumerData, otherwise assume INR is used in payment options
-      final currency = consumerData['currency'] ?? 'INR';
-      if (currency != 'INR') {
-        issues.add('Currency mismatch - expected INR, found: $currency');
-      }
-
-      analysis['potentialIssues'] = issues;
-      analysis['issueCount'] = issues.length;
-
-      _logToFile('Worldline Payload Structure Analysis: ${jsonEncode(analysis)}');
-
-    } catch (e) {
-      _logToFile('Failed to analyze payload structure: $e');
-    }
-  }
-
-  /// Enhanced success status code detection for different payment methods
-  bool _isSuccessStatusCode(String statusCode) {
-    _logToFile('');
-    _logToFile('🔍🔍🔍 SUCCESS STATUS CODE CHECK 🔍🔍🔍');
-    _logToFile('📥 Input Status Code: "$statusCode"');
-    _logToFile('📥 Input Type: ${statusCode.runtimeType}');
-    _logToFile('📥 Input Length: ${statusCode.length}');
-    _logToFile('📥 Input Uppercase: "${statusCode.toUpperCase()}"');
-
-    // COMPREHENSIVE LIST: All known success status codes for Worldline payments
-    const successCodes = [
-      // Standard Worldline success codes
-      '0300', '0301', '0302', '0303', '0304', '0305', '0306', '0307', '0308', '0309',
-      '0310', '0311', '0312', '0313', '0314', '0315', '0316', '0317', '0318', '0319',
-      '0320', '0321', '0322', '0323', '0324', '0325', '0326', '0327', '0328', '0329',
-      '0330', '0331', '0332', '0333', '0334', '0335', '0336', '0337', '0338', '0339',
-      '0340', '0341', '0342', '0343', '0344', '0345', '0346', '0347', '0348', '0349',
-      '0350', '0351', '0352', '0353', '0354', '0355', '0356', '0357', '0358', '0359',
-      '0360', '0361', '0362', '0363', '0364', '0365', '0366', '0367', '0368', '0369',
-      '0370', '0371', '0372', '0373', '0374', '0375', '0376', '0377', '0378', '0379',
-      '0380', '0381', '0382', '0383', '0384', '0385', '0386', '0387', '0388', '0389',
-      '0390', '0391', '0392', '0393', '0394', '0395', '0396', '0397', '0398', '0399',
-
-      // HTTP success codes
-      '200', '201', '202', '204',
-
-      // String success indicators
-      'SUCCESS', 'COMPLETED', 'APPROVED', 'PAID', 'CONFIRMED', 'ACCEPTED',
-      'SUCCESSFUL', 'TRANSACTION_SUCCESS', 'PAYMENT_SUCCESS',
-
-      // Single character indicators
-      'Y', 'S', 'T', // Y=Yes, S=Success, T=True
-
-      // Bank specific codes
-      'TXN_SUCCESS', 'CAPTURED', 'SETTLED'
-      'S', // Success short code
-      '00', // Standard bank success code
-      '000', // Alternative success code
-    ];
-
-    _logToFile('📋 Supported Success Codes: $successCodes');
-
-    final statusCodeUpper = statusCode.toUpperCase();
-    bool isSuccess = successCodes.contains(statusCodeUpper);
-
-    _logToFile('🔍 Checking if "$statusCodeUpper" is in success codes...');
-    for (String code in successCodes) {
-      final matches = code == statusCodeUpper;
-      _logToFile('  🔸 "$code" == "$statusCodeUpper" ? $matches');
-      if (matches) {
-        _logToFile('  ✅ MATCH FOUND!');
-        break;
-      }
-    }
-
-    // Additional success detection logic for edge cases
-    if (!isSuccess) {
-      _logToFile('🔍 Checking additional success patterns...');
-
-      // Check if status contains success keywords
-      if (statusCodeUpper.contains('SUCCESS') ||
-          statusCodeUpper.contains('APPROVED') ||
-          statusCodeUpper.contains('COMPLETED') ||
-          statusCodeUpper.contains('PAID')) {
-        _logToFile('  ✅ SUCCESS KEYWORD FOUND in "$statusCode"');
-        isSuccess = true;
-      }
-
-      // Check for numeric success patterns (0xxx codes)
-      if (statusCode.startsWith('0') && statusCode.length == 4) {
-        final numericCode = int.tryParse(statusCode);
-        if (numericCode != null && numericCode >= 300 && numericCode <= 399) {
-          _logToFile('  ✅ SUCCESS NUMERIC PATTERN FOUND: "$statusCode" (300-399 range)');
-          isSuccess = true;
-        }
-      }
-    }
-
-    _logToFile('🎯 FINAL RESULT: "$statusCode" -> ${isSuccess ? "✅ SUCCESS" : "❌ NOT SUCCESS"}');
-    _logToFile('');
-
-    return isSuccess;
-  }
-
-  /// Save ALL payment transactions to database for debugging and record keeping
-  Future<void> _saveAllTransactionsToDatabase(PaymentResponse response) async {
-    _logToFile('');
-    _logToFile('💾💾💾 SAVING TRANSACTION TO DATABASE 💾💾💾');
-    _logToFile('📅 Timestamp: ${DateTime.now().toIso8601String()}');
-
-    try {
-      _logToFile('📊 TRANSACTION DATA TO SAVE:');
-      _logToFile('  🆔 Transaction ID: "${response.transactionId}"');
-      _logToFile('  📊 Status: ${response.status} (${response.status.name.toUpperCase()})');
-      _logToFile('  💰 Amount: ₹${response.amount}');
-      _logToFile('  🥇 Gold Grams: ${widget.goldGrams}');
-      _logToFile('  💳 Payment Method: ${response.paymentMethod}');
-      _logToFile('  🏦 Gateway Transaction ID: "${response.gatewayTransactionId ?? ''}"');
-      _logToFile('  📋 Additional Data Present: ${response.additionalData != null}');
-
-      if (response.additionalData != null) {
-        _logToFile('  📋 Additional Data Content: ${jsonEncode(response.additionalData)}');
-      }
-
-      _logToFile('🔄 Calling CustomerService.saveTransactionWithCustomerData...');
-
-      // Save to database regardless of success or failure
-      final success = await CustomerService.saveTransactionWithCustomerData(
-        transactionId: response.transactionId,
-        type: 'BUY',
-        amount: response.amount,
-        goldGrams: widget.goldGrams,
-        goldPricePerGram: response.amount / widget.goldGrams, // Calculate price per gram
-        paymentMethod: response.paymentMethod,
-        status: response.status.name.toUpperCase(),
-        gatewayTransactionId: response.gatewayTransactionId ?? '',
-        additionalData: response.additionalData,
-      );
-
-      _logToFile('📤 CustomerService.saveTransactionWithCustomerData returned: $success');
-
-      if (success) {
-        _logToFile('✅✅✅ TRANSACTION SAVED SUCCESSFULLY TO DATABASE! ✅✅✅');
-      } else {
-        _logToFile('❌❌❌ FAILED TO SAVE TRANSACTION TO DATABASE! ❌❌❌');
-      }
-    } catch (e) {
-      _logToFile('💥💥💥 CRITICAL ERROR SAVING TRANSACTION TO DATABASE! 💥💥💥');
-      _logToFile('❌ Error: $e');
-      _logToFile('❌ Stack trace: ${e.toString()}');
-    }
-
-    _logToFile('');
-  }
-
-  /// Create notification for transaction
-  Future<void> _createTransactionNotification(PaymentResponse response) async {
-    try {
-      _logToFile('🔔 Creating notification for transaction: ${response.transactionId}');
-
-      final notificationService = NotificationService();
-
-      if (response.status == PaymentStatus.success) {
-        // Success notification
-        await notificationService.createNotification(
-          type: NotificationType.paymentSuccess,
-          title: 'Payment Successful! 🎉',
-          message: 'Your payment of ₹${response.amount.toStringAsFixed(2)} was successful. You have purchased ${widget.goldGrams.toStringAsFixed(3)}g of gold.',
-          priority: NotificationPriority.high,
-          data: {
-            'transactionId': response.transactionId,
-            'amount': response.amount,
-            'goldGrams': widget.goldGrams,
-            'paymentMethod': response.paymentMethod,
-            'timestamp': response.timestamp.toIso8601String(),
-          },
-        );
-        _logToFile('✅ Success notification created');
-      } else if (response.status == PaymentStatus.failed) {
-        // Failure notification
-        await notificationService.createNotification(
-          type: NotificationType.paymentFailed,
-          title: 'Payment Failed ❌',
-          message: 'Your payment of ₹${response.amount.toStringAsFixed(2)} failed. ${response.errorMessage ?? "Please try again."}',
-          priority: NotificationPriority.high,
-          data: {
-            'transactionId': response.transactionId,
-            'amount': response.amount,
-            'goldGrams': widget.goldGrams,
-            'paymentMethod': response.paymentMethod,
-            'errorMessage': response.errorMessage,
-            'timestamp': response.timestamp.toIso8601String(),
-          },
-        );
-        _logToFile('✅ Failure notification created');
-      } else {
-        // Pending notification
-        await notificationService.createNotification(
-          type: NotificationType.paymentPending,
-          title: 'Payment Pending ⏳',
-          message: 'Your payment of ₹${response.amount.toStringAsFixed(2)} is being processed. We will notify you once it\'s complete.',
-          priority: NotificationPriority.normal,
-          data: {
-            'transactionId': response.transactionId,
-            'amount': response.amount,
-            'goldGrams': widget.goldGrams,
-            'paymentMethod': response.paymentMethod,
-            'timestamp': response.timestamp.toIso8601String(),
-          },
-        );
-        _logToFile('✅ Pending notification created');
-      }
-    } catch (e) {
-      _logToFile('❌ Error creating notification: $e');
-    }
   }
 
 }

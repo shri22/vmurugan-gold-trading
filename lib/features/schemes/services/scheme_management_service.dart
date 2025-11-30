@@ -2,11 +2,17 @@ import '../models/scheme_installment_model.dart';
 import '../../../core/enums/metal_type.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/notification_scheduler_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class SchemeManagementService {
   static final SchemeManagementService _instance = SchemeManagementService._internal();
   factory SchemeManagementService() => _instance;
   SchemeManagementService._internal();
+
+  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001/api';
+  final _notificationScheduler = NotificationSchedulerService();
 
   /// Get customer's active schemes
   Future<List<SchemeModel>> getCustomerSchemes(String customerPhone) async {
@@ -72,13 +78,30 @@ class SchemeManagementService {
 
       // Create all 15 installments
       final installments = await _createSchemeInstallments(scheme);
-      
+
       // Save scheme to database
       await _saveSchemeToDatabase(scheme);
-      
+
       // Save installments to database
       for (final installment in installments) {
         await _saveInstallmentToDatabase(installment);
+      }
+
+      // Schedule monthly reminders for all installments
+      try {
+        for (final installment in installments) {
+          await _notificationScheduler.scheduleMonthlyReminder(
+            schemeId: scheme.schemeId,
+            installmentNumber: installment.installmentNumber,
+            dueDate: installment.dueDate,
+            amount: installment.amount,
+            metalType: scheme.metalType,
+          );
+        }
+        print('✅ Scheduled ${installments.length} monthly reminders for scheme ${scheme.schemeId}');
+      } catch (e) {
+        print('⚠️ Warning: Failed to schedule notifications: $e');
+        // Don't fail scheme creation if notification scheduling fails
       }
 
       return scheme.copyWith(installments: installments);
@@ -159,6 +182,67 @@ class SchemeManagementService {
     } catch (e) {
       print('Error paying installment: $e');
       rethrow;
+    }
+  }
+
+  /// Make Flexi scheme payment (unlimited payments, no monthly restrictions)
+  Future<Map<String, dynamic>> makeFlexiPayment({
+    required String schemeId,
+    required double amount,
+    required double metalGrams,
+    required double currentRate,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? paymentMethod,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/schemes/$schemeId/flexi-payment'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'amount': amount,
+          'metal_grams': metalGrams,
+          'current_rate': currentRate,
+          'transaction_id': transactionId,
+          'gateway_transaction_id': gatewayTransactionId,
+          'payment_method': paymentMethod ?? 'FLEXI_PAYMENT',
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          // Send confirmation notification for Flexi payment
+          try {
+            await _notificationScheduler.sendFlexiPaymentConfirmation(
+              schemeId: schemeId,
+              amount: amount,
+              metalGrams: metalGrams,
+            );
+            print('✅ Sent Flexi payment confirmation notification');
+          } catch (e) {
+            print('⚠️ Warning: Failed to send notification: $e');
+            // Don't fail payment if notification fails
+          }
+
+          return {
+            'success': true,
+            'message': data['message'],
+            'scheme_id': data['scheme_id'],
+            'payment': data['payment'],
+          };
+        } else {
+          throw Exception(data['message'] ?? 'Flexi payment failed');
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error making Flexi payment: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
     }
   }
 

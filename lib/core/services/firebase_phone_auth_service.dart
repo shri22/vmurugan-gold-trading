@@ -20,14 +20,21 @@ class FirebasePhoneAuthService {
       // Check Firebase initialization first
       try {
         final app = _auth.app;
-        print('🔥 Firebase App Name: ${app.name}');
-        print('🔥 Firebase Project ID: ${app.options.projectId}');
-        print('🔥 Firebase API Key: ${app.options.apiKey.substring(0, 10)}...');
+        if (kDebugMode) {
+          print('🔥 Firebase App Name: ${app.name}');
+          print('🔥 Firebase Project ID: ${app.options.projectId}');
+          print('🔥 Firebase API Key: ${app.options.apiKey.substring(0, 10)}...');
+        }
       } catch (e) {
-        print('❌ Firebase not properly initialized: $e');
+        if (kDebugMode) {
+          print('❌ Firebase not properly initialized: $e');
+          print('💡 To enable Firebase Phone Auth:');
+          print('   - iOS: Add GoogleService-Info.plist to ios/Runner/');
+          print('   - Android: Add google-services.json to android/app/');
+        }
         return {
           'success': false,
-          'message': 'Firebase not initialized. Please restart the app.',
+          'message': 'Phone authentication is currently unavailable. Please contact support.',
           'provider': 'firebase',
         };
       }

@@ -223,6 +223,9 @@ async function createTablesIfNotExist() {
           pan_card NVARCHAR(10),
           device_id NVARCHAR(100),
           mpin NVARCHAR(255) NULL,
+          nominee_name NVARCHAR(100),
+          nominee_relationship NVARCHAR(50),
+          nominee_phone NVARCHAR(15),
           registration_date DATETIME2(3) DEFAULT SYSDATETIME(),
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
           total_invested DECIMAL(12,2) DEFAULT 0.00,
@@ -236,6 +239,27 @@ async function createTablesIfNotExist() {
         CREATE INDEX IX_customers_created_at ON customers (created_at)
         CREATE INDEX IX_customers_business_id ON customers (business_id)
         PRINT 'Customers table created with SQL Server 2019 features'
+      END
+    `);
+
+    // Add nominee columns if they don't exist (for existing databases)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'nominee_name')
+      BEGIN
+        ALTER TABLE customers ADD nominee_name NVARCHAR(100) NULL
+        PRINT 'Added nominee_name column to customers table'
+      END
+
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'nominee_relationship')
+      BEGIN
+        ALTER TABLE customers ADD nominee_relationship NVARCHAR(50) NULL
+        PRINT 'Added nominee_relationship column to customers table'
+      END
+
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'nominee_phone')
+      BEGIN
+        ALTER TABLE customers ADD nominee_phone NVARCHAR(15) NULL
+        PRINT 'Added nominee_phone column to customers table'
       END
     `);
 
@@ -278,6 +302,69 @@ async function createTablesIfNotExist() {
       BEGIN
         ALTER TABLE transactions ADD additional_data NVARCHAR(MAX)
         PRINT 'Added additional_data column to transactions table'
+      END
+    `);
+
+    // Add silver_grams column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'silver_grams')
+      BEGIN
+        ALTER TABLE transactions ADD silver_grams DECIMAL(10,4) DEFAULT 0.0000
+        PRINT 'Added silver_grams column to transactions table'
+      END
+    `);
+
+    // Add silver_price_per_gram column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'silver_price_per_gram')
+      BEGIN
+        ALTER TABLE transactions ADD silver_price_per_gram DECIMAL(10,2) DEFAULT 0.00
+        PRINT 'Added silver_price_per_gram column to transactions table'
+      END
+    `);
+
+    // Add scheme_type column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'scheme_type')
+      BEGIN
+        ALTER TABLE transactions ADD scheme_type NVARCHAR(20) NULL CHECK (scheme_type IN ('GOLDPLUS', 'GOLDFLEXI', 'SILVERPLUS', 'SILVERFLEXI', NULL))
+        PRINT 'Added scheme_type column to transactions table'
+      END
+    `);
+
+    // Add scheme_id column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'scheme_id')
+      BEGIN
+        ALTER TABLE transactions ADD scheme_id NVARCHAR(100) NULL
+        PRINT 'Added scheme_id column to transactions table'
+      END
+    `);
+
+    // Add installment_number column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'installment_number')
+      BEGIN
+        ALTER TABLE transactions ADD installment_number INT NULL
+        PRINT 'Added installment_number column to transactions table'
+      END
+    `);
+
+    // Add closure_remarks column to existing schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_remarks')
+      BEGIN
+        ALTER TABLE schemes ADD closure_remarks NVARCHAR(500) NULL
+        PRINT 'Added closure_remarks column to schemes table'
+      END
+    `);
+
+    // Add closure_date column to existing schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_date')
+      BEGIN
+        ALTER TABLE schemes ADD closure_date DATETIME2(3) NULL
+        PRINT 'Added closure_date column to schemes table'
       END
     `);
 
@@ -325,13 +412,66 @@ async function createTablesIfNotExist() {
       END
     `);
 
+    // Database migration: Add customer_id column if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'customer_id')
+      BEGIN
+        ALTER TABLE customers ADD customer_id NVARCHAR(20) NULL
+        PRINT 'customer_id column added to customers table'
+      END
+    `);
+
+    // Populate customer_id for existing customers
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'customer_id')
+      BEGIN
+        -- Update existing customers without customer_id
+        UPDATE customers
+        SET customer_id = 'VM' + CAST(id AS NVARCHAR(10))
+        WHERE customer_id IS NULL
+
+        PRINT 'customer_id populated for existing customers'
+      END
+    `);
+
+    // Create ID counters table for sequential ID generation
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='id_counters')
+      BEGIN
+        CREATE TABLE id_counters (
+          counter_name NVARCHAR(50) PRIMARY KEY,
+          current_value INT NOT NULL DEFAULT 0,
+          last_updated DATETIME2(3) DEFAULT SYSDATETIME()
+        )
+        PRINT 'ID counters table created'
+
+        -- Initialize customer counter
+        INSERT INTO id_counters (counter_name, current_value)
+        SELECT 'customer_id_counter', ISNULL(MAX(CAST(SUBSTRING(customer_id, 3, LEN(customer_id)-2) AS INT)), 0)
+        FROM customers
+        WHERE customer_id LIKE 'VM%' AND ISNUMERIC(SUBSTRING(customer_id, 3, LEN(customer_id)-2)) = 1
+
+        -- Initialize scheme counter
+        INSERT INTO id_counters (counter_name, current_value) VALUES ('scheme_id_counter', 0)
+
+        PRINT 'ID counters initialized'
+      END
+    `);
+
     // Insert test data
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM customers WHERE phone = '9999999999')
       BEGIN
-        INSERT INTO customers (phone, name, email, address, pan_card, device_id)
-        VALUES ('9999999999', 'Test Customer', 'test@vmurugan.com', 'Test Address, Chennai', 'ABCDE1234F', 'test_device_001')
-        PRINT 'Test customer inserted'
+        -- Get next customer ID
+        DECLARE @nextId INT
+        SELECT @nextId = current_value + 1 FROM id_counters WHERE counter_name = 'customer_id_counter'
+        UPDATE id_counters SET current_value = @nextId, last_updated = SYSDATETIME() WHERE counter_name = 'customer_id_counter'
+
+        DECLARE @customerId NVARCHAR(20) = 'VM' + CAST(@nextId AS NVARCHAR(10))
+
+        INSERT INTO customers (customer_id, phone, name, email, address, pan_card, device_id)
+        VALUES (@customerId, '9999999999', 'Test Customer', 'test@vmurugan.com', 'Test Address, Chennai', 'ABCDE1234F', 'test_device_001')
+        PRINT 'Test customer inserted with ID: ' + @customerId
       END
     `);
 
@@ -809,8 +949,19 @@ app.post('/api/customers', [
     await request.query(`
       IF NOT EXISTS (SELECT 1 FROM customers WHERE phone = @phone)
       BEGIN
-        INSERT INTO customers (phone, name, email, address, pan_card, device_id, business_id, mpin)
-        VALUES (@phone, @name, @email, @address, @pan_card, @device_id, @business_id, @mpin)
+        -- Generate sequential customer ID
+        DECLARE @nextId INT
+        DECLARE @customerId NVARCHAR(20)
+
+        -- Get and increment counter atomically
+        UPDATE id_counters
+        SET @nextId = current_value = current_value + 1, last_updated = SYSDATETIME()
+        WHERE counter_name = 'customer_id_counter'
+
+        SET @customerId = 'VM' + CAST(@nextId AS NVARCHAR(10))
+
+        INSERT INTO customers (customer_id, phone, name, email, address, pan_card, device_id, business_id, mpin)
+        VALUES (@customerId, @phone, @name, @email, @address, @pan_card, @device_id, @business_id, @mpin)
       END
       ELSE
       BEGIN
@@ -822,22 +973,39 @@ app.post('/api/customers', [
       END
     `);
 
-    // Get the saved customer data to return user object
+    // Get the saved customer data to return user object with all fields
     const getUserRequest = pool.request();
     getUserRequest.input('phone', sql.NVarChar(15), phone);
-    const userResult = await getUserRequest.query('SELECT id, phone, name, email FROM customers WHERE phone = @phone');
+    const userResult = await getUserRequest.query(`
+      SELECT id, customer_id, phone, name, email, address, pan_card, registration_date,
+             business_id, total_invested, total_gold, transaction_count,
+             last_transaction, created_at, updated_at
+      FROM customers
+      WHERE phone = @phone
+    `);
 
     const customer = userResult.recordset[0];
 
-    console.log('✅ Customer saved:', phone);
+    console.log('✅ Customer saved:', phone, '| Customer ID:', customer.customer_id);
     res.json({
       success: true,
       message: 'Customer saved successfully',
       user: {
-        id: customer.id,
+        id: customer.customer_id, // Use customer_id (VM1, VM2, etc.) instead of database id
+        customer_id: customer.customer_id,
         phone: customer.phone,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        address: customer.address,
+        pan_card: customer.pan_card,
+        registration_date: customer.registration_date,
+        business_id: customer.business_id,
+        total_invested: customer.total_invested,
+        total_gold: customer.total_gold,
+        transaction_count: customer.transaction_count,
+        last_transaction: customer.last_transaction,
+        created_at: customer.created_at,
+        updated_at: customer.updated_at
       }
     });
 
@@ -988,7 +1156,13 @@ app.get('/api/customers/:phone', async (req, res) => {
     const request = pool.request();
     request.input('phone', sql.NVarChar(15), phone);
 
-    const result = await request.query('SELECT id, phone, name, email FROM customers WHERE phone = @phone');
+    const result = await request.query(`
+      SELECT id, customer_id, phone, name, email, address, pan_card, registration_date,
+             business_id, total_invested, total_gold, transaction_count,
+             last_transaction, created_at, updated_at
+      FROM customers
+      WHERE phone = @phone
+    `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({
@@ -1002,10 +1176,21 @@ app.get('/api/customers/:phone', async (req, res) => {
     res.json({
       success: true,
       user: {
-        id: customer.id,
+        id: customer.customer_id, // Use customer_id (VM1, VM2, etc.) instead of database id
+        customer_id: customer.customer_id,
         phone: customer.phone,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        address: customer.address,
+        pan_card: customer.pan_card,
+        registration_date: customer.registration_date,
+        business_id: customer.business_id,
+        total_invested: customer.total_invested,
+        total_gold: customer.total_gold,
+        transaction_count: customer.transaction_count,
+        last_transaction: customer.last_transaction,
+        created_at: customer.created_at,
+        updated_at: customer.updated_at
       }
     });
 
@@ -1177,7 +1362,8 @@ app.post('/api/transactions', [
     const {
       transaction_id, customer_phone, customer_name, type, amount, gold_grams,
       gold_price_per_gram, payment_method, status, gateway_transaction_id,
-      device_info, location, additional_data
+      device_info, location, additional_data, scheme_type, scheme_id, installment_number,
+      silver_grams, silver_price_per_gram
     } = req.body;
 
     const business_id = 'VMURUGAN_001';
@@ -1189,6 +1375,9 @@ app.post('/api/transactions', [
     console.log('  - Status:', status);
     console.log('  - Payment Method:', payment_method);
     console.log('  - Gateway Transaction ID:', gateway_transaction_id);
+    console.log('  - Scheme Type:', scheme_type || 'REGULAR');
+    console.log('  - Scheme ID:', scheme_id || 'N/A');
+    console.log('  - Installment Number:', installment_number || 'N/A');
     console.log('  - Additional Data:', additional_data ? 'Present' : 'Not provided');
     if (additional_data) {
       console.log('  - Additional Data Content:', JSON.stringify(additional_data, null, 2));
@@ -1202,6 +1391,8 @@ app.post('/api/transactions', [
     request.input('amount', sql.Decimal(12, 2), amount);
     request.input('gold_grams', sql.Decimal(10, 4), gold_grams || 0);
     request.input('gold_price_per_gram', sql.Decimal(10, 2), gold_price_per_gram || 0);
+    request.input('silver_grams', sql.Decimal(10, 4), silver_grams || 0);
+    request.input('silver_price_per_gram', sql.Decimal(10, 2), silver_price_per_gram || 0);
     request.input('payment_method', sql.NVarChar(50), payment_method || 'GATEWAY');
     request.input('status', sql.NVarChar(20), status || 'PENDING');
     request.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id);
@@ -1209,16 +1400,19 @@ app.post('/api/transactions', [
     request.input('location', sql.NVarChar(sql.MAX), location);
     request.input('business_id', sql.NVarChar(50), business_id);
     request.input('additional_data', sql.NVarChar(sql.MAX), additional_data ? JSON.stringify(additional_data) : null);
+    request.input('scheme_type', sql.NVarChar(20), scheme_type || null);
+    request.input('scheme_id', sql.NVarChar(100), scheme_id || null);
+    request.input('installment_number', sql.Int, installment_number || null);
 
     await request.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount, gold_grams,
-        gold_price_per_gram, payment_method, status, gateway_transaction_id,
-        device_info, location, business_id, additional_data
+        gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, gateway_transaction_id,
+        device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
-        @gold_price_per_gram, @payment_method, @status, @gateway_transaction_id,
-        @device_info, @location, @business_id, @additional_data
+        @gold_price_per_gram, @silver_grams, @silver_price_per_gram, @payment_method, @status, @gateway_transaction_id,
+        @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number
       )
     `);
 
@@ -1283,37 +1477,97 @@ app.get('/api/portfolio', async (req, res) => {
     const request = pool.request();
     request.input('phone', sql.NVarChar(15), phone);
 
-    // Get portfolio summary from transactions
-    const portfolioResult = await request.query(`
+    // Get customer info (including customer_id, address, pan_card, nominee details)
+    const customerResult = await request.query(`
+      SELECT customer_id, name, email, address, pan_card,
+             nominee_name, nominee_relationship, nominee_phone
+      FROM customers
+      WHERE phone = @phone
+    `);
+
+    const customer = customerResult.recordset[0] || null;
+
+    // Get portfolio summary from transactions (direct buy/sell)
+    const transactionsRequest = pool.request();
+    transactionsRequest.input('phone', sql.NVarChar(15), phone);
+
+    const portfolioResult = await transactionsRequest.query(`
       SELECT
         SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN amount ELSE 0 END) as total_invested,
         SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN gold_grams ELSE 0 END) as total_gold_grams,
+        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN silver_grams ELSE 0 END) as total_silver_grams,
         COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as total_transactions,
         MAX(timestamp) as last_transaction_date
       FROM transactions
       WHERE customer_phone = @phone
     `);
 
+    // Get portfolio summary from schemes
+    const schemesRequest = pool.request();
+    schemesRequest.input('phone', sql.NVarChar(15), phone);
+    schemesRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    const schemesResult = await schemesRequest.query(`
+      SELECT
+        SUM(total_invested) as scheme_invested,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN total_metal_accumulated ELSE 0 END) as scheme_gold_grams,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN total_metal_accumulated ELSE 0 END) as scheme_silver_grams
+      FROM schemes
+      WHERE customer_phone = @phone AND business_id = @business_id AND status = 'ACTIVE'
+    `);
+
     const portfolio = portfolioResult.recordset[0] || {
       total_invested: 0,
       total_gold_grams: 0,
+      total_silver_grams: 0,
       total_transactions: 0,
       last_transaction_date: null
     };
 
-    // Calculate current value (assuming current gold price of ₹6000 per gram)
+    const schemes = schemesResult.recordset[0] || {
+      scheme_invested: 0,
+      scheme_gold_grams: 0,
+      scheme_silver_grams: 0
+    };
+
+    // Combine transactions and schemes
+    const totalInvested = (portfolio.total_invested || 0) + (schemes.scheme_invested || 0);
+    const totalGoldGrams = (portfolio.total_gold_grams || 0) + (schemes.scheme_gold_grams || 0);
+    const totalSilverGrams = (portfolio.total_silver_grams || 0) + (schemes.scheme_silver_grams || 0);
+
+    // Calculate current value (assuming current gold price of ₹6000 per gram and silver ₹85 per gram)
     const currentGoldPrice = 6000; // This should come from a gold price API
-    const currentValue = (portfolio.total_gold_grams || 0) * currentGoldPrice;
-    const profitLoss = currentValue - (portfolio.total_invested || 0);
-    const profitLossPercentage = portfolio.total_invested > 0 ? (profitLoss / portfolio.total_invested) * 100 : 0;
+    const currentSilverPrice = 85; // This should come from a silver price API
+    const currentGoldValue = totalGoldGrams * currentGoldPrice;
+    const currentSilverValue = totalSilverGrams * currentSilverPrice;
+    const currentValue = currentGoldValue + currentSilverValue;
+    const profitLoss = currentValue - totalInvested;
+    const profitLossPercentage = totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
 
     console.log('✅ Portfolio retrieved for phone:', phone);
+    console.log('📊 Portfolio Summary:', {
+      customer_id: customer?.customer_id,
+      totalInvested,
+      totalGoldGrams,
+      totalSilverGrams,
+      currentValue,
+      profitLoss
+    });
+
     res.json({
       success: true,
       portfolio: {
-        total_invested: portfolio.total_invested || 0,
-        total_gold_grams: portfolio.total_gold_grams || 0,
-        total_silver_grams: 0, // Not implemented yet
+        customer_id: customer?.customer_id || null,
+        customer_name: customer?.name || null,
+        customer_email: customer?.email || null,
+        customer_address: customer?.address || null,
+        customer_pan_card: customer?.pan_card || null,
+        customer_nominee_name: customer?.nominee_name || null,
+        customer_nominee_relationship: customer?.nominee_relationship || null,
+        customer_nominee_phone: customer?.nominee_phone || null,
+        total_invested: totalInvested,
+        total_gold_grams: totalGoldGrams,
+        total_silver_grams: totalSilverGrams,
         current_value: currentValue,
         profit_loss: profitLoss,
         profit_loss_percentage: profitLossPercentage,
@@ -1330,10 +1584,10 @@ app.get('/api/portfolio', async (req, res) => {
 
 // Create scheme endpoint
 app.post('/api/schemes', [
-  body('customer_phone').isMobilePhone('en-IN').withMessage('Invalid customer phone'),
+  body('customer_phone').notEmpty().withMessage('Customer phone required'),
   body('customer_name').notEmpty().withMessage('Customer name required'),
   body('scheme_type').isIn(['GOLDPLUS', 'GOLDFLEXI', 'SILVERPLUS', 'SILVERFLEXI']).withMessage('Invalid scheme type'),
-  body('monthly_amount').isFloat({ min: 100 }).withMessage('Monthly amount must be at least ₹100'),
+  body('monthly_amount').isFloat({ min: 0 }).withMessage('Monthly amount must be a valid number'),
   body('terms_accepted').isBoolean().withMessage('Terms acceptance required')
 ], async (req, res) => {
   try {
@@ -1343,10 +1597,27 @@ app.post('/api/schemes', [
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      console.log('❌ Validation errors:', errors.array());
+      return res.status(400).json({
+        success: false,
+        message: errors.array().map(e => e.msg).join(', '),
+        errors: errors.array()
+      });
     }
 
     const { customer_phone, customer_name, scheme_type, monthly_amount, terms_accepted } = req.body;
+
+    // Validate monthly_amount based on scheme type
+    // For testing: Allow amounts from ₹1
+    if (scheme_type === 'GOLDPLUS' || scheme_type === 'SILVERPLUS') {
+      if (monthly_amount < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Monthly amount for PLUS schemes must be at least ₹1'
+        });
+      }
+    }
+    // For FLEXI schemes, monthly_amount can be 0 (no fixed monthly amount)
 
     if (!terms_accepted) {
       return res.status(400).json({ success: false, message: 'Terms and conditions must be accepted' });
@@ -1358,21 +1629,31 @@ app.post('/api/schemes', [
     customerRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
     const customerResult = await customerRequest.query(`
-      SELECT id, name FROM customers WHERE phone = @phone AND business_id = @business_id
+      SELECT id, customer_id, name FROM customers WHERE phone = @phone AND business_id = @business_id
     `);
 
     let customerId;
     if (customerResult.recordset.length === 0) {
-      // Create customer if doesn't exist
+      // Create customer if doesn't exist with sequential customer ID
       const createCustomerRequest = pool.request();
       createCustomerRequest.input('phone', sql.NVarChar(15), customer_phone);
       createCustomerRequest.input('name', sql.NVarChar(100), customer_name);
       createCustomerRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
       const createResult = await createCustomerRequest.query(`
-        INSERT INTO customers (phone, name, business_id)
+        DECLARE @nextId INT
+        DECLARE @customerId NVARCHAR(20)
+
+        -- Get and increment counter atomically
+        UPDATE id_counters
+        SET @nextId = current_value = current_value + 1, last_updated = SYSDATETIME()
+        WHERE counter_name = 'customer_id_counter'
+
+        SET @customerId = 'VM' + CAST(@nextId AS NVARCHAR(10))
+
+        INSERT INTO customers (customer_id, phone, name, business_id)
         OUTPUT INSERTED.id
-        VALUES (@phone, @name, @business_id)
+        VALUES (@customerId, @phone, @name, @business_id)
       `);
       customerId = createResult.recordset[0].id;
       console.log('✅ New customer created with ID:', customerId);
@@ -1387,7 +1668,9 @@ app.post('/api/schemes', [
     existingSchemesRequest.input('status', sql.NVarChar(20), 'ACTIVE');
 
     const existingSchemes = await existingSchemesRequest.query(`
-      SELECT scheme_type FROM schemes WHERE customer_id = @customer_id AND status = @status
+      SELECT id, scheme_id, scheme_type, metal_type, monthly_amount, duration_months, status
+      FROM schemes
+      WHERE customer_id = @customer_id AND status = @status
     `);
 
     // Check if customer already has 4 schemes
@@ -1399,17 +1682,64 @@ app.post('/api/schemes', [
     }
 
     // Check if customer already has this scheme type
-    const hasSchemeType = existingSchemes.recordset.some(scheme => scheme.scheme_type === scheme_type);
-    if (hasSchemeType) {
-      return res.status(400).json({
-        success: false,
-        message: `Customer already has ${scheme_type} scheme`
+    const existingScheme = existingSchemes.recordset.find(scheme => scheme.scheme_type === scheme_type);
+    if (existingScheme) {
+      console.log(`ℹ️ Customer already has ${scheme_type} scheme, returning existing scheme_id: ${existingScheme.scheme_id}`);
+
+      // Return the existing scheme instead of error
+      return res.json({
+        success: true,
+        message: 'Using existing scheme',
+        scheme: {
+          id: existingScheme.id,
+          scheme_id: existingScheme.scheme_id,
+          customer_id: customerId,
+          scheme_type: existingScheme.scheme_type,
+          metal_type: existingScheme.metal_type,
+          monthly_amount: existingScheme.monthly_amount,
+          duration_months: existingScheme.duration_months,
+          status: existingScheme.status
+        }
       });
     }
 
-    // Generate scheme ID
-    const timestamp = Date.now();
-    const schemeId = `SCH${String(timestamp).slice(-6)}_${scheme_type}`;
+    // Generate sequential scheme ID based on MAX(scheme_id) for this scheme_type
+    // Format: {type}_P{number} where type is GP, GF, SP, SF
+    const schemeTypeMap = {
+      'GOLDPLUS': 'GP',
+      'GOLDFLEXI': 'GF',
+      'SILVERPLUS': 'SP',
+      'SILVERFLEXI': 'SF'
+    };
+
+    const schemePrefix = schemeTypeMap[scheme_type];
+
+    // Get the last scheme_id for this scheme_type
+    const lastSchemeRequest = pool.request();
+    lastSchemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    const lastSchemeResult = await lastSchemeRequest.query(`
+      SELECT TOP 1 scheme_id
+      FROM schemes
+      WHERE scheme_type = @scheme_type
+      ORDER BY id DESC
+    `);
+
+    let nextSchemeNumber = 1; // Default to 1 if no schemes exist
+
+    if (lastSchemeResult.recordset.length > 0) {
+      const lastSchemeId = lastSchemeResult.recordset[0].scheme_id;
+      console.log(`🔍 Last scheme_id for ${scheme_type}: ${lastSchemeId}`);
+
+      // Extract number from scheme_id (e.g., "GP_P5" -> 5)
+      const match = lastSchemeId.match(/_P(\d+)$/);
+      if (match) {
+        nextSchemeNumber = parseInt(match[1]) + 1;
+      }
+    }
+
+    const schemeId = `${schemePrefix}_P${nextSchemeNumber}`;
+
+    console.log(`🎯 Generated Scheme ID: ${schemeId} (Type: ${scheme_type}, Number: ${nextSchemeNumber})`);
 
     // Determine duration and metal type
     const duration = scheme_type.includes('PLUS') ? 12 : null;
@@ -1464,6 +1794,217 @@ app.post('/api/schemes', [
 
   } catch (error) {
     console.error('❌ Scheme creation error:', error);
+    res.status(500).json({ success: false, message: 'Scheme creation failed', error: error.message });
+  }
+});
+
+// Create scheme AFTER payment success
+app.post('/api/schemes/create-after-payment', [
+  body('customer_phone').notEmpty().withMessage('Customer phone required'),
+  body('customer_name').notEmpty().withMessage('Customer name required'),
+  body('scheme_type').isIn(['GOLDPLUS', 'GOLDFLEXI', 'SILVERPLUS', 'SILVERFLEXI']).withMessage('Invalid scheme type'),
+  body('monthly_amount').isFloat({ min: 0 }).withMessage('Monthly amount must be a valid number'),
+  body('transaction_id').notEmpty().withMessage('Transaction ID required')
+], async (req, res) => {
+  try {
+    console.log('🎯🎯🎯 CREATE SCHEME AFTER PAYMENT REQUEST 🎯🎯🎯');
+    console.log('📊 Request Body:', JSON.stringify(req.body, null, 2));
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
+      return res.status(400).json({
+        success: false,
+        message: errors.array().map(e => e.msg).join(', '),
+        errors: errors.array()
+      });
+    }
+
+    const { customer_phone, customer_name, scheme_type, monthly_amount, transaction_id } = req.body;
+
+    // Get customer ID
+    const customerRequest = pool.request();
+    customerRequest.input('phone', sql.NVarChar(15), customer_phone);
+    customerRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    const customerResult = await customerRequest.query(`
+      SELECT id FROM customers WHERE phone = @phone AND business_id = @business_id
+    `);
+
+    if (customerResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const customerId = customerResult.recordset[0].id;
+
+    // Check if customer already has an ACTIVE scheme for this type
+    const existingSchemesRequest = pool.request();
+    existingSchemesRequest.input('customer_id', sql.Int, customerId);
+    existingSchemesRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    existingSchemesRequest.input('status', sql.NVarChar(20), 'ACTIVE');
+
+    const existingSchemes = await existingSchemesRequest.query(`
+      SELECT id, scheme_id, scheme_type, metal_type, monthly_amount, duration_months, status, completed_installments
+      FROM schemes
+      WHERE customer_id = @customer_id AND scheme_type = @scheme_type AND status = @status
+    `);
+
+    // For FLEXI schemes: Always reuse existing scheme if found
+    // For PLUS schemes: Only reuse if not completed (completed_installments < 12)
+    if (existingSchemes.recordset.length > 0) {
+      const existingScheme = existingSchemes.recordset[0];
+
+      const isFlexi = scheme_type.includes('FLEXI');
+      const isPlus = scheme_type.includes('PLUS');
+
+      if (isFlexi) {
+        // FLEXI: Always reuse
+        console.log(`ℹ️ Customer already has ${scheme_type} FLEXI scheme, reusing: ${existingScheme.scheme_id}`);
+        return res.json({
+          success: true,
+          message: 'Using existing FLEXI scheme',
+          scheme_id: existingScheme.scheme_id,
+          is_new: false
+        });
+      } else if (isPlus && existingScheme.completed_installments < 12) {
+        // PLUS: Check if customer already paid this month
+        console.log(`ℹ️ Customer has incomplete ${scheme_type} PLUS scheme: ${existingScheme.scheme_id}`);
+
+        // Check for payments in current calendar month
+        const monthlyCheckRequest = pool.request();
+        monthlyCheckRequest.input('scheme_id', sql.NVarChar(100), existingScheme.scheme_id);
+
+        const monthlyCheckResult = await monthlyCheckRequest.query(`
+          SELECT TOP 1 created_at, installment_number
+          FROM transactions
+          WHERE scheme_id = @scheme_id
+            AND status = 'SUCCESS'
+            AND YEAR(created_at) = YEAR(GETDATE())
+            AND MONTH(created_at) = MONTH(GETDATE())
+          ORDER BY created_at DESC
+        `);
+
+        if (monthlyCheckResult.recordset.length > 0) {
+          const lastPayment = monthlyCheckResult.recordset[0];
+          const lastPaymentDate = new Date(lastPayment.created_at);
+          const nextPaymentDate = new Date(lastPaymentDate);
+          nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+
+          console.log(`❌ Customer already paid for ${scheme_type} this month on ${lastPaymentDate.toISOString()}`);
+          console.log(`⏰ Next payment allowed from: ${nextPaymentDate.toISOString()}`);
+
+          return res.status(400).json({
+            success: false,
+            message: `You have already paid for this month. Next payment is due from ${nextPaymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+            error_code: 'MONTHLY_PAYMENT_ALREADY_MADE',
+            last_payment_date: lastPaymentDate.toISOString(),
+            next_payment_date: nextPaymentDate.toISOString(),
+            scheme_id: existingScheme.scheme_id
+          });
+        }
+
+        // No payment this month, allow payment
+        console.log(`✅ No payment found for ${scheme_type} this month, allowing payment`);
+        return res.json({
+          success: true,
+          message: 'Using existing PLUS scheme',
+          scheme_id: existingScheme.scheme_id,
+          is_new: false
+        });
+      }
+      // If PLUS scheme is completed, create new one below
+    }
+
+    // Generate new scheme_id based on MAX for this scheme_type
+    const schemeTypeMap = {
+      'GOLDPLUS': 'GP',
+      'GOLDFLEXI': 'GF',
+      'SILVERPLUS': 'SP',
+      'SILVERFLEXI': 'SF'
+    };
+
+    const schemePrefix = schemeTypeMap[scheme_type];
+
+    const lastSchemeRequest = pool.request();
+    lastSchemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    const lastSchemeResult = await lastSchemeRequest.query(`
+      SELECT TOP 1 scheme_id
+      FROM schemes
+      WHERE scheme_type = @scheme_type
+      ORDER BY id DESC
+    `);
+
+    let nextSchemeNumber = 1;
+
+    if (lastSchemeResult.recordset.length > 0) {
+      const lastSchemeId = lastSchemeResult.recordset[0].scheme_id;
+      console.log(`🔍 Last scheme_id for ${scheme_type}: ${lastSchemeId}`);
+
+      const match = lastSchemeId.match(/_P(\d+)$/);
+      if (match) {
+        nextSchemeNumber = parseInt(match[1]) + 1;
+      }
+    }
+
+    const schemeId = `${schemePrefix}_P${nextSchemeNumber}`;
+    console.log(`🎯 Generated NEW Scheme ID: ${schemeId} (Type: ${scheme_type}, Number: ${nextSchemeNumber})`);
+
+    // Determine duration and metal type
+    const duration = scheme_type.includes('PLUS') ? 12 : null;
+    const metalType = scheme_type.includes('GOLD') ? 'GOLD' : 'SILVER';
+    const endDate = duration ? new Date(Date.now() + (duration * 30 * 24 * 60 * 60 * 1000)) : null;
+
+    // Create scheme
+    const schemeRequest = pool.request();
+    schemeRequest.input('scheme_id', sql.NVarChar(100), schemeId);
+    schemeRequest.input('customer_id', sql.Int, customerId);
+    schemeRequest.input('customer_phone', sql.NVarChar(15), customer_phone);
+    schemeRequest.input('customer_name', sql.NVarChar(100), customer_name);
+    schemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    schemeRequest.input('metal_type', sql.NVarChar(10), metalType);
+    schemeRequest.input('monthly_amount', sql.Decimal(12,2), monthly_amount);
+    schemeRequest.input('duration_months', sql.Int, duration);
+    schemeRequest.input('end_date', sql.DateTime, endDate);
+    schemeRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    const schemeResult = await schemeRequest.query(`
+      INSERT INTO schemes (
+        scheme_id, customer_id, customer_phone, customer_name,
+        scheme_type, metal_type, monthly_amount, duration_months,
+        end_date, terms_accepted, terms_accepted_at, business_id
+      )
+      OUTPUT INSERTED.id
+      VALUES (
+        @scheme_id, @customer_id, @customer_phone, @customer_name,
+        @scheme_type, @metal_type, @monthly_amount, @duration_months,
+        @end_date, 1, SYSDATETIME(), @business_id
+      )
+    `);
+
+    console.log(`✅ Scheme created successfully: ${schemeId}`);
+
+    // Update transaction with scheme_id
+    const updateTxnRequest = pool.request();
+    updateTxnRequest.input('transaction_id', sql.NVarChar(100), transaction_id);
+    updateTxnRequest.input('scheme_id', sql.NVarChar(100), schemeId);
+
+    await updateTxnRequest.query(`
+      UPDATE transactions
+      SET scheme_id = @scheme_id
+      WHERE transaction_id = @transaction_id
+    `);
+
+    console.log(`✅ Transaction ${transaction_id} updated with scheme_id: ${schemeId}`);
+
+    res.json({
+      success: true,
+      message: 'Scheme created successfully after payment',
+      scheme_id: schemeId,
+      is_new: true
+    });
+
+  } catch (error) {
+    console.error('❌ Scheme creation after payment error:', error);
     res.status(500).json({ success: false, message: 'Scheme creation failed', error: error.message });
   }
 });
@@ -1589,6 +2130,99 @@ app.put('/api/schemes/:scheme_id', [
   }
 });
 
+// Close scheme endpoint (Admin only)
+app.post('/api/schemes/:scheme_id/close', [
+  body('closure_remarks').optional().isString().withMessage('Closure remarks must be a string')
+], async (req, res) => {
+  try {
+    const { scheme_id } = req.params;
+    const { closure_remarks } = req.body;
+    console.log('🔒 Closing scheme:', scheme_id);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    // Get scheme details
+    const schemeRequest = pool.request();
+    schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+
+    const schemeResult = await schemeRequest.query(`
+      SELECT * FROM schemes WHERE scheme_id = @scheme_id
+    `);
+
+    if (schemeResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Scheme not found' });
+    }
+
+    const scheme = schemeResult.recordset[0];
+
+    // Check if scheme is already closed
+    if (scheme.status === 'COMPLETED' || scheme.status === 'CANCELLED') {
+      return res.status(400).json({
+        success: false,
+        message: `Scheme is already ${scheme.status.toLowerCase()}`
+      });
+    }
+
+    // Validate closure criteria
+    const schemeType = scheme.scheme_type;
+    const completedInstallments = scheme.completed_installments;
+    const durationMonths = scheme.duration_months;
+
+    // For GOLDPLUS/SILVERPLUS: Must complete 12 months
+    if ((schemeType === 'GOLDPLUS' || schemeType === 'SILVERPLUS') && completedInstallments < 12) {
+      return res.status(400).json({
+        success: false,
+        message: `${schemeType} scheme requires 12 completed installments. Current: ${completedInstallments}/12`
+      });
+    }
+
+    // For GOLDFLEXI/SILVERFLEXI: Can close anytime (no restrictions)
+
+    // Update scheme status to COMPLETED
+    const updateRequest = pool.request();
+    updateRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    updateRequest.input('status', sql.NVarChar(20), 'COMPLETED');
+    updateRequest.input('closure_date', sql.DateTime, new Date());
+    updateRequest.input('closure_remarks', sql.NVarChar(500), closure_remarks || 'Scheme closed successfully');
+    updateRequest.input('end_date', sql.DateTime, new Date());
+    updateRequest.input('updated_at', sql.DateTime, new Date());
+
+    await updateRequest.query(`
+      UPDATE schemes
+      SET status = @status,
+          closure_date = @closure_date,
+          closure_remarks = @closure_remarks,
+          end_date = @end_date,
+          updated_at = @updated_at
+      WHERE scheme_id = @scheme_id
+    `);
+
+    console.log('✅ Scheme closed successfully:', scheme_id);
+
+    res.json({
+      success: true,
+      message: 'Scheme closed successfully',
+      scheme_id,
+      closure_summary: {
+        scheme_type: scheme.scheme_type,
+        total_invested: scheme.total_invested,
+        total_metal_accumulated: scheme.total_metal_accumulated,
+        completed_installments: scheme.completed_installments,
+        start_date: scheme.start_date,
+        closure_date: new Date(),
+        closure_remarks: closure_remarks || 'Scheme closed successfully'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Scheme closure error:', error);
+    res.status(500).json({ success: false, message: 'Scheme closure failed', error: error.message });
+  }
+});
+
 // Add scheme investment/payment
 app.post('/api/schemes/:scheme_id/invest', [
   body('amount').isFloat({ min: 100 }).withMessage('Investment amount must be at least ₹100'),
@@ -1637,7 +2271,7 @@ app.post('/api/schemes/:scheme_id/invest', [
       WHERE scheme_id = @scheme_id
     `);
 
-    // Create transaction record
+    // Create transaction record with scheme context
     const transactionRequest = pool.request();
     transactionRequest.input('transaction_id', sql.NVarChar(100), transaction_id);
     transactionRequest.input('customer_phone', sql.NVarChar(15), scheme.customer_phone);
@@ -1645,19 +2279,30 @@ app.post('/api/schemes/:scheme_id/invest', [
     transactionRequest.input('type', sql.NVarChar(10), 'BUY');
     transactionRequest.input('amount', sql.Decimal(12,2), amount);
     transactionRequest.input('gold_grams', sql.Decimal(10,4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
+    transactionRequest.input('gold_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'GOLD' ? current_rate : 0);
     transactionRequest.input('silver_grams', sql.Decimal(10,4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
+    transactionRequest.input('silver_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'SILVER' ? current_rate : 0);
     transactionRequest.input('status', sql.NVarChar(20), 'SUCCESS');
     transactionRequest.input('payment_method', sql.NVarChar(50), 'SCHEME_INVESTMENT');
     transactionRequest.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id || `SCHEME_${transaction_id}`);
     transactionRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
+    // Add scheme context fields
+    transactionRequest.input('scheme_type', sql.NVarChar(20), scheme.scheme_type);
+    transactionRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    transactionRequest.input('installment_number', sql.Int, scheme.completed_installments + 1);
+
     await transactionRequest.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount,
-        gold_grams, silver_grams, status, payment_method, gateway_transaction_id, business_id
+        gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
+        status, payment_method, gateway_transaction_id, business_id,
+        scheme_type, scheme_id, installment_number
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount,
-        @gold_grams, @silver_grams, @status, @payment_method, @gateway_transaction_id, @business_id
+        @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
+        @status, @payment_method, @gateway_transaction_id, @business_id,
+        @scheme_type, @scheme_id, @installment_number
       )
     `);
 
@@ -1681,11 +2326,120 @@ app.post('/api/schemes/:scheme_id/invest', [
   }
 });
 
+// Add Flexi scheme payment (unlimited payments, no monthly restrictions)
+app.post('/api/schemes/:scheme_id/flexi-payment', [
+  body('amount').isFloat({ min: 100 }).withMessage('Payment amount must be at least ₹100'),
+  body('metal_grams').isFloat({ min: 0.001 }).withMessage('Metal grams must be positive'),
+  body('current_rate').isFloat({ min: 1 }).withMessage('Current rate must be positive'),
+  body('transaction_id').notEmpty().withMessage('Transaction ID required')
+], async (req, res) => {
+  try {
+    const { scheme_id } = req.params;
+    const { amount, metal_grams, current_rate, transaction_id, gateway_transaction_id, payment_method } = req.body;
+    console.log('💰 Adding Flexi payment to scheme:', scheme_id, 'Amount:', amount);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    // Get scheme details
+    const schemeRequest = pool.request();
+    schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+
+    const schemeResult = await schemeRequest.query(`
+      SELECT * FROM schemes WHERE scheme_id = @scheme_id AND status = 'ACTIVE'
+    `);
+
+    if (schemeResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Active scheme not found' });
+    }
+
+    const scheme = schemeResult.recordset[0];
+
+    // Verify it's a FLEXI scheme
+    if (scheme.scheme_type !== 'GOLDFLEXI' && scheme.scheme_type !== 'SILVERFLEXI') {
+      return res.status(400).json({
+        success: false,
+        message: 'This endpoint is only for FLEXI schemes. Use /invest for PLUS schemes.'
+      });
+    }
+
+    // Update scheme with new payment
+    const updateSchemeRequest = pool.request();
+    updateSchemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    updateSchemeRequest.input('amount', sql.Decimal(12,2), amount);
+    updateSchemeRequest.input('metal_grams', sql.Decimal(10,4), metal_grams);
+    updateSchemeRequest.input('updated_at', sql.DateTime, new Date());
+
+    await updateSchemeRequest.query(`
+      UPDATE schemes
+      SET
+        total_amount_paid = total_amount_paid + @amount,
+        total_metal_accumulated = total_metal_accumulated + @metal_grams,
+        updated_at = @updated_at
+      WHERE scheme_id = @scheme_id
+    `);
+
+    // Create transaction record with scheme context (no installment_number for Flexi)
+    const transactionRequest = pool.request();
+    transactionRequest.input('transaction_id', sql.NVarChar(100), transaction_id);
+    transactionRequest.input('customer_phone', sql.NVarChar(15), scheme.customer_phone);
+    transactionRequest.input('customer_name', sql.NVarChar(100), scheme.customer_name);
+    transactionRequest.input('type', sql.NVarChar(10), 'BUY');
+    transactionRequest.input('amount', sql.Decimal(12,2), amount);
+    transactionRequest.input('gold_grams', sql.Decimal(10,4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
+    transactionRequest.input('gold_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'GOLD' ? current_rate : 0);
+    transactionRequest.input('silver_grams', sql.Decimal(10,4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
+    transactionRequest.input('silver_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'SILVER' ? current_rate : 0);
+    transactionRequest.input('status', sql.NVarChar(20), 'SUCCESS');
+    transactionRequest.input('payment_method', sql.NVarChar(50), payment_method || 'FLEXI_PAYMENT');
+    transactionRequest.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id || `FLEXI_${transaction_id}`);
+    transactionRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    // Add scheme context fields (no installment_number for Flexi)
+    transactionRequest.input('scheme_type', sql.NVarChar(20), scheme.scheme_type);
+    transactionRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+
+    await transactionRequest.query(`
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, type, amount,
+        gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
+        status, payment_method, gateway_transaction_id, business_id,
+        scheme_type, scheme_id
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, @type, @amount,
+        @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
+        @status, @payment_method, @gateway_transaction_id, @business_id,
+        @scheme_type, @scheme_id
+      )
+    `);
+
+    console.log('✅ Flexi payment added successfully:', scheme_id);
+
+    res.json({
+      success: true,
+      message: 'Flexi payment added successfully',
+      scheme_id,
+      payment: {
+        amount,
+        metal_grams,
+        current_rate,
+        transaction_id
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Flexi payment error:', error);
+    res.status(500).json({ success: false, message: 'Flexi payment failed', error: error.message });
+  }
+});
+
 // Get scheme details by ID
 app.get('/api/schemes/details/:scheme_id', async (req, res) => {
   try {
     const { scheme_id } = req.params;
-    console.log('📊 Getting scheme details:', scheme_id);
+    console.log('📊 Getting scheme details for scheme_id:', scheme_id);
 
     const schemeRequest = pool.request();
     schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
@@ -1701,9 +2455,21 @@ app.get('/api/schemes/details/:scheme_id', async (req, res) => {
       WHERE s.scheme_id = @scheme_id
     `);
 
+    console.log(`📊 Query returned ${schemeResult.recordset.length} results`);
+
     if (schemeResult.recordset.length === 0) {
+      console.log(`❌ Scheme not found: ${scheme_id}`);
+
+      // Debug: Check if scheme exists with different query
+      const debugRequest = pool.request();
+      debugRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+      const debugResult = await debugRequest.query(`SELECT COUNT(*) as count FROM schemes WHERE scheme_id = @scheme_id`);
+      console.log(`🔍 Debug: Schemes table has ${debugResult.recordset[0].count} records with scheme_id = ${scheme_id}`);
+
       return res.status(404).json({ success: false, message: 'Scheme not found' });
     }
+
+    console.log(`✅ Scheme found: ${scheme_id}, Type: ${schemeResult.recordset[0].scheme_type}`);
 
     // Get scheme transactions
     const transactionsRequest = pool.request();
@@ -2961,6 +3727,150 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
+// Get comprehensive customer details (for admin portal)
+app.get('/api/admin/customers/:phone', async (req, res) => {
+  try {
+    const { phone } = req.params;
+    console.log('👤 Admin: Getting comprehensive details for customer:', phone);
+
+    // Get customer basic info
+    const customerRequest = pool.request();
+    customerRequest.input('phone', sql.NVarChar(15), phone);
+
+    const customerResult = await customerRequest.query(`
+      SELECT id, customer_id, phone, name, email, address, pan_card,
+             business_id, registration_date, total_invested, total_gold,
+             transaction_count, last_transaction, created_at, updated_at
+      FROM customers
+      WHERE phone = @phone
+    `);
+
+    if (customerResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const customer = customerResult.recordset[0];
+
+    // Get all schemes for this customer
+    const schemesRequest = pool.request();
+    schemesRequest.input('phone', sql.NVarChar(15), phone);
+
+    const schemesResult = await schemesRequest.query(`
+      SELECT scheme_id, scheme_type, metal_type, monthly_amount, duration_months,
+             status, start_date, end_date, total_invested, total_metal_accumulated,
+             completed_installments, closure_date, closure_remarks, created_at, updated_at
+      FROM schemes
+      WHERE customer_phone = @phone
+      ORDER BY created_at DESC
+    `);
+
+    // Get all transactions for this customer
+    const transactionsRequest = pool.request();
+    transactionsRequest.input('phone', sql.NVarChar(15), phone);
+
+    const transactionsResult = await transactionsRequest.query(`
+      SELECT transaction_id, type, amount, gold_grams, silver_grams,
+             gold_price_per_gram, silver_price_per_gram, payment_method,
+             status, gateway_transaction_id, timestamp, created_at
+      FROM transactions
+      WHERE customer_phone = @phone
+      ORDER BY timestamp DESC
+    `);
+
+    // Calculate total holdings (from schemes + direct purchases)
+    // IMPORTANT: Avoid double-counting by excluding scheme transactions from direct purchases
+
+    // Gold from schemes (GOLDPLUS + GOLDFLEXI)
+    const goldFromSchemes = schemesResult.recordset
+      .filter(s => s.metal_type === 'GOLD' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    // Gold from direct purchases (exclude scheme transactions)
+    const goldFromDirectPurchases = transactionsResult.recordset
+      .filter(t => t.status === 'SUCCESS' && t.type === 'BUY' && !t.scheme_id)
+      .reduce((sum, t) => sum + (t.gold_grams || 0), 0);
+
+    const totalGoldGrams = goldFromSchemes + goldFromDirectPurchases;
+
+    // Silver from schemes (SILVERPLUS + SILVERFLEXI)
+    const silverFromSchemes = schemesResult.recordset
+      .filter(s => s.metal_type === 'SILVER' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    // Silver from direct purchases (exclude scheme transactions)
+    const silverFromDirectPurchases = transactionsResult.recordset
+      .filter(t => t.status === 'SUCCESS' && t.type === 'BUY' && !t.scheme_id)
+      .reduce((sum, t) => sum + (t.silver_grams || 0), 0);
+
+    const totalSilverGrams = silverFromSchemes + silverFromDirectPurchases;
+
+    // Total invested (schemes + direct purchases, avoid double-counting)
+    const investedInSchemes = schemesResult.recordset
+      .filter(s => s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_invested || 0), 0);
+
+    const investedInDirectPurchases = transactionsResult.recordset
+      .filter(t => t.status === 'SUCCESS' && t.type === 'BUY' && !t.scheme_id)
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const totalInvested = investedInSchemes + investedInDirectPurchases;
+
+    // Calculate breakdown by scheme type
+    const goldPlusGrams = schemesResult.recordset
+      .filter(s => s.scheme_type === 'GOLDPLUS' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    const goldFlexiGrams = schemesResult.recordset
+      .filter(s => s.scheme_type === 'GOLDFLEXI' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    const silverPlusGrams = schemesResult.recordset
+      .filter(s => s.scheme_type === 'SILVERPLUS' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    const silverFlexiGrams = schemesResult.recordset
+      .filter(s => s.scheme_type === 'SILVERFLEXI' && s.status === 'ACTIVE')
+      .reduce((sum, s) => sum + (s.total_metal_accumulated || 0), 0);
+
+    res.json({
+      success: true,
+      customer: {
+        ...customer,
+        total_gold_grams: totalGoldGrams,
+        total_silver_grams: totalSilverGrams,
+        total_invested: totalInvested
+      },
+      schemes: schemesResult.recordset,
+      transactions: transactionsResult.recordset,
+      summary: {
+        active_schemes: schemesResult.recordset.filter(s => s.status === 'ACTIVE').length,
+        completed_schemes: schemesResult.recordset.filter(s => s.status === 'COMPLETED').length,
+        total_schemes: schemesResult.recordset.length,
+        total_transactions: transactionsResult.recordset.length,
+        successful_transactions: transactionsResult.recordset.filter(t => t.status === 'SUCCESS').length
+      },
+      breakdown: {
+        gold: {
+          total: totalGoldGrams,
+          direct_purchase: goldFromDirectPurchases,
+          gold_plus: goldPlusGrams,
+          gold_flexi: goldFlexiGrams
+        },
+        silver: {
+          total: totalSilverGrams,
+          direct_purchase: silverFromDirectPurchases,
+          silver_plus: silverPlusGrams,
+          silver_flexi: silverFlexiGrams
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting customer details:', error.message);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // Get all transactions (for admin portal)
 app.get('/api/transactions', async (req, res) => {
   try {
@@ -3202,6 +4112,695 @@ async function startServer() {
   }
 }
 
+// ==================== ADMIN REPORTING ENDPOINTS ====================
+
+// Dashboard Analytics - Comprehensive overview
+app.get('/api/admin/analytics/dashboard', async (req, res) => {
+  const requestId = `DASH_${Date.now()}`;
+  console.log(`📊 [${requestId}] Dashboard analytics requested`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    // Get total customers
+    const customersResult = await pool.request().query(`
+      SELECT
+        COUNT(*) as total_customers,
+        COUNT(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN 1 END) as new_customers_this_month,
+        COUNT(CASE WHEN CAST(created_at AS DATE) >= DATEADD(DAY, -7, GETDATE()) THEN 1 END) as new_customers_this_week
+      FROM customers
+    `);
+
+    // Get transaction analytics
+    const transactionsResult = await pool.request().query(`
+      SELECT
+        COUNT(*) as total_transactions,
+        SUM(amount) as total_revenue,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        COUNT(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN 1 END) as transactions_this_month,
+        SUM(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN amount ELSE 0 END) as revenue_this_month
+      FROM transactions
+      WHERE status = 'SUCCESS'
+    `);
+
+    // Get scheme analytics
+    const schemesResult = await pool.request().query(`
+      SELECT
+        COUNT(*) as total_schemes,
+        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as active_schemes,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_schemes,
+        COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) as cancelled_schemes,
+        COUNT(CASE WHEN scheme_type = 'GOLDPLUS' THEN 1 END) as goldplus_count,
+        COUNT(CASE WHEN scheme_type = 'GOLDFLEXI' THEN 1 END) as goldflexi_count,
+        COUNT(CASE WHEN scheme_type = 'SILVERPLUS' THEN 1 END) as silverplus_count,
+        COUNT(CASE WHEN scheme_type = 'SILVERFLEXI' THEN 1 END) as silverflexi_count,
+        SUM(total_invested) as total_scheme_investment,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN total_metal_accumulated ELSE 0 END) as total_gold_accumulated,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN total_metal_accumulated ELSE 0 END) as total_silver_accumulated,
+        AVG(monthly_amount) as avg_monthly_amount
+      FROM schemes
+    `);
+
+    // Get monthly revenue trend (last 6 months)
+    const monthlyTrendResult = await pool.request().query(`
+      SELECT
+        FORMAT(created_at, 'yyyy-MM') as month,
+        COUNT(*) as transaction_count,
+        SUM(amount) as revenue
+      FROM transactions
+      WHERE status = 'SUCCESS'
+        AND created_at >= DATEADD(MONTH, -6, GETDATE())
+      GROUP BY FORMAT(created_at, 'yyyy-MM')
+      ORDER BY month
+    `);
+
+    const analytics = {
+      customers: customersResult.recordset[0],
+      transactions: transactionsResult.recordset[0],
+      schemes: schemesResult.recordset[0],
+      monthlyTrend: monthlyTrendResult.recordset
+    };
+
+    console.log(`✅ [${requestId}] Dashboard analytics retrieved successfully`);
+    res.json({
+      success: true,
+      analytics: analytics
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error fetching dashboard analytics:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch dashboard analytics',
+      message: error.message
+    });
+  }
+});
+
+// Scheme-wise Report
+app.get('/api/admin/reports/scheme-wise', async (req, res) => {
+  const requestId = `SCHEME_RPT_${Date.now()}`;
+  const { start_date, end_date } = req.query;
+
+  console.log(`📊 [${requestId}] Scheme-wise report requested`);
+  console.log(`   Date range: ${start_date || 'ALL'} to ${end_date || 'ALL'}`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    let dateFilter = '';
+    if (start_date && end_date) {
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
+      dateFilter = 'AND created_at >= @start_date AND created_at <= @end_date';
+    }
+
+    const query = `
+      SELECT
+        scheme_type,
+        metal_type,
+        COUNT(*) as total_schemes,
+        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as active_count,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_count,
+        COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) as cancelled_count,
+        COUNT(CASE WHEN status = 'PAUSED' THEN 1 END) as paused_count,
+        SUM(total_invested) as total_investment,
+        SUM(total_metal_accumulated) as total_metal_accumulated,
+        AVG(monthly_amount) as avg_monthly_amount,
+        AVG(completed_installments) as avg_completed_installments,
+        MIN(monthly_amount) as min_monthly_amount,
+        MAX(monthly_amount) as max_monthly_amount
+      FROM schemes
+      WHERE 1=1 ${dateFilter}
+      GROUP BY scheme_type, metal_type
+      ORDER BY scheme_type
+    `;
+
+    const result = await request.query(query);
+
+    console.log(`✅ [${requestId}] Scheme-wise report generated: ${result.recordset.length} scheme types`);
+    res.json({
+      success: true,
+      report: result.recordset,
+      filters: { start_date, end_date }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating scheme-wise report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate scheme-wise report',
+      message: error.message
+    });
+  }
+});
+
+// Customer-wise Report
+app.get('/api/admin/reports/customer-wise', async (req, res) => {
+  const requestId = `CUST_RPT_${Date.now()}`;
+  const { customer_id, customer_phone, start_date, end_date } = req.query;
+
+  console.log(`📊 [${requestId}] Customer-wise report requested`);
+  console.log(`   Customer ID: ${customer_id || 'N/A'}, Phone: ${customer_phone || 'N/A'}`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    // Build customer filter
+    let customerFilter = '';
+    if (customer_id) {
+      request.input('customer_id', sql.NVarChar(20), customer_id);
+      customerFilter = 'AND c.customer_id = @customer_id';
+    } else if (customer_phone) {
+      request.input('customer_phone', sql.NVarChar(15), customer_phone);
+      customerFilter = 'AND c.phone = @customer_phone';
+    }
+
+    // Get customer details with aggregated data
+    const customerQuery = `
+      SELECT
+        c.id,
+        c.customer_id,
+        c.phone,
+        c.name,
+        c.email,
+        c.address,
+        c.pan_card,
+        c.registration_date,
+        c.created_at as member_since,
+        COUNT(DISTINCT s.id) as total_schemes,
+        COUNT(DISTINCT CASE WHEN s.status = 'ACTIVE' THEN s.id END) as active_schemes,
+        SUM(s.total_invested) as total_scheme_investment,
+        SUM(CASE WHEN s.metal_type = 'GOLD' THEN s.total_metal_accumulated ELSE 0 END) as total_gold_grams,
+        SUM(CASE WHEN s.metal_type = 'SILVER' THEN s.total_metal_accumulated ELSE 0 END) as total_silver_grams,
+        COUNT(DISTINCT t.id) as total_transactions,
+        SUM(t.amount) as total_transaction_amount,
+        SUM(CASE WHEN t.metal_type = 'GOLD' THEN t.metal_grams ELSE 0 END) as total_gold_purchased,
+        SUM(CASE WHEN t.metal_type = 'SILVER' THEN t.metal_grams ELSE 0 END) as total_silver_purchased
+      FROM customers c
+      LEFT JOIN schemes s ON c.id = s.customer_id
+      LEFT JOIN transactions t ON c.phone = t.customer_phone AND t.status = 'SUCCESS'
+      WHERE 1=1 ${customerFilter}
+      GROUP BY c.id, c.customer_id, c.phone, c.name, c.email, c.address, c.pan_card, c.registration_date, c.created_at
+    `;
+
+    const customerResult = await request.query(customerQuery);
+
+    if (customerResult.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Customer not found'
+      });
+    }
+
+    const customer = customerResult.recordset[0];
+
+    // Get customer's schemes
+    const schemesRequest = pool.request();
+    schemesRequest.input('customer_id_int', sql.Int, customer.id);
+    const schemesResult = await schemesRequest.query(`
+      SELECT
+        scheme_id, scheme_type, metal_type, monthly_amount, duration_months,
+        status, start_date, end_date, total_invested, total_metal_accumulated,
+        completed_installments, created_at
+      FROM schemes
+      WHERE customer_id = @customer_id_int
+      ORDER BY created_at DESC
+    `);
+
+    // Get customer's transactions
+    const transactionsRequest = pool.request();
+    transactionsRequest.input('customer_phone_txn', sql.NVarChar(15), customer.phone);
+
+    let dateFilter = '';
+    if (start_date && end_date) {
+      transactionsRequest.input('start_date', sql.DateTime, new Date(start_date));
+      transactionsRequest.input('end_date', sql.DateTime, new Date(end_date));
+      dateFilter = 'AND created_at >= @start_date AND created_at <= @end_date';
+    }
+
+    const transactionsResult = await transactionsRequest.query(`
+      SELECT
+        transaction_id, amount, metal_type, metal_grams, metal_price_per_gram,
+        payment_method, status, created_at, scheme_id
+      FROM transactions
+      WHERE customer_phone = @customer_phone_txn ${dateFilter}
+      ORDER BY created_at DESC
+    `);
+
+    console.log(`✅ [${requestId}] Customer report generated for ${customer.customer_id}`);
+    res.json({
+      success: true,
+      customer: customer,
+      schemes: schemesResult.recordset,
+      transactions: transactionsResult.recordset,
+      filters: { start_date, end_date }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating customer report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate customer report',
+      message: error.message
+    });
+  }
+});
+
+// Transaction-wise Report
+app.get('/api/admin/reports/transaction-wise', async (req, res) => {
+  const requestId = `TXN_RPT_${Date.now()}`;
+  const { start_date, end_date, type, status, metal_type, min_amount, max_amount } = req.query;
+
+  console.log(`📊 [${requestId}] Transaction-wise report requested`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    let filters = [];
+
+    if (start_date && end_date) {
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
+      filters.push('t.created_at >= @start_date AND t.created_at <= @end_date');
+    }
+
+    if (status) {
+      request.input('status', sql.NVarChar(20), status);
+      filters.push('t.status = @status');
+    }
+
+    if (metal_type) {
+      request.input('metal_type', sql.NVarChar(10), metal_type);
+      filters.push('t.metal_type = @metal_type');
+    }
+
+    if (min_amount) {
+      request.input('min_amount', sql.Decimal(12, 2), parseFloat(min_amount));
+      filters.push('t.amount >= @min_amount');
+    }
+
+    if (max_amount) {
+      request.input('max_amount', sql.Decimal(12, 2), parseFloat(max_amount));
+      filters.push('t.amount <= @max_amount');
+    }
+
+    const whereClause = filters.length > 0 ? 'WHERE ' + filters.join(' AND ') : '';
+
+    const query = `
+      SELECT
+        t.id,
+        t.transaction_id,
+        t.customer_phone,
+        c.customer_id,
+        c.name as customer_name,
+        t.amount,
+        t.metal_type,
+        t.metal_grams,
+        t.metal_price_per_gram,
+        t.payment_method,
+        t.status,
+        t.scheme_id,
+        CASE WHEN t.scheme_id IS NOT NULL THEN 'Scheme Payment' ELSE 'Direct Purchase' END as transaction_type,
+        t.created_at
+      FROM transactions t
+      LEFT JOIN customers c ON t.customer_phone = c.phone
+      ${whereClause}
+      ORDER BY t.created_at DESC
+    `;
+
+    const result = await request.query(query);
+
+    // Calculate summary
+    const summary = {
+      total_transactions: result.recordset.length,
+      total_amount: result.recordset.reduce((sum, txn) => sum + parseFloat(txn.amount || 0), 0),
+      total_gold_grams: result.recordset.reduce((sum, txn) =>
+        sum + (txn.metal_type === 'GOLD' ? parseFloat(txn.metal_grams || 0) : 0), 0),
+      total_silver_grams: result.recordset.reduce((sum, txn) =>
+        sum + (txn.metal_type === 'SILVER' ? parseFloat(txn.metal_grams || 0) : 0), 0),
+      success_count: result.recordset.filter(txn => txn.status === 'SUCCESS').length,
+      pending_count: result.recordset.filter(txn => txn.status === 'PENDING').length,
+      failed_count: result.recordset.filter(txn => txn.status === 'FAILED').length
+    };
+
+    console.log(`✅ [${requestId}] Transaction report generated: ${result.recordset.length} transactions`);
+    res.json({
+      success: true,
+      transactions: result.recordset,
+      summary: summary,
+      filters: { start_date, end_date, type, status, metal_type, min_amount, max_amount }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating transaction report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate transaction report',
+      message: error.message
+    });
+  }
+});
+
+// Date-wise Report
+app.get('/api/admin/reports/date-wise', async (req, res) => {
+  const requestId = `DATE_RPT_${Date.now()}`;
+  const { date, start_date, end_date } = req.query;
+
+  console.log(`📊 [${requestId}] Date-wise report requested`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    let dateFilter = '';
+    if (date) {
+      // Single date
+      request.input('target_date', sql.Date, new Date(date));
+      dateFilter = 'CAST(created_at AS DATE) = @target_date';
+    } else if (start_date && end_date) {
+      // Date range
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
+      dateFilter = 'created_at >= @start_date AND created_at <= @end_date';
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide either date or start_date and end_date'
+      });
+    }
+
+    // Get transaction summary
+    const transactionQuery = `
+      SELECT
+        CAST(created_at AS DATE) as transaction_date,
+        COUNT(*) as total_transactions,
+        SUM(amount) as total_revenue,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as successful_transactions,
+        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_transactions,
+        COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failed_transactions
+      FROM transactions
+      WHERE ${dateFilter}
+      GROUP BY CAST(created_at AS DATE)
+      ORDER BY transaction_date
+    `;
+
+    const transactionResult = await request.query(transactionQuery);
+
+    // Get new customers registered
+    const customerRequest = pool.request();
+    if (date) {
+      customerRequest.input('target_date', sql.Date, new Date(date));
+      dateFilter = 'CAST(created_at AS DATE) = @target_date';
+    } else {
+      customerRequest.input('start_date', sql.DateTime, new Date(start_date));
+      customerRequest.input('end_date', sql.DateTime, new Date(end_date));
+      dateFilter = 'created_at >= @start_date AND created_at <= @end_date';
+    }
+
+    const customerQuery = `
+      SELECT
+        CAST(created_at AS DATE) as registration_date,
+        COUNT(*) as new_customers
+      FROM customers
+      WHERE ${dateFilter}
+      GROUP BY CAST(created_at AS DATE)
+      ORDER BY registration_date
+    `;
+
+    const customerResult = await customerRequest.query(customerQuery);
+
+    // Get new schemes enrolled
+    const schemeRequest = pool.request();
+    if (date) {
+      schemeRequest.input('target_date', sql.Date, new Date(date));
+      dateFilter = 'CAST(created_at AS DATE) = @target_date';
+    } else {
+      schemeRequest.input('start_date', sql.DateTime, new Date(start_date));
+      schemeRequest.input('end_date', sql.DateTime, new Date(end_date));
+      dateFilter = 'created_at >= @start_date AND created_at <= @end_date';
+    }
+
+    const schemeQuery = `
+      SELECT
+        CAST(created_at AS DATE) as enrollment_date,
+        COUNT(*) as new_schemes,
+        COUNT(CASE WHEN scheme_type = 'GOLDPLUS' THEN 1 END) as goldplus_count,
+        COUNT(CASE WHEN scheme_type = 'GOLDFLEXI' THEN 1 END) as goldflexi_count,
+        COUNT(CASE WHEN scheme_type = 'SILVERPLUS' THEN 1 END) as silverplus_count,
+        COUNT(CASE WHEN scheme_type = 'SILVERFLEXI' THEN 1 END) as silverflexi_count
+      FROM schemes
+      WHERE ${dateFilter}
+      GROUP BY CAST(created_at AS DATE)
+      ORDER BY enrollment_date
+    `;
+
+    const schemeResult = await schemeRequest.query(schemeQuery);
+
+    console.log(`✅ [${requestId}] Date-wise report generated`);
+    res.json({
+      success: true,
+      transactions: transactionResult.recordset,
+      customers: customerResult.recordset,
+      schemes: schemeResult.recordset,
+      filters: { date, start_date, end_date }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating date-wise report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate date-wise report',
+      message: error.message
+    });
+  }
+});
+
+// Month-wise Report
+app.get('/api/admin/reports/month-wise', async (req, res) => {
+  const requestId = `MONTH_RPT_${Date.now()}`;
+  const { year, month } = req.query;
+
+  console.log(`📊 [${requestId}] Month-wise report requested for ${year || 'all years'}/${month || 'all months'}`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    let dateFilter = '';
+    if (year && month) {
+      request.input('year', sql.Int, parseInt(year));
+      request.input('month', sql.Int, parseInt(month));
+      dateFilter = 'AND YEAR(created_at) = @year AND MONTH(created_at) = @month';
+    } else if (year) {
+      request.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    // Get monthly transaction summary
+    const transactionQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        MONTH(created_at) as month,
+        FORMAT(created_at, 'yyyy-MM') as month_year,
+        COUNT(*) as total_transactions,
+        SUM(amount) as total_revenue,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        AVG(amount) as avg_transaction_amount
+      FROM transactions
+      WHERE status = 'SUCCESS' ${dateFilter}
+      GROUP BY YEAR(created_at), MONTH(created_at), FORMAT(created_at, 'yyyy-MM')
+      ORDER BY year, month
+    `;
+
+    const transactionResult = await request.query(transactionQuery);
+
+    // Get monthly customer registrations
+    const customerRequest = pool.request();
+    if (year && month) {
+      customerRequest.input('year', sql.Int, parseInt(year));
+      customerRequest.input('month', sql.Int, parseInt(month));
+      dateFilter = 'AND YEAR(created_at) = @year AND MONTH(created_at) = @month';
+    } else if (year) {
+      customerRequest.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    const customerQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        MONTH(created_at) as month,
+        FORMAT(created_at, 'yyyy-MM') as month_year,
+        COUNT(*) as new_customers
+      FROM customers
+      WHERE 1=1 ${dateFilter}
+      GROUP BY YEAR(created_at), MONTH(created_at), FORMAT(created_at, 'yyyy-MM')
+      ORDER BY year, month
+    `;
+
+    const customerResult = await customerRequest.query(customerQuery);
+
+    // Get monthly scheme enrollments
+    const schemeRequest = pool.request();
+    if (year && month) {
+      schemeRequest.input('year', sql.Int, parseInt(year));
+      schemeRequest.input('month', sql.Int, parseInt(month));
+      dateFilter = 'AND YEAR(created_at) = @year AND MONTH(created_at) = @month';
+    } else if (year) {
+      schemeRequest.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    const schemeQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        MONTH(created_at) as month,
+        FORMAT(created_at, 'yyyy-MM') as month_year,
+        COUNT(*) as new_schemes,
+        SUM(total_invested) as total_investment
+      FROM schemes
+      WHERE 1=1 ${dateFilter}
+      GROUP BY YEAR(created_at), MONTH(created_at), FORMAT(created_at, 'yyyy-MM')
+      ORDER BY year, month
+    `;
+
+    const schemeResult = await schemeRequest.query(schemeQuery);
+
+    console.log(`✅ [${requestId}] Month-wise report generated`);
+    res.json({
+      success: true,
+      transactions: transactionResult.recordset,
+      customers: customerResult.recordset,
+      schemes: schemeResult.recordset,
+      filters: { year, month }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating month-wise report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate month-wise report',
+      message: error.message
+    });
+  }
+});
+
+// Year-wise Report
+app.get('/api/admin/reports/year-wise', async (req, res) => {
+  const requestId = `YEAR_RPT_${Date.now()}`;
+  const { year } = req.query;
+
+  console.log(`📊 [${requestId}] Year-wise report requested for ${year || 'all years'}`);
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const request = pool.request();
+
+    let dateFilter = '';
+    if (year) {
+      request.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    // Get yearly transaction summary
+    const transactionQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        COUNT(*) as total_transactions,
+        SUM(amount) as total_revenue,
+        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
+        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        AVG(amount) as avg_transaction_amount
+      FROM transactions
+      WHERE status = 'SUCCESS' ${dateFilter}
+      GROUP BY YEAR(created_at)
+      ORDER BY year
+    `;
+
+    const transactionResult = await request.query(transactionQuery);
+
+    // Get yearly customer registrations
+    const customerRequest = pool.request();
+    if (year) {
+      customerRequest.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    const customerQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        COUNT(*) as new_customers
+      FROM customers
+      WHERE 1=1 ${dateFilter}
+      GROUP BY YEAR(created_at)
+      ORDER BY year
+    `;
+
+    const customerResult = await customerRequest.query(customerQuery);
+
+    // Get yearly scheme enrollments
+    const schemeRequest = pool.request();
+    if (year) {
+      schemeRequest.input('year', sql.Int, parseInt(year));
+      dateFilter = 'AND YEAR(created_at) = @year';
+    }
+
+    const schemeQuery = `
+      SELECT
+        YEAR(created_at) as year,
+        COUNT(*) as new_schemes,
+        SUM(total_invested) as total_investment,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_schemes
+      FROM schemes
+      WHERE 1=1 ${dateFilter}
+      GROUP BY YEAR(created_at)
+      ORDER BY year
+    `;
+
+    const schemeResult = await schemeRequest.query(schemeQuery);
+
+    // Calculate year-over-year growth if multiple years
+    const growth = [];
+    if (transactionResult.recordset.length > 1) {
+      for (let i = 1; i < transactionResult.recordset.length; i++) {
+        const current = transactionResult.recordset[i];
+        const previous = transactionResult.recordset[i - 1];
+
+        growth.push({
+          year: current.year,
+          revenue_growth: ((current.total_revenue - previous.total_revenue) / previous.total_revenue * 100).toFixed(2),
+          transaction_growth: ((current.total_transactions - previous.total_transactions) / previous.total_transactions * 100).toFixed(2)
+        });
+      }
+    }
+
+    console.log(`✅ [${requestId}] Year-wise report generated`);
+    res.json({
+      success: true,
+      transactions: transactionResult.recordset,
+      customers: customerResult.recordset,
+      schemes: schemeResult.recordset,
+      growth: growth,
+      filters: { year }
+    });
+
+  } catch (error) {
+    console.error(`❌ [${requestId}] Error generating year-wise report:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate year-wise report',
+      message: error.message
+    });
+  }
+});
+
 // Worldline Error Capture API - Persistent logging for "Invalid Request" debugging
 app.post('/api/payments/worldline/error-capture', [
   body('timestamp').notEmpty().withMessage('Timestamp is required'),
@@ -3285,6 +4884,199 @@ app.post('/api/payments/worldline/error-capture', [
 });
 
 // HTTPS-only production server
+
+// ============================================
+// COMPREHENSIVE REPORTS API ENDPOINTS
+// ============================================
+
+// Monthly Report - Detailed monthly breakdown
+app.get('/api/reports/monthly', async (req, res) => {
+  try {
+    const { customer_phone, month, year } = req.query;
+    console.log('📊 Generating monthly report:', { customer_phone, month, year });
+
+    const request = pool.request();
+
+    // Build query based on filters
+    let whereClause = 'WHERE 1=1';
+    if (customer_phone) {
+      request.input('customer_phone', sql.NVarChar(15), customer_phone);
+      whereClause += ' AND customer_phone = @customer_phone';
+    }
+    if (month && year) {
+      request.input('month', sql.Int, parseInt(month));
+      request.input('year', sql.Int, parseInt(year));
+      whereClause += ' AND MONTH(created_at) = @month AND YEAR(created_at) = @year';
+    }
+
+    const result = await request.query(`
+      SELECT
+        scheme_type,
+        COUNT(*) as transaction_count,
+        SUM(amount) as total_amount,
+        SUM(gold_grams) as total_gold_grams,
+        SUM(silver_grams) as total_silver_grams,
+        AVG(gold_price_per_gram) as avg_gold_price,
+        AVG(silver_price_per_gram) as avg_silver_price
+      FROM transactions
+      ${whereClause} AND status = 'SUCCESS'
+      GROUP BY scheme_type
+      ORDER BY scheme_type
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset,
+      filters: { customer_phone, month, year }
+    });
+
+  } catch (error) {
+    console.error('❌ Monthly report error:', error);
+    res.status(500).json({ success: false, message: 'Monthly report failed', error: error.message });
+  }
+});
+
+// Scheme-wise Report - Breakdown by scheme type
+app.get('/api/reports/scheme-wise', async (req, res) => {
+  try {
+    const { customer_phone, scheme_type } = req.query;
+    console.log('📊 Generating scheme-wise report:', { customer_phone, scheme_type });
+
+    const request = pool.request();
+
+    let whereClause = 'WHERE status = \'ACTIVE\'';
+    if (customer_phone) {
+      request.input('customer_phone', sql.NVarChar(15), customer_phone);
+      whereClause += ' AND customer_phone = @customer_phone';
+    }
+    if (scheme_type) {
+      request.input('scheme_type', sql.NVarChar(20), scheme_type);
+      whereClause += ' AND scheme_type = @scheme_type';
+    }
+
+    const result = await request.query(`
+      SELECT
+        scheme_id,
+        scheme_type,
+        customer_name,
+        customer_phone,
+        total_amount_paid,
+        total_metal_accumulated,
+        completed_installments,
+        total_installments,
+        start_date,
+        created_at
+      FROM schemes
+      ${whereClause}
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset,
+      filters: { customer_phone, scheme_type }
+    });
+
+  } catch (error) {
+    console.error('❌ Scheme-wise report error:', error);
+    res.status(500).json({ success: false, message: 'Scheme-wise report failed', error: error.message });
+  }
+});
+
+// Flexi Report - All Flexi scheme transactions
+app.get('/api/reports/flexi', async (req, res) => {
+  try {
+    const { customer_phone } = req.query;
+    console.log('📊 Generating Flexi report:', { customer_phone });
+
+    const request = pool.request();
+
+    let whereClause = 'WHERE (scheme_type = \'GOLDFLEXI\' OR scheme_type = \'SILVERFLEXI\')';
+    if (customer_phone) {
+      request.input('customer_phone', sql.NVarChar(15), customer_phone);
+      whereClause += ' AND customer_phone = @customer_phone';
+    }
+
+    const result = await request.query(`
+      SELECT
+        transaction_id,
+        customer_name,
+        customer_phone,
+        scheme_type,
+        scheme_id,
+        amount,
+        gold_grams,
+        silver_grams,
+        gold_price_per_gram,
+        silver_price_per_gram,
+        payment_method,
+        created_at
+      FROM transactions
+      ${whereClause} AND status = 'SUCCESS'
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset,
+      filters: { customer_phone }
+    });
+
+  } catch (error) {
+    console.error('❌ Flexi report error:', error);
+    res.status(500).json({ success: false, message: 'Flexi report failed', error: error.message });
+  }
+});
+
+// Consolidated Report - Complete overview
+app.get('/api/reports/consolidated', async (req, res) => {
+  try {
+    const { customer_phone, start_date, end_date } = req.query;
+    console.log('📊 Generating consolidated report:', { customer_phone, start_date, end_date });
+
+    const request = pool.request();
+
+    let whereClause = 'WHERE status = \'SUCCESS\'';
+    if (customer_phone) {
+      request.input('customer_phone', sql.NVarChar(15), customer_phone);
+      whereClause += ' AND customer_phone = @customer_phone';
+    }
+    if (start_date) {
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      whereClause += ' AND created_at >= @start_date';
+    }
+    if (end_date) {
+      request.input('end_date', sql.DateTime, new Date(end_date));
+      whereClause += ' AND created_at <= @end_date';
+    }
+
+    const result = await request.query(`
+      SELECT
+        CASE
+          WHEN scheme_type IS NULL THEN 'DIRECT_PURCHASE'
+          ELSE scheme_type
+        END as category,
+        COUNT(*) as transaction_count,
+        SUM(amount) as total_amount,
+        SUM(gold_grams) as total_gold_grams,
+        SUM(silver_grams) as total_silver_grams
+      FROM transactions
+      ${whereClause}
+      GROUP BY scheme_type
+      ORDER BY total_amount DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset,
+      filters: { customer_phone, start_date, end_date }
+    });
+
+  } catch (error) {
+    console.error('❌ Consolidated report error:', error);
+    res.status(500).json({ success: false, message: 'Consolidated report failed', error: error.message });
+  }
+});
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {

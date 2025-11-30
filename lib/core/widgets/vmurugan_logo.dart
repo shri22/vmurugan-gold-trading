@@ -260,7 +260,7 @@ class VMuruganAppBarLogo extends StatelessWidget {
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.w700, // Extra bold
-            color: AppColors.primaryGold,
+            color: textColor,
             letterSpacing: 0.5, // Slight letter spacing for elegance
             fontFamily: 'serif', // More elegant serif font
             shadows: [

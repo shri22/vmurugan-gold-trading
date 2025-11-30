@@ -4,6 +4,8 @@ import 'firebase_service.dart';
 import 'custom_server_service.dart';
 import 'local_api_service.dart';
 import 'sql_server_api_service.dart';
+import '../config/server_config.dart';
+import 'secure_http_client.dart';
 
 class ApiService {
   // CONFIGURATION: Choose your data storage method
@@ -43,6 +45,11 @@ class ApiService {
     required String deviceInfo,
     required String location,
     Map<String, dynamic>? additionalData,
+    String? schemeType,
+    String? schemeId,
+    int? installmentNumber,
+    double? silverGrams,
+    double? silverPricePerGram,
   }) async {
     print('');
     print('🔄🔄🔄 ApiService.saveTransaction CALLED 🔄🔄🔄');
@@ -56,6 +63,9 @@ class ApiService {
     print('  💳 Payment Method: "$paymentMethod"');
     print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
     print('  📋 Additional Data Present: ${additionalData != null}');
+    print('  🎯 Scheme Type: ${schemeType ?? "REGULAR"}');
+    print('  🎯 Scheme ID: ${schemeId ?? "N/A"}');
+    print('  🎯 Installment Number: ${installmentNumber ?? "N/A"}');
     print('🔄 Routing to $storageMode for transaction save...');
 
     switch (storageMode) {
@@ -73,6 +83,12 @@ class ApiService {
           gatewayTransactionId: gatewayTransactionId,
           deviceInfo: deviceInfo,
           location: location,
+          additionalData: additionalData,
+          schemeType: schemeType,
+          schemeId: schemeId,
+          installmentNumber: installmentNumber,
+          silverGrams: silverGrams,
+          silverPricePerGram: silverPricePerGram,
         );
       case 'server':
         return await CustomServerService.saveTransaction({
@@ -119,6 +135,11 @@ class ApiService {
           deviceInfo: deviceInfo,
           location: location,
           additionalData: additionalData,
+          schemeType: schemeType,
+          schemeId: schemeId,
+          installmentNumber: installmentNumber,
+          silverGrams: silverGrams,
+          silverPricePerGram: silverPricePerGram,
         );
       default:
         return {
@@ -264,12 +285,38 @@ class ApiService {
     if (useFirebase) {
       return await FirebaseService.getCustomerByPhone(phone);
     } else {
-      // For custom server, implement customer lookup
-      return {
-        'success': false,
-        'customer': null,
-        'message': 'Custom server customer lookup not implemented',
-      };
+      // For SQL Server, call the /api/customers/:phone endpoint
+      try {
+        print('🔍 ApiService: Fetching customer from SQL Server for phone: $phone');
+        final url = '${ServerConfig.baseUrl}/api/customers/$phone';
+
+        final response = await SecureHttpClient.get(url);
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          print('✅ ApiService: Customer data fetched successfully');
+          print('   Customer ID: ${data['user']?['customer_id']}');
+          return {
+            'success': true,
+            'customer': data['user'],
+            'message': 'Customer found',
+          };
+        } else {
+          print('❌ ApiService: Failed to fetch customer - Status: ${response.statusCode}');
+          return {
+            'success': false,
+            'customer': null,
+            'message': 'Customer not found',
+          };
+        }
+      } catch (e) {
+        print('❌ ApiService: Error fetching customer: $e');
+        return {
+          'success': false,
+          'customer': null,
+          'message': 'Error: $e',
+        };
+      }
     }
   }
 

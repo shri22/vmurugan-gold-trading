@@ -13,6 +13,9 @@ class AppTheme {
       primarySwatch: _createMaterialColor(AppColors.primaryGold),
       primaryColor: AppColors.primaryGold,
       scaffoldBackgroundColor: AppColors.backgroundLight,
+
+      // Force consistent font family across platforms
+      fontFamily: 'Roboto', // Use Roboto on both Android and iOS for consistency
       
       // Color Scheme - Pleasant & Warm
       colorScheme: const ColorScheme.light(
@@ -141,7 +144,10 @@ class AppTheme {
       primarySwatch: _createMaterialColor(AppColors.primaryGold),
       primaryColor: AppColors.primaryGold,
       scaffoldBackgroundColor: AppColors.backgroundDark,
-      
+
+      // Force consistent font family across platforms
+      fontFamily: 'Roboto', // Use Roboto on both Android and iOS for consistency
+
       // Color Scheme
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primaryGold,
@@ -155,7 +161,7 @@ class AppTheme {
         onSurface: AppColors.white,
         onError: AppColors.white,
       ),
-      
+
       // App Bar Theme
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.darkGreen,
@@ -169,7 +175,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
-      
+
       // Bottom Navigation Bar Theme
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surfaceDark,
@@ -178,7 +184,86 @@ class AppTheme {
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
-      
+
+      // Elevated Button Theme
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryGold,
+          foregroundColor: AppColors.black,
+          elevation: 2,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // Outlined Button Theme
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.emeraldGreen,
+          side: const BorderSide(color: AppColors.emeraldGreen, width: 1.5),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+
+      // Text Button Theme
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.emeraldGreen,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+      ),
+
+      // Input Decoration Theme
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceDark,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.darkGrey),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.darkGrey),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.primaryGold, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        labelStyle: const TextStyle(color: AppColors.grey),
+        hintStyle: const TextStyle(color: AppColors.grey),
+      ),
+
+      // Card Theme
+      cardTheme: const CardThemeData(
+        color: AppColors.surfaceDark,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+
+      // Floating Action Button Theme
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.primaryGold,
+        foregroundColor: AppColors.black,
+        elevation: 6,
+      ),
+
       // Text Theme - Premium Typography
       textTheme: AppTypography.textTheme,
     );

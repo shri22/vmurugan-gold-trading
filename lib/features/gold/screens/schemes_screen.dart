@@ -18,6 +18,7 @@ class SchemesScreen extends StatefulWidget {
 class _SchemesScreenState extends State<SchemesScreen> {
   final GoldSchemeService _schemeService = GoldSchemeService();
   List<GoldSchemeModel> _allSchemes = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -25,11 +26,19 @@ class _SchemesScreenState extends State<SchemesScreen> {
     _loadSchemes();
   }
 
-  void _loadSchemes() {
-    _schemeService.initialize();
-    setState(() {
-      _allSchemes = _schemeService.getUserSchemes();
-    });
+  Future<void> _loadSchemes() async {
+    setState(() => _isLoading = true);
+    try {
+      _schemeService.initialize();
+      final schemes = await _schemeService.getUserSchemes();
+      setState(() {
+        _allSchemes = schemes;
+      });
+    } catch (e) {
+      print('❌ Error loading schemes: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -126,11 +135,6 @@ class _SchemesScreenState extends State<SchemesScreen> {
   }
 
   Widget _buildSchemeCard(GoldSchemeModel scheme) {
-    final performance = _schemeService.calculateSchemePerformance(scheme.id);
-    final currentValue = performance?['currentValue'] ?? 0.0;
-    final totalGain = performance?['totalGain'] ?? 0.0;
-    final gainPercentage = performance?['gainPercentage'] ?? 0.0;
-
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: InkWell(
@@ -156,6 +160,41 @@ class _SchemesScreenState extends State<SchemesScreen> {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
+                        // Scheme ID Display
+                        if (scheme.schemeId != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGold.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: AppColors.primaryGold.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.tag,
+                                  size: 12,
+                                  color: AppColors.primaryGold,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'ID: ${scheme.schemeId}',
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: AppColors.primaryGold,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
                         Text(
                           '${scheme.formattedMonthlyAmount}/month',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -246,9 +285,9 @@ class _SchemesScreenState extends State<SchemesScreen> {
                   ),
                   Expanded(
                     child: _buildMetric(
-                      'Current Value',
-                      '₹${currentValue.toStringAsFixed(2)}',
-                      Icons.trending_up,
+                      'Installments',
+                      '${scheme.completedMonths}/${scheme.totalMonths}',
+                      Icons.calendar_today,
                     ),
                   ),
                 ],
@@ -343,9 +382,9 @@ class _SchemesScreenState extends State<SchemesScreen> {
   Widget _buildSchemeDetailsSheet(GoldSchemeModel scheme) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: AppColors.getCardColor(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
@@ -355,11 +394,11 @@ class _SchemesScreenState extends State<SchemesScreen> {
             height: 4,
             margin: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.grey,
+              color: AppColors.getSecondaryTextColor(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -370,17 +409,18 @@ class _SchemesScreenState extends State<SchemesScreen> {
                     scheme.schemeName,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: AppColors.getTextColor(context),
                     ),
                   ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: AppColors.getTextColor(context)),
                 ),
               ],
             ),
           ),
-          
+
           // Content
           Expanded(
             child: SingleChildScrollView(
@@ -392,6 +432,7 @@ class _SchemesScreenState extends State<SchemesScreen> {
                     'Payment History',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: AppColors.getTextColor(context),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),

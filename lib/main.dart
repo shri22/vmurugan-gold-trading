@@ -62,8 +62,8 @@ class DigiGoldApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey, // Add global navigator key
         theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
+        // Force Light Mode - ignore device dark mode settings
+        themeMode: ThemeMode.light,
         home: const AppInitializer(),
       ),
     );
@@ -168,7 +168,7 @@ class _AppInitializerState extends State<AppInitializer> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            VMuruganLogo(
+            const VMuruganLogo(
               size: 80,
               primaryColor: AppColors.primaryGreen,
               textColor: AppColors.black,
@@ -373,8 +373,11 @@ class _HomePageState extends State<HomePage> {
         title: const VMuruganAppBarLogo(
           logoSize: 32,
           fontSize: 18,
-          textColor: Colors.black,
+          textColor: AppColors.primaryGold,  // ✅ Changed to Gold/Yellow
         ),
+        backgroundColor: AppColors.primaryGreen,
+        foregroundColor: AppColors.primaryGold,  // ✅ Changed to Gold/Yellow
+        iconTheme: const IconThemeData(color: AppColors.primaryGold),  // ✅ Changed to Gold/Yellow
         actions: [
           Stack(
             children: [
@@ -487,7 +490,7 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          'Welcome to VMurugan Jewellery',
+                          'Welcome to V.Murugan Jewellery',  // ✅ Changed to V.Murugan
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             color: AppColors.white,
                             fontWeight: FontWeight.w600,
@@ -564,7 +567,7 @@ class _HomePageState extends State<HomePage> {
                           Text(
                             '22KT Per gram',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
+                              color: AppColors.getSecondaryTextColor(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -606,7 +609,7 @@ class _HomePageState extends State<HomePage> {
                             child: Text(
                               _currentSilverPrice != null ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(0)}' : '--',
                               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: _currentSilverPrice != null ? Colors.grey[700] : Colors.grey,
+                                color: _currentSilverPrice != null ? AppColors.getTextColor(context) : AppColors.getSecondaryTextColor(context),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -614,7 +617,7 @@ class _HomePageState extends State<HomePage> {
                           Text(
                             'Per gram',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
+                              color: AppColors.getSecondaryTextColor(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -633,14 +636,14 @@ class _HomePageState extends State<HomePage> {
               'Investment Schemes',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: AppColors.primaryGreen, // Changed to dark green for better visibility
+                color: AppColors.getTextColor(context),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Choose from a range of investment products with unique benefits to suit your needs and convenience',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
+                color: AppColors.getSecondaryTextColor(context),
               ),
             ),
 

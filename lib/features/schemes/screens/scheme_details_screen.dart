@@ -601,7 +601,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
   }
 
   void _showSchemeInvestmentDialog(SchemeDetailModel scheme, String customerPhone, String customerName) {
-    final investmentAmountController = TextEditingController(text: '2000');
+    final investmentAmountController = TextEditingController(text: '100');
 
     showDialog(
       context: context,
@@ -643,7 +643,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final amount = double.tryParse(investmentAmountController.text) ?? 2000;
+              final amount = double.tryParse(investmentAmountController.text) ?? 100;
               Navigator.pop(context);
               _navigateToInvestment(scheme, amount);
             },
@@ -655,26 +655,39 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
   }
 
   void _navigateToInvestment(SchemeDetailModel scheme, double amount) async {
-    String? schemeId = scheme.id;
+    print('🔍 NAVIGATE TO INVESTMENT: Scheme: ${scheme.name}, Amount: $amount');
 
-    // For FLEXI schemes, ensure we get or create a single scheme ID
-    if (scheme.name.toLowerCase().contains('flexi')) {
-      final prefs = await SharedPreferences.getInstance();
-      final customerPhone = widget.customerPhone ?? prefs.getString('customer_phone') ?? '';
+    // Get customer info
+    final prefs = await SharedPreferences.getInstance();
+    final customerPhone = widget.customerPhone ?? prefs.getString('customer_phone') ?? '';
+    final customerName = widget.customerName ?? prefs.getString('customer_name') ?? '';
 
-      if (customerPhone.isNotEmpty) {
-        final flexiSchemeId = await SchemePaymentValidationService.getOrCreateFlexiSchemeId(
-          customerPhone: customerPhone,
-          metalType: widget.metalType,
-        );
-
-        if (flexiSchemeId != null) {
-          schemeId = flexiSchemeId;
-        }
-      }
+    if (customerPhone.isEmpty) {
+      print('❌ NAVIGATE TO INVESTMENT: Customer phone is empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer information not found. Please login again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
-    // Navigate directly to purchase screen with prefilled amount
+    // Determine scheme type
+    String schemeType;
+    if (widget.metalType == MetalType.gold) {
+      schemeType = scheme.name.contains('Plus') ? 'GOLDPLUS' : 'GOLDFLEXI';
+    } else {
+      schemeType = scheme.name.contains('Plus') ? 'SILVERPLUS' : 'SILVERFLEXI';
+    }
+
+    // For PLUS schemes, use the amount as monthly_amount
+    // For FLEXI schemes, set monthly_amount to 0
+    final monthlyAmount = scheme.name.contains('Plus') ? amount : 0.0;
+
+    print('🔍 NAVIGATE TO INVESTMENT: Scheme type: $schemeType, Monthly amount: $monthlyAmount');
+
+    // Navigate to purchase screen - scheme will be created AFTER payment success
     if (widget.metalType == MetalType.gold) {
       Navigator.push(
         context,
@@ -682,7 +695,8 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuyGoldScreen(
             prefilledAmount: amount,
             isFromScheme: true,
-            schemeId: schemeId,
+            schemeType: schemeType,
+            monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
           ),
         ),
@@ -694,7 +708,8 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuySilverScreen(
             prefilledAmount: amount,
             isFromScheme: true,
-            schemeId: schemeId,
+            schemeType: schemeType,
+            monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
           ),
         ),
@@ -762,7 +777,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
   }
 
   void _showSchemeEnrollmentDialog(SchemeDetailModel scheme, String customerPhone, String customerName) {
-    final monthlyAmountController = TextEditingController(text: '2000');
+    final monthlyAmountController = TextEditingController(text: '100');
     bool termsAccepted = false;
 
     showDialog(
@@ -818,7 +833,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                 scheme,
                 customerPhone,
                 customerName,
-                double.tryParse(monthlyAmountController.text) ?? 2000,
+                double.tryParse(monthlyAmountController.text) ?? 100,
               ) : null,
               child: const Text('Join Scheme'),
             ),
@@ -832,15 +847,6 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     try {
       Navigator.pop(context); // Close dialog
 
-      // Show loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-
       // Determine scheme type based on metal type and scheme
       String schemeType;
       if (widget.metalType == MetalType.gold) {
@@ -849,64 +855,41 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
         schemeType = scheme.name.contains('Plus') ? 'SILVERPLUS' : 'SILVERFLEXI';
       }
 
-      // Create scheme via API
-      final result = await _callSchemeCreationAPI(
-        customerPhone: customerPhone,
-        customerName: customerName,
-        schemeType: schemeType,
-        monthlyAmount: monthlyAmount,
-      );
+      print('🔍 JOIN SCHEME: Scheme type: $schemeType, Monthly amount: $monthlyAmount');
 
-      Navigator.pop(context); // Close loading
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Successfully joined ${scheme.name}!'),
-            backgroundColor: Colors.green,
+      // Navigate to payment - scheme will be created AFTER payment success
+      if (widget.metalType == MetalType.gold) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BuyGoldScreen(
+              prefilledAmount: monthlyAmount,
+              isFromScheme: true,
+              schemeType: schemeType,
+              monthlyAmount: monthlyAmount,
+              schemeName: scheme.name,
+            ),
           ),
         );
-
-        // Navigate to payment for first installment with prefilled amount
-        if (widget.metalType == MetalType.gold) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => BuyGoldScreen(
-                prefilledAmount: monthlyAmount,
-                isFromScheme: true,
-                schemeId: result['scheme_id']?.toString(),
-                schemeName: scheme.name,
-              ),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => BuySilverScreen(
-                prefilledAmount: monthlyAmount,
-                isFromScheme: true,
-                schemeId: result['scheme_id']?.toString(),
-                schemeName: scheme.name,
-              ),
-            ),
-          );
-        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to join scheme: ${result['message']}'),
-            backgroundColor: Colors.red,
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BuySilverScreen(
+              prefilledAmount: monthlyAmount,
+              isFromScheme: true,
+              schemeType: schemeType,
+              monthlyAmount: monthlyAmount,
+              schemeName: scheme.name,
+            ),
           ),
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading if open
-      print('Error creating scheme: $e');
+      print('Error navigating to payment: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error creating scheme: $e'),
+          content: Text('Error: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -920,27 +903,67 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     required double monthlyAmount,
   }) async {
     try {
+      final requestBody = {
+        'customer_phone': customerPhone,
+        'customer_name': customerName,
+        'scheme_type': schemeType,
+        'monthly_amount': monthlyAmount,
+        'terms_accepted': true,
+      };
+
+      print('🔍 SCHEME CREATION API REQUEST:');
+      print('🔍 URL: https://api.vmuruganjewellery.co.in:3001/api/schemes');
+      print('🔍 Body: $requestBody');
+
       final response = await SecureHttpClient.post(
         'https://api.vmuruganjewellery.co.in:3001/api/schemes',
         headers: {'Content-Type': 'application/json'},
-        body: {
-          'customer_phone': customerPhone,
-          'customer_name': customerName,
-          'scheme_type': schemeType,
-          'monthly_amount': monthlyAmount,
-          'terms_accepted': true,
-        },
+        body: requestBody,
       );
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+      print('🔍 Scheme creation response status: ${response.statusCode}');
+      print('🔍 Scheme creation response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        print('🔍 Parsed response data: $data');
+
+        // Extract scheme_id from nested structure
+        if (data['success'] == true && data['scheme'] != null) {
+          final schemeId = data['scheme']['scheme_id'];
+          print('✅ Scheme created with ID: $schemeId');
+          return {
+            'success': true,
+            'scheme_id': schemeId,
+            'message': data['message'],
+          };
+        }
+
+        return data;
       } else {
+        print('❌ Server error: ${response.statusCode}');
+        print('❌ Response body: ${response.body}');
+
+        // Try to parse error message from response
+        String errorMessage = 'Server error: ${response.statusCode}';
+        try {
+          final errorData = jsonDecode(response.body);
+          if (errorData['message'] != null) {
+            errorMessage = errorData['message'];
+          } else if (errorData['errors'] != null) {
+            errorMessage = errorData['errors'].toString();
+          }
+        } catch (e) {
+          print('❌ Could not parse error response: $e');
+        }
+
         return {
           'success': false,
-          'message': 'Server error: ${response.statusCode}',
+          'message': errorMessage,
         };
       }
     } catch (e) {
+      print('❌ Network error: $e');
       return {
         'success': false,
         'message': 'Network error: $e',

@@ -35,18 +35,52 @@ class PortfolioService {
     }
   }
 
+  // Get active schemes for current user
+  Future<List<Map<String, dynamic>>> getActiveSchemes() async {
+    try {
+      final phone = await _getUserPhone();
+      if (phone == null) {
+        throw Exception('User not logged in');
+      }
+
+      print('📊 PortfolioService: Fetching active schemes for phone: $phone');
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/admin/customers/$phone'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['schemes'] != null) {
+          final schemes = (data['schemes'] as List)
+              .where((s) => s['status'] == 'ACTIVE')
+              .toList();
+          print('✅ PortfolioService: Found ${schemes.length} active schemes');
+          return schemes.cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('❌ PortfolioService: Error getting schemes: $e');
+      return [];
+    }
+  }
+
   // Get current portfolio from server
   Future<Portfolio> getPortfolio() async {
     try {
       final userId = await _getCurrentUserId();
-      if (userId == null) {
+      final phone = await _getUserPhone();
+
+      if (userId == null || phone == null) {
         throw Exception('User not logged in');
       }
 
-      print('📊 PortfolioService: Fetching portfolio from server for user $userId');
+      print('📊 PortfolioService: Fetching portfolio from server for phone: $phone');
 
       final response = await http.get(
-        Uri.parse('$baseUrl/portfolio?user_id=$userId'),
+        Uri.parse('$baseUrl/portfolio?phone=$phone'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
@@ -56,9 +90,13 @@ class PortfolioService {
         if (data['success'] == true) {
           final portfolioData = data['portfolio'];
           print('✅ PortfolioService: Portfolio fetched successfully');
+          print('📋 Customer ID: ${portfolioData['customer_id']}');
 
           return Portfolio(
             id: userId,
+            customerId: portfolioData['customer_id'],
+            customerName: portfolioData['customer_name'],
+            customerEmail: portfolioData['customer_email'],
             totalGoldGrams: (portfolioData['total_gold_grams'] ?? 0.0).toDouble(),
             totalSilverGrams: (portfolioData['total_silver_grams'] ?? 0.0).toDouble(),
             totalInvested: (portfolioData['total_invested'] ?? 0.0).toDouble(),
@@ -66,6 +104,7 @@ class PortfolioService {
             profitLoss: (portfolioData['profit_loss'] ?? 0.0).toDouble(),
             profitLossPercentage: (portfolioData['profit_loss_percentage'] ?? 0.0).toDouble(),
             lastUpdated: DateTime.parse(portfolioData['last_updated'] ?? DateTime.now().toIso8601String()),
+            breakdown: data['breakdown'] != null ? PortfolioBreakdown.fromMap(data['breakdown']) : null,
           );
         } else {
           throw Exception(data['message'] ?? 'Failed to fetch portfolio');

@@ -189,6 +189,11 @@ class SqlServerService {
     String? deviceInfo,
     String? location,
     Map<String, dynamic>? additionalData,
+    String? schemeType,
+    String? schemeId,
+    int? installmentNumber,
+    double? silverGrams,
+    double? silverPricePerGram,
   }) async {
     print('');
     print('🔄🔄🔄 SqlServerService.saveTransaction CALLED 🔄🔄🔄');
@@ -202,6 +207,9 @@ class SqlServerService {
     print('  💳 Payment Method: "$paymentMethod"');
     print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
     print('  📋 Additional Data Present: ${additionalData != null}');
+    print('  🎯 Scheme Type: ${schemeType ?? "REGULAR"}');
+    print('  🎯 Scheme ID: ${schemeId ?? "N/A"}');
+    print('  🎯 Installment Number: ${installmentNumber ?? "N/A"}');
 
     try {
       final transactionData = {
@@ -212,12 +220,17 @@ class SqlServerService {
         'amount': amount,
         'gold_grams': goldGrams,
         'gold_price_per_gram': goldPricePerGram,
+        'silver_grams': silverGrams ?? 0.0,
+        'silver_price_per_gram': silverPricePerGram ?? 0.0,
         'payment_method': paymentMethod,
         'status': status,
         'gateway_transaction_id': gatewayTransactionId,
         'device_info': deviceInfo,
         'location': location,
         'additional_data': additionalData != null ? jsonEncode(additionalData) : null,
+        'scheme_type': schemeType,
+        'scheme_id': schemeId,
+        'installment_number': installmentNumber,
       };
 
       print('📤 Transaction Data to Send:');

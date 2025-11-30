@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
+import '../../../core/utils/number_formatter.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../models/gold_price_model.dart';
 import '../models/gold_scheme_model.dart';
@@ -45,14 +46,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     });
   }
 
-  void _loadData() async {
+  Future<void> _loadData() async {
     final price = await _priceService.getCurrentPrice();
-    final schemes = _schemeService.getUserSchemes();
-    
-    setState(() {
-      _currentPrice = price;
-      _userSchemes = schemes;
-    });
+    final schemes = await _schemeService.getUserSchemes();
+
+    if (mounted) {
+      setState(() {
+        _currentPrice = price;
+        _userSchemes = schemes;
+      });
+    }
   }
 
   @override
@@ -156,7 +159,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               ),
               _buildSummaryItem(
                 'Gold Holdings',
-                '${totalGoldAccumulated.toStringAsFixed(4)}g',
+                '${NumberFormatter.formatToThreeDecimals(totalGoldAccumulated)}g',
               ),
             ],
           ),
@@ -355,8 +358,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _buildSchemeCard(GoldSchemeModel scheme) {
-    final performance = _schemeService.calculateSchemePerformance(scheme.id);
-    
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Padding(
@@ -368,11 +369,52 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    scheme.schemeName,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        scheme.schemeName,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      // Scheme ID Display
+                      if (scheme.schemeId != null) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryGold.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: AppColors.primaryGold.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.tag,
+                                size: 10,
+                                color: AppColors.primaryGold,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'ID: ${scheme.schemeId}',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  fontSize: 10,
+                                  color: AppColors.primaryGold,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 Container(
@@ -381,7 +423,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     vertical: AppSpacing.xs,
                   ),
                   decoration: BoxDecoration(
-                    color: scheme.isActive 
+                    color: scheme.isActive
                         ? AppColors.success.withValues(alpha: 0.1)
                         : AppColors.grey.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppBorderRadius.sm),
@@ -577,6 +619,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Future<void> _refreshData() async {
     await _priceService.refreshPrice();
-    _loadData();
+    await _schemeService.refreshSchemes();
+    await _loadData();
   }
 }

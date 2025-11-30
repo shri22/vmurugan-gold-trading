@@ -1,9 +1,14 @@
+import '../../../core/utils/number_formatter.dart';
+
 enum SchemeStatus { active, completed, paused, cancelled }
 
 class GoldSchemeModel {
   final String id;
+  final String? schemeId; // Backend scheme ID (e.g., GP_P1, GF_P2)
   final String userId;
   final String schemeName;
+  final String? schemeType; // GOLDPLUS, GOLDFLEXI, SILVERPLUS, SILVERFLEXI
+  final String? metalType; // GOLD, SILVER
   final double monthlyAmount;
   final int totalMonths;
   final int completedMonths;
@@ -18,8 +23,11 @@ class GoldSchemeModel {
 
   const GoldSchemeModel({
     required this.id,
+    this.schemeId,
     required this.userId,
     required this.schemeName,
+    this.schemeType,
+    this.metalType,
     required this.monthlyAmount,
     required this.totalMonths,
     required this.completedMonths,
@@ -33,11 +41,78 @@ class GoldSchemeModel {
     required this.updatedAt,
   });
 
+  // Factory for parsing backend API response
+  factory GoldSchemeModel.fromBackendApi(Map<String, dynamic> json) {
+    // Parse status from backend (ACTIVE, PAUSED, COMPLETED, CANCELLED)
+    SchemeStatus status;
+    final statusStr = (json['status'] as String?)?.toUpperCase() ?? 'ACTIVE';
+    switch (statusStr) {
+      case 'ACTIVE':
+        status = SchemeStatus.active;
+        break;
+      case 'PAUSED':
+        status = SchemeStatus.paused;
+        break;
+      case 'COMPLETED':
+        status = SchemeStatus.completed;
+        break;
+      case 'CANCELLED':
+        status = SchemeStatus.cancelled;
+        break;
+      default:
+        status = SchemeStatus.active;
+    }
+
+    // Parse scheme type to get display name
+    final schemeType = json['scheme_type'] as String?;
+    String schemeName = schemeType ?? 'Unknown Scheme';
+    if (schemeType != null) {
+      switch (schemeType.toUpperCase()) {
+        case 'GOLDPLUS':
+          schemeName = 'Gold Plus';
+          break;
+        case 'GOLDFLEXI':
+          schemeName = 'Gold Flexi';
+          break;
+        case 'SILVERPLUS':
+          schemeName = 'Silver Plus';
+          break;
+        case 'SILVERFLEXI':
+          schemeName = 'Silver Flexi';
+          break;
+      }
+    }
+
+    return GoldSchemeModel(
+      id: json['id']?.toString() ?? '',
+      schemeId: json['scheme_id'] as String?,
+      userId: json['customer_id']?.toString() ?? '',
+      schemeName: schemeName,
+      schemeType: schemeType,
+      metalType: json['metal_type'] as String?,
+      monthlyAmount: (json['monthly_amount'] as num?)?.toDouble() ?? 0.0,
+      totalMonths: json['duration_months'] as int? ?? 12,
+      completedMonths: json['completed_installments'] as int? ?? 0,
+      startDate: json['start_date'] != null ? DateTime.parse(json['start_date'] as String) : DateTime.now(),
+      endDate: json['end_date'] != null ? DateTime.parse(json['end_date'] as String) : null,
+      status: status,
+      totalInvested: (json['total_invested'] as num?)?.toDouble() ?? 0.0,
+      totalGoldAccumulated: (json['total_metal_accumulated'] as num?)?.toDouble() ?? 0.0,
+      payments: [], // Payments will be loaded separately if needed
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : DateTime.now(),
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : DateTime.now(),
+    );
+  }
+
+  // Factory for parsing local JSON (mock data)
   factory GoldSchemeModel.fromJson(Map<String, dynamic> json) {
     return GoldSchemeModel(
       id: json['id'] as String,
+      schemeId: json['schemeId'] as String?,
       userId: json['userId'] as String,
       schemeName: json['schemeName'] as String,
+      schemeType: json['schemeType'] as String?,
+      metalType: json['metalType'] as String?,
       monthlyAmount: (json['monthlyAmount'] as num).toDouble(),
       totalMonths: json['totalMonths'] as int,
       completedMonths: json['completedMonths'] as int,
@@ -46,9 +121,9 @@ class GoldSchemeModel {
       status: SchemeStatus.values.firstWhere((e) => e.name == json['status']),
       totalInvested: (json['totalInvested'] as num).toDouble(),
       totalGoldAccumulated: (json['totalGoldAccumulated'] as num).toDouble(),
-      payments: (json['payments'] as List<dynamic>)
-          .map((payment) => SchemePayment.fromJson(payment as Map<String, dynamic>))
-          .toList(),
+      payments: (json['payments'] as List<dynamic>?)
+          ?.map((payment) => SchemePayment.fromJson(payment as Map<String, dynamic>))
+          .toList() ?? [],
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -57,8 +132,11 @@ class GoldSchemeModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'schemeId': schemeId,
       'userId': userId,
       'schemeName': schemeName,
+      'schemeType': schemeType,
+      'metalType': metalType,
       'monthlyAmount': monthlyAmount,
       'totalMonths': totalMonths,
       'completedMonths': completedMonths,
@@ -91,7 +169,7 @@ class GoldSchemeModel {
 
   String get formattedTotalInvested => '₹${totalInvested.toStringAsFixed(2)}';
   String get formattedMonthlyAmount => '₹${monthlyAmount.toStringAsFixed(0)}';
-  String get formattedGoldAccumulated => '${totalGoldAccumulated.toStringAsFixed(4)} grams';
+  String get formattedGoldAccumulated => '${NumberFormatter.formatToThreeDecimals(totalGoldAccumulated)} grams';
 
   GoldSchemeModel copyWith({
     String? id,
@@ -180,6 +258,6 @@ class SchemePayment {
   }
 
   String get formattedAmount => '₹${amount.toStringAsFixed(2)}';
-  String get formattedGoldQuantity => '${goldQuantity.toStringAsFixed(4)} grams';
+  String get formattedGoldQuantity => '${NumberFormatter.formatToThreeDecimals(goldQuantity)} grams';
   String get formattedGoldPrice => '₹${goldPrice.toStringAsFixed(2)}/gram';
 }

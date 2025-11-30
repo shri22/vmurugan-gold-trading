@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
+import '../../../core/utils/number_formatter.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/vmurugan_logo.dart';
 import '../models/gold_scheme_model.dart';
@@ -155,7 +156,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           Expanded(
             child: _buildSummaryItem(
               'Gold Purchased',
-              '${totalGold.toStringAsFixed(4)}g',
+              '${NumberFormatter.formatToThreeDecimals(totalGold)}g',
               Icons.diamond,
             ),
           ),

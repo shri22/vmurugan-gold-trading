@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/gold_scheme_model.dart';
 import 'gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
@@ -10,23 +13,100 @@ class GoldSchemeService {
   GoldSchemeService._internal();
 
   final GoldPriceService _priceService = GoldPriceService();
-  
-  // Mock user schemes (in real app, this would come from backend)
-  final List<GoldSchemeModel> _userSchemes = [];
+
+  // Cache for user schemes
+  List<GoldSchemeModel> _userSchemes = [];
+  DateTime? _lastFetchTime;
+  static const _cacheValidityDuration = Duration(minutes: 5);
+
+  // Backend API base URL
+  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001/api';
 
   // Initialize service
   void initialize() {
-    // Service initialized - no mock data
+    // Service initialized
+    print('🔧 GoldSchemeService initialized');
   }
 
-  // Get all user schemes
-  List<GoldSchemeModel> getUserSchemes() {
+  // Get customer phone from SharedPreferences
+  Future<String?> _getCustomerPhone() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('customer_phone');
+    } catch (e) {
+      print('❌ Error getting customer phone: $e');
+      return null;
+    }
+  }
+
+  // Fetch schemes from backend API
+  Future<List<GoldSchemeModel>> fetchSchemesFromBackend() async {
+    try {
+      final phone = await _getCustomerPhone();
+      if (phone == null) {
+        print('❌ No customer phone found');
+        return [];
+      }
+
+      print('📊 Fetching schemes from backend for phone: $phone');
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/schemes/$phone'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          final schemesData = data['schemes'] as List<dynamic>;
+          print('✅ Fetched ${schemesData.length} schemes from backend');
+
+          _userSchemes = schemesData
+              .map((schemeJson) => GoldSchemeModel.fromBackendApi(schemeJson as Map<String, dynamic>))
+              .toList();
+
+          _lastFetchTime = DateTime.now();
+          return _userSchemes;
+        } else {
+          print('❌ Backend returned success: false');
+          return [];
+        }
+      } else {
+        print('❌ Failed to fetch schemes: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('❌ Error fetching schemes from backend: $e');
+      return [];
+    }
+  }
+
+  // Get all user schemes (with caching)
+  Future<List<GoldSchemeModel>> getUserSchemes() async {
+    // Check if cache is still valid
+    if (_lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!) < _cacheValidityDuration &&
+        _userSchemes.isNotEmpty) {
+      print('📦 Returning cached schemes (${_userSchemes.length} schemes)');
+      return List.unmodifiable(_userSchemes);
+    }
+
+    // Fetch fresh data from backend
+    await fetchSchemesFromBackend();
     return List.unmodifiable(_userSchemes);
   }
 
   // Get active schemes
-  List<GoldSchemeModel> getActiveSchemes() {
-    return _userSchemes.where((scheme) => scheme.isActive).toList();
+  Future<List<GoldSchemeModel>> getActiveSchemes() async {
+    final schemes = await getUserSchemes();
+    return schemes.where((scheme) => scheme.isActive).toList();
+  }
+
+  // Refresh schemes (force fetch from backend)
+  Future<List<GoldSchemeModel>> refreshSchemes() async {
+    _lastFetchTime = null; // Invalidate cache
+    return await getUserSchemes();
   }
 
   // Create new gold scheme
@@ -120,17 +200,19 @@ class GoldSchemeService {
   }
 
   // Get scheme by ID
-  GoldSchemeModel? getSchemeById(String schemeId) {
+  Future<GoldSchemeModel?> getSchemeById(String schemeId) async {
     try {
-      return _userSchemes.firstWhere((scheme) => scheme.id == schemeId);
+      final schemes = await getUserSchemes();
+      return schemes.firstWhere((scheme) => scheme.id == schemeId || scheme.schemeId == schemeId);
     } catch (e) {
+      print('❌ Scheme not found: $schemeId');
       return null;
     }
   }
 
   // Calculate scheme performance
-  Map<String, dynamic>? calculateSchemePerformance(String schemeId) {
-    final scheme = getSchemeById(schemeId);
+  Future<Map<String, dynamic>?> calculateSchemePerformance(String schemeId) async {
+    final scheme = await getSchemeById(schemeId);
     if (scheme == null) return null;
 
     final currentPrice = _priceService.currentPrice?.pricePerGram;
@@ -165,13 +247,14 @@ class GoldSchemeService {
   }
 
   // Get upcoming payments
-  List<Map<String, dynamic>> getUpcomingPayments() {
+  Future<List<Map<String, dynamic>>> getUpcomingPayments() async {
+    final schemes = await getUserSchemes();
     final upcomingPayments = <Map<String, dynamic>>[];
-    
-    for (final scheme in _userSchemes) {
+
+    for (final scheme in schemes) {
       if (scheme.isActive && !scheme.isCompleted) {
         upcomingPayments.add({
-          'schemeId': scheme.id,
+          'schemeId': scheme.schemeId ?? scheme.id,
           'schemeName': scheme.schemeName,
           'amount': scheme.monthlyAmount,
           'dueDate': scheme.nextPaymentDate,
@@ -181,7 +264,7 @@ class GoldSchemeService {
     }
 
     // Sort by due date
-    upcomingPayments.sort((a, b) => 
+    upcomingPayments.sort((a, b) =>
         (a['dueDate'] as DateTime).compareTo(b['dueDate'] as DateTime));
 
     return upcomingPayments;
