@@ -1,0 +1,68 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.1 effective-5.10 (swiftlang-6.1.0.110.21 clang-1700.0.13.3)
+// swift-module-flags: -target arm64-apple-ios13.0 -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -O -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -module-name PaymentGatewaySwiftSDK
+// swift-module-flags-ignorable: -no-verify-emitted-module-interface -interface-compiler-version 6.1
+import Foundation
+@_exported import PaymentGatewaySwiftSDK
+import Swift
+import UIKit
+import WebKit
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+@_hasMissingDesignatedInitializers public class Constants {
+  @objc deinit
+}
+@objc @_inheritsConvenienceInitializers public class PaymentGateway : ObjectiveC.NSObject {
+  public class func present(from: UIKit.UIViewController, url: Swift.String, delegate: any PaymentGatewaySwiftSDK.PaymentGatewayDelegate, withParams params: PaymentGatewaySwiftSDK.PaymentGatewayParams)
+  public class func open(from: UIKit.UIViewController, url: Swift.String, delegate: any PaymentGatewaySwiftSDK.PaymentGatewayDelegate, withParams params: PaymentGatewaySwiftSDK.PaymentGatewayParams)
+  @objc override dynamic public init()
+  @objc deinit
+}
+public protocol PaymentGatewayDelegate : AnyObject {
+  func didPaymentCompleted(_ controller: UIKit.UIViewController, withData data: Any?)
+  func didPaymentCanceled(_ controller: UIKit.UIViewController)
+}
+@objc @_inheritsConvenienceInitializers public class PaymentGatewayParams : ObjectiveC.NSObject, Swift.Encodable {
+  public var udf1: Swift.String?
+  public var udf2: Swift.String?
+  public var udf3: Swift.String?
+  public var udf4: Swift.String?
+  public var udf5: Swift.String?
+  public var zipCode: Swift.String?
+  public var timeout_duration: Swift.String?
+  public var return_url_failure: Swift.String?
+  public var return_url_cancel: Swift.String?
+  public var percent_tdr_by_user: Swift.String?
+  public var flatfee_tdr_by_user: Swift.String?
+  public var show_convenience_fee: Swift.String?
+  public var split_enforce_strict: Swift.String?
+  public var split_info: Swift.String?
+  public var payment_options: Swift.String?
+  public var payment_page_display_text: Swift.String?
+  public var allowed_bank_codes: Swift.String?
+  public var allowed_emi_tenure: Swift.String?
+  public var allowed_bins: Swift.String?
+  public var offer_code: Swift.String?
+  public var product_details: Swift.String?
+  public var enable_auto_refund: Swift.String?
+  public var interface_type: Swift.String?
+  @objc override dynamic public init()
+  convenience public init(apiKey: Swift.String?, orderID: Swift.String?, theHash: Swift.String?, mode: Swift.String?, amount: Swift.String?, name: Swift.String?, phone: Swift.String?, email: Swift.String?, returnURL: Swift.String?, theDescription: Swift.String?, currency: Swift.String?, country: Swift.String?, city: Swift.String?, state: Swift.String?, addressLine1: Swift.String?, addressLine2: Swift.String?, zipCode: Swift.String?)
+  @objc deinit
+  public func encode(to encoder: any Swift.Encoder) throws
+}
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency public class PaymentGatewayViewController : UIKit.UIViewController, WebKit.WKNavigationDelegate, WebKit.WKUIDelegate, WebKit.WKScriptMessageHandler {
+  @_Concurrency.MainActor @preconcurrency public var _showDevLogs: Swift.Bool
+  @_Concurrency.MainActor @preconcurrency public func setShowDevLogs(_ showLogs: Swift.Bool)
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public func viewDidLoad()
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public func loadView()
+  @_Concurrency.MainActor @preconcurrency @objc public func webView(_ webView: WebKit.WKWebView, didStartProvisionalNavigation navigation: WebKit.WKNavigation!)
+  @_Concurrency.MainActor @preconcurrency @objc public func webView(_ webView: WebKit.WKWebView, didFinish navigation: WebKit.WKNavigation!)
+  @_Concurrency.MainActor @preconcurrency @objc public func webView(_ webView: WebKit.WKWebView, didFail navigation: WebKit.WKNavigation!, withError error: any Swift.Error)
+  @_Concurrency.MainActor @preconcurrency @objc public func webView(_ webView: WebKit.WKWebView, decidePolicyFor navigationAction: WebKit.WKNavigationAction, decisionHandler: @escaping (WebKit.WKNavigationActionPolicy) -> Swift.Void)
+  @_Concurrency.MainActor @preconcurrency @objc public func userContentController(_ userContentController: WebKit.WKUserContentController, didReceive message: WebKit.WKScriptMessage)
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public init(nibName nibNameOrNil: Swift.String?, bundle nibBundleOrNil: Foundation.Bundle?)
+  @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
+  @objc deinit
+}

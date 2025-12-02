@@ -1,0 +1,11 @@
+framework module PaymentGatewaySwiftSDK {
+  umbrella header "PaymentGatewaySwiftSDK.h"
+  export *
+
+  module * { export * }
+}
+
+module PaymentGatewaySwiftSDK.Swift {
+  header "PaymentGatewaySwiftSDK-Swift.h"
+  requires objc
+}

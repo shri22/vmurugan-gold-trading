@@ -940,6 +940,13 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
 
   void _handlePaymentComplete(PaymentResponse response) async {
+    print('\n📥 ========== PAYMENT CALLBACK RECEIVED (SILVER) ========== 📥');
+    print('Status: ${response.status}');
+    print('Transaction ID: ${response.transactionId}');
+    print('Amount: ₹${response.amount}');
+    print('Payment Method: ${response.paymentMethod}');
+    print('========================================================\n');
+
     if (response.status == PaymentStatus.success) {
       // Clear any previous error information
       setState(() {
@@ -947,8 +954,12 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         _detailedErrorInfo = null;
       });
 
+      print('💾 Starting database save operation (SILVER)...');
+
       // Save transaction to database only after successful payment
       await _saveSuccessfulTransaction(response);
+
+      print('✅ Database save completed (SILVER)');
 
       // If this is a scheme payment, create the scheme AFTER payment success
       if (widget.isFromScheme == true && widget.schemeType != null) {
@@ -968,18 +979,27 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         print('❌ Error getting customer ID: $e');
       }
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(successMessage),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      print('📱 Showing success message to user...');
 
-      // Navigate back to portfolio or show success screen
-      Navigator.pop(context);
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+
+        // Navigate back to portfolio or show success screen
+        print('🔙 Navigating back to previous screen...');
+        Navigator.pop(context);
+      }
+
+      print('✅ Payment flow completed successfully (SILVER)!\n');
     } else {
+      print('❌ Payment failed or cancelled (SILVER)');
+
       // Capture detailed error information for display
       setState(() {
         _lastPaymentError = response.errorMessage;
@@ -987,13 +1007,15 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       });
 
       // Show brief error message in snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment failed - see details below'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed - see details below'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1129,6 +1151,8 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
   Future<void> _saveSuccessfulTransaction(PaymentResponse response) async {
     try {
+      print('\n💾 ========== SAVING TRANSACTION TO DATABASE (SILVER) ========== 💾');
+
       if (_currentPrice == null) {
         print('❌ Cannot save transaction: Silver price not available');
         return;
@@ -1136,7 +1160,19 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
       final silverGrams = _selectedAmount / _currentPrice!.pricePerGram;
 
+      print('📊 Transaction Details:');
+      print('   Transaction ID: ${response.transactionId}');
+      print('   Type: BUY');
+      print('   Amount: ₹${response.amount}');
+      print('   Silver Grams: ${silverGrams.toStringAsFixed(4)}g');
+      print('   Silver Price/Gram: ₹${_currentPrice!.pricePerGram}');
+      print('   Payment Method: ${response.paymentMethod}');
+      print('   Gateway Transaction ID: ${response.gatewayTransactionId ?? 'N/A'}');
+      print('   Status: SUCCESS');
+
       // Save transaction with customer data
+      print('📡 Calling CustomerService.saveTransactionWithCustomerData...');
+
       final success = await CustomerService.saveTransactionWithCustomerData(
         transactionId: response.transactionId,
         type: 'BUY',
@@ -1149,12 +1185,25 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       );
 
       if (success) {
-        print('✅ Silver transaction saved successfully: ${response.transactionId}');
+        print('✅ ========== TRANSACTION SAVED SUCCESSFULLY (SILVER) ========== ✅');
+        print('   Transaction ID: ${response.transactionId}');
+        print('   The transaction will now appear in:');
+        print('   - Customer Portfolio (updated silver balance)');
+        print('   - Transaction History');
+        print('   - Admin Dashboard');
+        print('   - All Reports');
+        print('================================================================\n');
       } else {
-        print('❌ Failed to save silver transaction: ${response.transactionId}');
+        print('❌ ========== FAILED TO SAVE TRANSACTION (SILVER) ========== ❌');
+        print('   Transaction ID: ${response.transactionId}');
+        print('   Please check server logs for details');
+        print('============================================================\n');
       }
     } catch (e) {
-      print('❌ Error saving silver transaction: $e');
+      print('❌ ========== ERROR SAVING TRANSACTION (SILVER) ========== ❌');
+      print('   Error: $e');
+      print('   Transaction ID: ${response.transactionId}');
+      print('===========================================================\n');
     }
   }
 

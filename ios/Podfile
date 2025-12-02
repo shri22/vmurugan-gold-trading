@@ -31,6 +31,10 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # Use local PaymentGatewaySwiftSDK framework instead of Bitbucket repository
+  pod 'PaymentGatewaySwiftSDK', :path => 'Frameworks'
+
   target 'RunnerTests' do
     inherit! :search_paths
   end

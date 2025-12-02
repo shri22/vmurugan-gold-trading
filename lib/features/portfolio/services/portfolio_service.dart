@@ -45,10 +45,11 @@ class PortfolioService {
 
       print('📊 PortfolioService: Fetching active schemes for phone: $phone');
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/admin/customers/$phone'),
+      final response = await SecureHttpClient.get(
+        '$baseUrl/admin/customers/$phone',
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -79,10 +80,11 @@ class PortfolioService {
 
       print('📊 PortfolioService: Fetching portfolio from server for phone: $phone');
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/portfolio?phone=$phone'),
+      final response = await SecureHttpClient.get(
+        '$baseUrl/portfolio?phone=$phone',
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -144,10 +146,10 @@ class PortfolioService {
       print('📊 PortfolioService: Updating portfolio on server - Gold purchase');
 
       // For Node.js server, we'll create the transaction and let the portfolio be calculated from transactions
-      final response = await http.post(
-        Uri.parse('$baseUrl/transactions'),
+      final response = await SecureHttpClient.post(
+        '$baseUrl/transactions',
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+        body: {
           'transaction_id': 'TXN_${DateTime.now().millisecondsSinceEpoch}',
           'customer_phone': await _getUserPhone(),
           'amount': amountPaid,
@@ -157,8 +159,9 @@ class PortfolioService {
           'transaction_type': 'BUY',
           'status': 'SUCCESS',
           'gold_price_per_gram': pricePerGram,
-        }),
-      ).timeout(const Duration(seconds: 30));
+        },
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -192,10 +195,10 @@ class PortfolioService {
       print('📊 PortfolioService: Updating portfolio on server - Silver purchase');
 
       // For Node.js server, create silver transaction
-      final response = await http.post(
-        Uri.parse('$baseUrl/transactions'),
+      final response = await SecureHttpClient.post(
+        '$baseUrl/transactions',
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+        body: {
           'transaction_id': 'TXN_${DateTime.now().millisecondsSinceEpoch}',
           'customer_phone': await _getUserPhone(),
           'amount': amountPaid,
@@ -205,8 +208,9 @@ class PortfolioService {
           'transaction_type': 'BUY',
           'status': 'SUCCESS',
           'silver_price_per_gram': amountPaid / silverGrams,
-        }),
-      ).timeout(const Duration(seconds: 30));
+        },
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -276,10 +280,10 @@ class PortfolioService {
 
       print('📊 PortfolioService: Saving transaction to server');
 
-      final response = await http.post(
-        Uri.parse('${ClientServerConfig.transactionCreateEndpoint}'),
+      final response = await SecureHttpClient.post(
+        ClientServerConfig.transactionCreateEndpoint,
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+        body: {
           'user_id': userId,
           'transaction_id': transactionId,
           'type': type.toString().split('.').last.toUpperCase(),
@@ -290,8 +294,9 @@ class PortfolioService {
           'payment_method': paymentMethod,
           'payment_status': status.toString().split('.').last.toUpperCase(),
           'gateway_transaction_id': gatewayTransactionId ?? '',
-        }),
-      ).timeout(const Duration(seconds: 30));
+        },
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -450,14 +455,15 @@ class PortfolioService {
     try {
       print('📊 PortfolioService: Updating transaction status on server');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/transaction-status'),
+      final response = await SecureHttpClient.post(
+        '$baseUrl/transaction-status',
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+        body: {
           'transaction_id': transactionId,
           'status': status.toString().split('.').last.toUpperCase(),
-        }),
-      ).timeout(const Duration(seconds: 30));
+        },
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

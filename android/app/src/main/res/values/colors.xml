@@ -4,4 +4,9 @@
     <color name="vmurugan_accent">#FFD700</color>
     <color name="vmurugan_text">#FFFFFF</color>
 	<color name="ic_launcher_background">#FFFFFF</color>
+
+	<!-- Omniware Payment Gateway SDK required colors -->
+    <color name="colorPrimary">#DC143C</color>
+    <color name="colorPrimaryDark">#B01030</color>
+    <color name="colorAccent">#FFD700</color>
 </resources>

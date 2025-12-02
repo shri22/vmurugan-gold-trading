@@ -3,7 +3,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../models/payment_response.dart';
-import '../screens/enhanced_payment_screen.dart';
+import '../screens/omniware_payment_page_screen.dart'; // UPI Mode (Payment Page)
 
 enum PaymentMethod {
   upi,
@@ -346,25 +346,37 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
     });
 
     try {
-      // Navigate to actual Worldline payment gateway
-      final result = await Navigator.push(
+      // Navigate to Omniware UPI Mode payment page (NEW METHOD)
+      // This opens Omniware's payment gateway page in WebView
+      // Advantages: Instant status, auto-return, webhooks work, better UX
+      final result = await Navigator.push<PaymentResponse>(
         context,
         MaterialPageRoute(
-          builder: (context) => EnhancedPaymentScreen(
+          builder: (context) => OmniwarePaymentPageScreen(
             amount: widget.amount,
             description: widget.description,
             goldGrams: widget.metalGrams ?? 0.0,
-            metalType: widget.metalType, // Pass metal type to determine merchant (779285 for gold, 779295 for silver)
+            metalType: widget.metalType ?? 'gold', // Pass metal type to determine merchant (779285 for gold, 779295 for silver)
             onPaymentComplete: (PaymentResponse response) {
               // This will be called when payment is actually completed
-              widget.onPaymentComplete(response);
+              // Note: We don't call widget.onPaymentComplete here because
+              // the payment screen will return the response via Navigator.pop
+              print('💳 Payment completed in screen, response will be returned via Navigator');
             },
           ),
         ),
       );
 
-      // If user navigated back without completing payment, treat as cancelled
-      if (result == null) {
+      print('📥 Payment screen returned with result: ${result?.status}');
+
+      // Handle the result from payment screen
+      if (result != null) {
+        // Payment screen returned a result (success, failed, or cancelled)
+        print('✅ Payment result received: ${result.status}');
+        widget.onPaymentComplete(result);
+      } else {
+        // User closed the screen without any result (rare case - back button pressed before payment started)
+        print('⚠️ Payment screen closed without result - treating as cancelled');
         final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
         final response = PaymentResponse.cancelled(
           transactionId: transactionId,
@@ -373,7 +385,7 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
           additionalData: {
             'description': widget.description,
             'method': _selectedMethod!.name,
-            'reason': 'User cancelled payment',
+            'reason': 'User closed payment screen',
           },
         );
 

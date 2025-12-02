@@ -2767,21 +2767,21 @@ function generateWorldlineToken(paymentData, requestId) {
 
 // Worldline Token Generation API - Following Payment_GateWay.md specifications
 app.post('/api/payments/worldline/token', [
-  // Accept amount as whole number (1-10) for test environment
+  // Accept amount as whole number (1 to 1,000,000) for production environment
   body('amount').custom((value) => {
     let amount;
     // If it's a string, convert to number
     if (typeof value === 'string') {
-      amount = parseInt(value);
+      amount = parseFloat(value);
     } else if (typeof value === 'number') {
-      amount = Math.round(value);
+      amount = value;
     } else {
       throw new Error('Amount must be a number or string');
     }
 
-    // Validate range for test environment (1-10)
-    if (amount < WORLDLINE_CONFIG.MIN_AMOUNT || amount > WORLDLINE_CONFIG.MAX_AMOUNT) {
-      throw new Error(`Amount must be between ${WORLDLINE_CONFIG.MIN_AMOUNT} and ${WORLDLINE_CONFIG.MAX_AMOUNT} for sandbox environment`);
+    // Validate range for production environment (₹1 to ₹10,00,000)
+    if (amount < 1 || amount > 1000000) {
+      throw new Error(`Amount must be between ₹1 and ₹10,00,000 (10 lakhs)`);
     }
     return true;
   }),
@@ -3925,6 +3925,18 @@ app.get('/api/schemes/:customerId', async (req, res) => {
   }
 });
 
+// ============================================
+// OMNIWARE UPI INTENT API ENDPOINTS
+// ============================================
+
+// Import Omniware UPI routes
+const omniwareUpiRoutes = require('./routes/omniware_upi');
+app.use('/api/omniware', omniwareUpiRoutes);
+
+// Import Omniware Webhook routes
+const omniwareWebhookRoutes = require('./routes/omniware_webhook');
+app.use('/api/omniware/webhook', omniwareWebhookRoutes);
+
 // 404 handler
 app.use('*', (req, res) => {
   console.log('❌ 404 - Endpoint not found:', req.originalUrl);
@@ -4104,6 +4116,10 @@ async function startServer() {
       console.log(`💳 Worldline Payment Integration (Clean Slate Rebuild):`);
       console.log(`   Token:    https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/token`);
       console.log(`   Verify:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/verify`);
+      console.log(`💳 Omniware UPI Payment Integration (UPI Mode):`);
+      console.log(`   Payment Page URL: https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/payment-page-url`);
+      console.log(`   Payment Status:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/check-payment-status`);
+      console.log(`   Webhook:          https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/webhook/payment`);
       console.log('');
       console.log('✅ HTTPS-only production mode');
       console.log('🔒 All connections encrypted');
@@ -4886,6 +4902,196 @@ app.post('/api/payments/worldline/error-capture', [
       success: false,
       error: 'Internal server error during error capture',
       requestId: requestId,
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// OMNIWARE PAYMENT GATEWAY INTEGRATION
+// ============================================
+
+const omniwareConfig = require('./omniware_config');
+
+/**
+ * Omniware Payment Initiation API
+ * Generates payment URL for Omniware payment gateway
+ */
+app.post('/api/payments/omniware/initiate', [
+  body('orderId').notEmpty().withMessage('Order ID is required'),
+  body('amount').isFloat({ min: 100, max: 1000000 }).withMessage('Amount must be between ₹100 and ₹10,00,000'),
+  body('description').notEmpty().withMessage('Description is required'),
+  body('metalType').isIn(['gold', 'silver']).withMessage('Metal type must be gold or silver'),
+  body('customer').isObject().withMessage('Customer details are required')
+], async (req, res) => {
+  const requestId = `OMNI_INIT_${Date.now()}`;
+  const requestStartTime = Date.now();
+
+  try {
+    console.log('');
+    console.log('🟢 ===== OMNIWARE PAYMENT INITIATION STARTED =====');
+    console.log(`📋 Request ID: ${requestId}`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+    console.log(`🌐 Client IP: ${req.ip || 'unknown'}`);
+
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log(`❌ [${requestId}] Validation errors:`, errors.array());
+      return res.status(400).json({
+        success: false,
+        errors: errors.array()
+      });
+    }
+
+    const { orderId, amount, description, metalType, customer } = req.body;
+
+    console.log(`💰 [${requestId}] Payment Details:`);
+    console.log(`   Order ID: ${orderId}`);
+    console.log(`   Amount: ₹${amount}`);
+    console.log(`   Metal Type: ${metalType}`);
+    console.log(`   Customer: ${customer.name} (${customer.phone})`);
+
+    // Get merchant configuration
+    const merchant = omniwareConfig.getMerchantConfig(metalType);
+    console.log(`🏪 [${requestId}] Using Merchant: ${merchant.name} (${merchant.merchantId})`);
+
+    // Build payment request parameters
+    const paymentData = {
+      orderId,
+      amount,
+      description,
+      customer
+    };
+
+    const paymentParams = omniwareConfig.buildPaymentRequest(paymentData, metalType);
+
+    console.log(`🔐 [${requestId}] Payment Parameters Generated:`);
+    console.log(`   API Key: ${paymentParams.api_key.substring(0, 10)}...`);
+    console.log(`   Hash: ${paymentParams.hash.substring(0, 20)}...`);
+
+    // NOTE: Since we don't have the actual Omniware API URL yet,
+    // we'll return the parameters for now
+    // TODO: Replace with actual API call when URL is provided
+
+    if (omniwareConfig.COMMON_CONFIG.apiBaseUrl.includes('{pg_api_url}')) {
+      console.log(`⚠️ [${requestId}] WARNING: Omniware API URL not configured yet!`);
+      console.log(`   Please update COMMON_CONFIG.apiBaseUrl in omniware_config.js`);
+
+      return res.json({
+        success: false,
+        message: 'Omniware API URL not configured. Please contact support.',
+        debug: {
+          requestId,
+          merchant: merchant.name,
+          orderId,
+          amount
+        }
+      });
+    }
+
+    // When API URL is available, make the actual API call:
+    // const paymentUrl = `${omniwareConfig.COMMON_CONFIG.apiBaseUrl}/v2/paymentrequest`;
+    // const response = await axios.post(paymentUrl, paymentParams);
+
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`⏱️ [${requestId}] Total processing time: ${totalTime}ms`);
+    console.log(`🟢 ===== OMNIWARE PAYMENT INITIATION COMPLETED =====`);
+
+    res.json({
+      success: true,
+      requestId,
+      paymentUrl: `${omniwareConfig.COMMON_CONFIG.apiBaseUrl}/v2/paymentrequest`,
+      paymentParams,
+      message: 'Payment URL generated successfully'
+    });
+
+  } catch (error) {
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`💥 [${requestId}] CRITICAL ERROR OCCURRED:`);
+    console.log(`❌ [${requestId}] Error message: ${error.message}`);
+    console.log(`❌ [${requestId}] Error stack: ${error.stack}`);
+    console.log(`⏱️ [${requestId}] Total time before error: ${totalTime}ms`);
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during payment initiation',
+      requestId,
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Omniware Payment Verification API
+ * Verifies payment response from Omniware
+ */
+app.post('/api/payments/omniware/verify', async (req, res) => {
+  const requestId = `OMNI_VERIFY_${Date.now()}`;
+  const requestStartTime = Date.now();
+
+  try {
+    console.log('');
+    console.log('🟢 ===== OMNIWARE PAYMENT VERIFICATION STARTED =====');
+    console.log(`📋 Request ID: ${requestId}`);
+    console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+    console.log(`📦 Request Body:`, JSON.stringify(req.body, null, 2));
+
+    const { metalType, ...responseParams } = req.body;
+
+    // Get merchant configuration
+    const merchant = omniwareConfig.getMerchantConfig(metalType || 'gold');
+
+    // Verify hash
+    const receivedHash = responseParams.hash;
+    delete responseParams.hash; // Remove hash from params before verification
+
+    const isValid = omniwareConfig.verifyHash(responseParams, receivedHash, merchant.salt);
+
+    console.log(`🔐 [${requestId}] Hash Verification: ${isValid ? '✅ VALID' : '❌ INVALID'}`);
+
+    if (!isValid) {
+      console.log(`❌ [${requestId}] Hash verification failed!`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment response - hash verification failed'
+      });
+    }
+
+    // Check payment status
+    const paymentSuccess = responseParams.status === '0' || responseParams.status === 'success';
+
+    console.log(`💳 [${requestId}] Payment Status: ${paymentSuccess ? '✅ SUCCESS' : '❌ FAILED'}`);
+    console.log(`   Transaction ID: ${responseParams.txnid || responseParams.transaction_id}`);
+    console.log(`   Order ID: ${responseParams.order_id}`);
+    console.log(`   Amount: ₹${responseParams.amount}`);
+
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`⏱️ [${requestId}] Total processing time: ${totalTime}ms`);
+    console.log(`🟢 ===== OMNIWARE PAYMENT VERIFICATION COMPLETED =====`);
+
+    res.json({
+      success: paymentSuccess,
+      requestId,
+      transactionId: responseParams.txnid || responseParams.transaction_id,
+      orderId: responseParams.order_id,
+      amount: responseParams.amount,
+      status: responseParams.status,
+      message: paymentSuccess ? 'Payment verified successfully' : 'Payment failed',
+      rawResponse: responseParams
+    });
+
+  } catch (error) {
+    const totalTime = Date.now() - requestStartTime;
+    console.log(`💥 [${requestId}] CRITICAL ERROR OCCURRED:`);
+    console.log(`❌ [${requestId}] Error message: ${error.message}`);
+    console.log(`❌ [${requestId}] Error stack: ${error.stack}`);
+    console.log(`⏱️ [${requestId}] Total time before error: ${totalTime}ms`);
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during payment verification',
+      requestId,
       message: error.message
     });
   }

@@ -1,8 +1,8 @@
 class ValidationConfig {
   static const bool isDemoMode = false; // Production mode - Firebase SMS
 
-  // Payment sandbox mode configuration (for Worldline testing)
-  static const bool isPaymentSandboxMode = true; // Enable ₹1-₹10 payments
+  // Payment sandbox mode configuration (for testing)
+  static const bool isPaymentSandboxMode = true; // TESTING: Enable ₹10 minimum for testing (set to false for production ₹100 minimum)
   static const String _demoOtp = '123456';
   static const Duration demoOtpExpiry = Duration(minutes: 5);
   static const Duration productionOtpExpiry = Duration(minutes: 5);
@@ -64,11 +64,11 @@ class ValidationConfig {
 
   // Payment amount validation
   static double getMinimumPaymentAmount() {
-    return isPaymentSandboxMode ? 1.0 : 100.0;
+    return isPaymentSandboxMode ? 10.0 : 100.0; // Omniware UPI minimum is ₹10
   }
 
   static double getMaximumPaymentAmount() {
-    return isPaymentSandboxMode ? 10.0 : 1000000.0;
+    return isPaymentSandboxMode ? 1000000.0 : 1000000.0; // ₹10 lakh max for both modes
   }
 
   static String? validatePaymentAmount(double? amount) {

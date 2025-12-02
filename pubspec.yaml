@@ -11,8 +11,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.4.0
-  firebase_core: ^4.1.1
-  firebase_auth: ^6.1.0
+  firebase_core: ^3.15.1
+  firebase_auth: ^5.3.3
   url_launcher: ^6.2.2
   webview_flutter: ^4.4.2
   shared_preferences: ^2.5.3
@@ -21,8 +21,9 @@ dependencies:
   path: ^1.9.1
   pdf: ^3.11.1
   path_provider: ^2.1.4
-  weipl_checkout_flutter: ^1.2.0
   intl: ^0.20.2
+  # Omniware Payment Gateway SDK
+  omniware_payment_gateway_totalxsoftware: ^1.0.12
 
 dev_dependencies:
   flutter_test:

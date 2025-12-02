@@ -48,6 +48,16 @@
 				<string>com.googleusercontent.apps.286337779819-6frh3mm4ave9bo9hjmd68i00nlhg5a1c</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.vmurugan.digigold</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vmurugangold</string>
+			</array>
+		</dict>
 	</array>
 
 	<key>CFBundleVersion</key>
@@ -55,10 +65,21 @@
 
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
+		<!-- UPI Payment Apps -->
+		<string>upi</string>
 		<string>phonepe</string>
 		<string>gpay</string>
 		<string>paytm</string>
-		<string>credpe</string>
+		<string>paytmmp</string>
+		<string>credpay</string>
+		<string>mobikwik</string>
+		<string>com.amazon.mobile.shopping</string>
+		<string>bharatpe</string>
+		<string>freecharge</string>
+		<string>payzapp</string>
+		<string>myjio</string>
+		<string>bhim</string>
+		<string>slice</string>
 	</array>
 
 	<key>LSRequiresIPhoneOS</key>
