@@ -1486,11 +1486,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Help & Support',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            const Expanded(
+              child: Text(
+                'Help & Support',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -1665,6 +1667,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         fontSize: 13,
                         color: Colors.black87,
                       ),
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
                     ),
                   ],
                 ),
@@ -1740,11 +1744,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Icon(icon, color: Colors.green[600], size: 14),
           const SizedBox(width: 8),
-          Text(
-            phoneNumber,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Text(
+              phoneNumber,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1771,11 +1778,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'About V Murugan Jewellery',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            const Expanded(
+              child: Text(
+                'About V Murugan Jewellery',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],

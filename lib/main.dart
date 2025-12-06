@@ -730,9 +730,9 @@ class _HomePageState extends State<HomePage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => SchemeDetailsScreen(
-                                  customerPhone: '+91 9876543210', // Default for demo
-                                  customerName: 'Demo Customer', // Default for demo
+                                builder: (context) => const SchemeDetailsScreen(
+                                  // Don't pass customerPhone and customerName
+                                  // Let the screen fetch actual data from SharedPreferences
                                   metalType: MetalType.gold, // Show only Gold schemes
                                 ),
                               ),
@@ -842,9 +842,9 @@ class _HomePageState extends State<HomePage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => SchemeDetailsScreen(
-                                  customerPhone: '+91 9876543210', // Default for demo
-                                  customerName: 'Demo Customer', // Default for demo
+                                builder: (context) => const SchemeDetailsScreen(
+                                  // Don't pass customerPhone and customerName
+                                  // Let the screen fetch actual data from SharedPreferences
                                   metalType: MetalType.silver, // Show only Silver schemes
                                 ),
                               ),

@@ -26,7 +26,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   String _selectedSchemeType = 'All';
   final List<String> _schemeTypeOptions = [
     'All',
-    'Regular',
     'Gold Plus',
     'Gold Flexi',
     'Silver Plus',
@@ -90,6 +89,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         paymentDate: transaction.createdAt,
         status: _mapTransactionStatus(transaction.status),
         paymentMethod: transaction.paymentMethod.toString().split('.').last,
+        metalType: transaction.metalType.name.toUpperCase(),
       );
     }).toList();
 
@@ -105,8 +105,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       convertedTransactions = convertedTransactions.where((transaction) {
         final schemeId = transaction.schemeId;
         switch (_selectedSchemeType) {
-          case 'Regular':
-            return schemeId == 'REGULAR' || schemeId.startsWith('REAL_TRANSACTION');
           case 'Gold Plus':
             return schemeId.startsWith('GP_');
           case 'Gold Flexi':
@@ -269,7 +267,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
   Widget _buildTransactionSummary() {
     final totalAmount = _filteredTransactions.fold(0.0, (sum, transaction) => sum + transaction.amount);
-    final totalGold = _filteredTransactions.fold(0.0, (sum, transaction) => sum + transaction.goldQuantity);
+
+    // Calculate Gold and Silver separately from all successful transactions
+    final totalGold = _realTransactions
+        .where((t) => t.metalType.name.toUpperCase() == 'GOLD' && t.status == TransactionStatus.SUCCESS)
+        .fold(0.0, (sum, t) => sum + t.metalGrams);
+    final totalSilver = _realTransactions
+        .where((t) => t.metalType.name.toUpperCase() == 'SILVER' && t.status == TransactionStatus.SUCCESS)
+        .fold(0.0, (sum, t) => sum + t.metalGrams);
 
     return Container(
       margin: const EdgeInsets.all(AppSpacing.md),
@@ -278,38 +283,62 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         gradient: AppColors.goldGreenGradient,
         borderRadius: BorderRadius.circular(AppBorderRadius.md),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: _buildSummaryItem(
-              'Total Invested',
-              '₹${totalAmount.toStringAsFixed(2)}',
-              Icons.account_balance_wallet,
-            ),
+          // First Row: Total Invested | Transactions
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryItem(
+                  'Total Invested',
+                  '₹${totalAmount.toStringAsFixed(2)}',
+                  Icons.account_balance_wallet,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: AppColors.white.withValues(alpha: 0.3),
+              ),
+              Expanded(
+                child: _buildSummaryItem(
+                  'Transactions',
+                  '${_filteredTransactions.length}',
+                  Icons.receipt,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          // Horizontal divider
           Container(
-            width: 1,
-            height: 40,
+            height: 1,
             color: AppColors.white.withValues(alpha: 0.3),
           ),
-          Expanded(
-            child: _buildSummaryItem(
-              'Gold Purchased',
-              '${totalGold.toStringAsFixed(4)}g',
-              Icons.diamond,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.white.withValues(alpha: 0.3),
-          ),
-          Expanded(
-            child: _buildSummaryItem(
-              'Transactions',
-              '${_filteredTransactions.length}',
-              Icons.receipt,
-            ),
+          const SizedBox(height: AppSpacing.md),
+          // Second Row: Gold Purchased | Silver Purchased
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryItem(
+                  'Gold Purchased',
+                  '${totalGold.toStringAsFixed(4)}g',
+                  Icons.star,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: AppColors.white.withValues(alpha: 0.3),
+              ),
+              Expanded(
+                child: _buildSummaryItem(
+                  'Silver Purchased',
+                  '${totalSilver.toStringAsFixed(4)}g',
+                  Icons.circle,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -374,11 +403,17 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      gradient: AppColors.goldGradient,
+                      gradient: (transaction.metalType?.toUpperCase() ?? 'GOLD') == 'GOLD'
+                          ? AppColors.goldGradient
+                          : LinearGradient(
+                              colors: [Colors.grey[400]!, Colors.grey[600]!],
+                            ),
                       borderRadius: BorderRadius.circular(AppBorderRadius.sm),
                     ),
                     child: Icon(
-                      _getTransactionIcon(transaction.status),
+                      (transaction.metalType?.toUpperCase() ?? 'GOLD') == 'GOLD'
+                          ? Icons.star
+                          : Icons.circle,
                       color: AppColors.white,
                       size: 24,
                     ),
@@ -388,11 +423,44 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Gold Purchase',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                (transaction.metalType?.toUpperCase() ?? 'GOLD') == 'GOLD'
+                                    ? 'Gold Purchase'
+                                    : 'Silver Purchase',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: (transaction.metalType?.toUpperCase() ?? 'GOLD') == 'GOLD'
+                                    ? const Color(0xFFFFD700).withOpacity(0.2)
+                                    : Colors.grey[300],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                transaction.metalType?.toUpperCase() ?? 'GOLD',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: (transaction.metalType?.toUpperCase() ?? 'GOLD') == 'GOLD'
+                                      ? const Color(0xFFFFD700)
+                                      : Colors.grey[700],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -400,6 +468,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textSecondary,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -450,13 +520,13 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   children: [
                     Expanded(
                       child: _buildDetailItem(
-                        'Gold Quantity',
+                        '${transaction.metalType?.toUpperCase() ?? 'GOLD'} Quantity',
                         transaction.formattedGoldQuantity,
                       ),
                     ),
                     Expanded(
                       child: _buildDetailItem(
-                        'Gold Price',
+                        '${transaction.metalType?.toUpperCase() ?? 'GOLD'} Price',
                         transaction.formattedGoldPrice,
                       ),
                     ),
@@ -645,8 +715,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     ],
                     _buildDetailRow('Transaction ID', transaction.transactionId),
                     _buildDetailRow('Amount', transaction.formattedAmount),
-                    _buildDetailRow('Gold Quantity', transaction.formattedGoldQuantity),
-                    _buildDetailRow('Gold Price', transaction.formattedGoldPrice),
+                    _buildDetailRow(
+                      '${transaction.metalType?.toUpperCase() ?? 'GOLD'} Quantity',
+                      transaction.formattedGoldQuantity,
+                    ),
+                    _buildDetailRow(
+                      '${transaction.metalType?.toUpperCase() ?? 'GOLD'} Price',
+                      transaction.formattedGoldPrice,
+                    ),
                     _buildDetailRow('Payment Method', transaction.paymentMethod),
                     _buildDetailRow('Date', _formatDate(transaction.paymentDate)),
                     _buildDetailRow('Status', transaction.status.toUpperCase()),

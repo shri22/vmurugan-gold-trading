@@ -350,6 +350,26 @@ async function createTablesIfNotExist() {
       END
     `);
 
+    // Add metal_type column to existing transactions table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'metal_type')
+      BEGIN
+        ALTER TABLE transactions ADD metal_type NVARCHAR(10) NULL CHECK (metal_type IN ('GOLD', 'SILVER', NULL))
+        PRINT 'Added metal_type column to transactions table'
+      END
+    `);
+
+    // Update existing transactions to set metal_type based on gold_grams and silver_grams
+    await pool.request().query(`
+      UPDATE transactions
+      SET metal_type = CASE
+        WHEN silver_grams > 0 THEN 'SILVER'
+        WHEN gold_grams > 0 THEN 'GOLD'
+        ELSE 'GOLD'
+      END
+      WHERE metal_type IS NULL
+    `);
+
     // Add closure_remarks column to existing schemes table if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_remarks')
@@ -1404,15 +1424,19 @@ app.post('/api/transactions', [
     request.input('scheme_id', sql.NVarChar(100), scheme_id || null);
     request.input('installment_number', sql.Int, installment_number || null);
 
+    // Determine metal_type based on which grams field is non-zero
+    const metal_type = silver_grams > 0 ? 'SILVER' : 'GOLD';
+    request.input('metal_type', sql.NVarChar(10), metal_type);
+
     await request.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount, gold_grams,
         gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, gateway_transaction_id,
-        device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number
+        device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number, metal_type
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
         @gold_price_per_gram, @silver_grams, @silver_price_per_gram, @payment_method, @status, @gateway_transaction_id,
-        @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number
+        @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number, @metal_type
       )
     `);
 
@@ -1465,6 +1489,13 @@ app.get('/api/transaction-history', async (req, res) => {
 });
 
 // Get customer portfolio
+// Price caching to improve performance (5 minute cache)
+// Initialize as null - will be set only when MJDTA successfully returns prices
+let cachedGoldPrice = null;
+let cachedSilverPrice = null;
+let lastPriceFetch = null;
+const PRICE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 app.get('/api/portfolio', async (req, res) => {
   try {
     const { phone } = req.query;
@@ -1487,33 +1518,30 @@ app.get('/api/portfolio', async (req, res) => {
 
     const customer = customerResult.recordset[0] || null;
 
-    // Get portfolio summary from transactions (direct buy/sell)
-    const transactionsRequest = pool.request();
-    transactionsRequest.input('phone', sql.NVarChar(15), phone);
+    // Get portfolio summary - COMBINED query for better performance
+    // This calculates:
+    // 1. Direct purchases (transactions with scheme_id IS NULL)
+    // 2. Scheme payments (transactions with scheme_id IS NOT NULL)
+    // 3. Separates gold and silver based on actual grams in transactions
+    const portfolioRequest = pool.request();
+    portfolioRequest.input('phone', sql.NVarChar(15), phone);
 
-    const portfolioResult = await transactionsRequest.query(`
+    const portfolioResult = await portfolioRequest.query(`
       SELECT
-        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN amount ELSE 0 END) as total_invested,
-        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN gold_grams ELSE 0 END) as total_gold_grams,
-        SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN silver_grams ELSE 0 END) as total_silver_grams,
+        -- Total invested (all successful BUY transactions)
+        ISNULL(SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN amount ELSE 0 END), 0) as total_invested,
+
+        -- Gold grams (sum all gold_grams from successful transactions)
+        ISNULL(SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN gold_grams ELSE 0 END), 0) as total_gold_grams,
+
+        -- Silver grams (sum all silver_grams from successful transactions)
+        ISNULL(SUM(CASE WHEN status = 'SUCCESS' AND type = 'BUY' THEN silver_grams ELSE 0 END), 0) as total_silver_grams,
+
+        -- Transaction counts
         COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as total_transactions,
         MAX(timestamp) as last_transaction_date
       FROM transactions
       WHERE customer_phone = @phone
-    `);
-
-    // Get portfolio summary from schemes
-    const schemesRequest = pool.request();
-    schemesRequest.input('phone', sql.NVarChar(15), phone);
-    schemesRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
-
-    const schemesResult = await schemesRequest.query(`
-      SELECT
-        SUM(total_invested) as scheme_invested,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN total_metal_accumulated ELSE 0 END) as scheme_gold_grams,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN total_metal_accumulated ELSE 0 END) as scheme_silver_grams
-      FROM schemes
-      WHERE customer_phone = @phone AND business_id = @business_id AND status = 'ACTIVE'
     `);
 
     const portfolio = portfolioResult.recordset[0] || {
@@ -1524,25 +1552,67 @@ app.get('/api/portfolio', async (req, res) => {
       last_transaction_date: null
     };
 
-    const schemes = schemesResult.recordset[0] || {
-      scheme_invested: 0,
-      scheme_gold_grams: 0,
-      scheme_silver_grams: 0
-    };
+    // Use the values directly (no need to combine with schemes since all transactions are already included)
+    const totalInvested = portfolio.total_invested || 0;
+    const totalGoldGrams = portfolio.total_gold_grams || 0;
+    const totalSilverGrams = portfolio.total_silver_grams || 0;
 
-    // Combine transactions and schemes
-    const totalInvested = (portfolio.total_invested || 0) + (schemes.scheme_invested || 0);
-    const totalGoldGrams = (portfolio.total_gold_grams || 0) + (schemes.scheme_gold_grams || 0);
-    const totalSilverGrams = (portfolio.total_silver_grams || 0) + (schemes.scheme_silver_grams || 0);
+    // Fetch live prices from MJDTA with caching (for display purposes only)
+    let currentGoldPrice = cachedGoldPrice;
+    let currentSilverPrice = cachedSilverPrice;
 
-    // Calculate current value (assuming current gold price of ₹6000 per gram and silver ₹85 per gram)
-    const currentGoldPrice = 6000; // This should come from a gold price API
-    const currentSilverPrice = 85; // This should come from a silver price API
-    const currentGoldValue = totalGoldGrams * currentGoldPrice;
-    const currentSilverValue = totalSilverGrams * currentSilverPrice;
-    const currentValue = currentGoldValue + currentSilverValue;
-    const profitLoss = currentValue - totalInvested;
-    const profitLossPercentage = totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
+    const now = Date.now();
+    if (!lastPriceFetch || (now - lastPriceFetch) > PRICE_CACHE_DURATION) {
+      try {
+        // Fetch live gold price from MJDTA
+        const goldPriceResponse = await fetch('https://www.mjdta.com/');
+        if (goldPriceResponse.ok) {
+          const html = await goldPriceResponse.text();
+
+          // Parse gold price (22K) from MJDTA HTML
+          const goldMatch = html.match(/22\s*K.*?₹\s*([\d,]+)/i);
+          if (goldMatch) {
+            const parsedGoldPrice = parseFloat(goldMatch[1].replace(/,/g, ''));
+            if (parsedGoldPrice >= 3000 && parsedGoldPrice <= 15000) {
+              cachedGoldPrice = parsedGoldPrice;
+              currentGoldPrice = parsedGoldPrice;
+              console.log('✅ Live Gold Price fetched from MJDTA:', currentGoldPrice);
+            }
+          }
+
+          // Parse silver price from MJDTA HTML
+          const silverMatch = html.match(/Silver.*?₹\s*([\d,]+)/i);
+          if (silverMatch) {
+            const parsedSilverPrice = parseFloat(silverMatch[1].replace(/,/g, ''));
+            if (parsedSilverPrice >= 30 && parsedSilverPrice <= 300) {
+              cachedSilverPrice = parsedSilverPrice;
+              currentSilverPrice = parsedSilverPrice;
+              console.log('✅ Live Silver Price fetched from MJDTA:', currentSilverPrice);
+            }
+          }
+
+          lastPriceFetch = now;
+        } else {
+          console.log('⚠️ MJDTA returned non-OK status:', goldPriceResponse.status);
+        }
+      } catch (priceError) {
+        console.log('⚠️ Could not fetch live prices from MJDTA:', priceError.message);
+        console.log('ℹ️ Prices will be returned as null (frontend will display "--")');
+      }
+    } else {
+      console.log('ℹ️ Using cached prices (last fetched', Math.round((now - lastPriceFetch) / 1000), 'seconds ago)');
+    }
+
+    // OPTION 2: Current Value = Total Invested (no market value calculation)
+    // This is a savings scheme - customers cannot sell, only receive physical gold/silver
+    const currentValue = totalInvested;
+    const profitLoss = 0; // Always zero (no unrealized gains)
+    const profitLossPercentage = 0; // Always zero
+
+    // Calculate market values for informational display only (not used in portfolio value)
+    // Only calculate if prices are available (not null)
+    const currentGoldValue = currentGoldPrice ? totalGoldGrams * currentGoldPrice : null;
+    const currentSilverValue = currentSilverPrice ? totalSilverGrams * currentSilverPrice : null;
 
     console.log('✅ Portfolio retrieved for phone:', phone);
     console.log('📊 Portfolio Summary:', {
@@ -1550,8 +1620,11 @@ app.get('/api/portfolio', async (req, res) => {
       totalInvested,
       totalGoldGrams,
       totalSilverGrams,
-      currentValue,
-      profitLoss
+      totalTransactions: portfolio.total_transactions,
+      currentValue: totalInvested, // Same as invested (Option 2 - Savings Scheme)
+      profitLoss: 0, // Always zero (Option 2 - No selling allowed)
+      currentGoldPrice, // From MJDTA (for display)
+      currentSilverPrice // From MJDTA (for display)
     });
 
     res.json({
@@ -1568,9 +1641,13 @@ app.get('/api/portfolio', async (req, res) => {
         total_invested: totalInvested,
         total_gold_grams: totalGoldGrams,
         total_silver_grams: totalSilverGrams,
-        current_value: currentValue,
-        profit_loss: profitLoss,
-        profit_loss_percentage: profitLossPercentage,
+        current_value: currentValue, // Same as total_invested (Option 2)
+        current_gold_price: currentGoldPrice, // For display only
+        current_silver_price: currentSilverPrice, // For display only
+        current_gold_value: currentGoldValue, // For informational display only
+        current_silver_value: currentSilverValue, // For informational display only
+        profit_loss: profitLoss, // Always 0 (Option 2)
+        profit_loss_percentage: profitLossPercentage, // Always 0 (Option 2)
         total_transactions: portfolio.total_transactions || 0,
         last_updated: new Date().toISOString()
       }
@@ -2019,37 +2096,62 @@ app.get('/api/schemes/:customer_phone', async (req, res) => {
     schemesRequest.input('customer_phone', sql.NVarChar(15), customer_phone);
     schemesRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
+    // Get schemes with calculated values from transactions table
     const schemes = await schemesRequest.query(`
       SELECT
         s.*,
         c.name as customer_name,
-        c.email as customer_email
+        c.email as customer_email,
+        ISNULL(SUM(t.amount), 0) as calculated_invested,
+        ISNULL(SUM(CASE WHEN s.metal_type = 'GOLD' THEN t.gold_grams WHEN s.metal_type = 'SILVER' THEN t.silver_grams ELSE 0 END), 0) as calculated_metal_accumulated,
+        COUNT(t.id) as payment_count
       FROM schemes s
       INNER JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
       WHERE s.customer_phone = @customer_phone AND s.business_id = @business_id
+      GROUP BY s.id, s.scheme_id, s.customer_id, s.customer_phone, s.customer_name,
+               s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
+               s.status, s.start_date, s.end_date, s.total_invested,
+               s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
+               s.business_id, s.created_at, s.updated_at,
+               c.name, c.email
       ORDER BY s.created_at DESC
     `);
 
-    // Calculate portfolio summary
+    // Update the schemes with calculated values
+    const updatedSchemes = schemes.recordset.map(scheme => ({
+      ...scheme,
+      total_invested: scheme.calculated_invested || 0,
+      total_metal_accumulated: scheme.calculated_metal_accumulated || 0,
+      total_amount_paid: scheme.calculated_invested || 0, // Frontend expects this field
+      completed_installments: scheme.payment_count || 0,
+      paid_months: scheme.payment_count || 0 // Frontend expects this field
+    }));
+
+    // Calculate portfolio summary from actual payments
     const portfolioRequest = pool.request();
     portfolioRequest.input('customer_phone', sql.NVarChar(15), customer_phone);
     portfolioRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
     const portfolioSummary = await portfolioRequest.query(`
       SELECT
-        COUNT(*) as total_schemes,
-        SUM(total_invested) as total_invested,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN total_metal_accumulated ELSE 0 END) as total_gold_grams,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN total_metal_accumulated ELSE 0 END) as total_silver_grams,
-        SUM(completed_installments) as total_installments
-      FROM schemes
-      WHERE customer_phone = @customer_phone AND business_id = @business_id AND status = 'ACTIVE'
+        COUNT(DISTINCT s.scheme_id) as total_schemes,
+        ISNULL(SUM(t.amount), 0) as total_invested,
+        ISNULL(SUM(CASE WHEN s.metal_type = 'GOLD' THEN t.gold_grams ELSE 0 END), 0) as total_gold_grams,
+        ISNULL(SUM(CASE WHEN s.metal_type = 'SILVER' THEN t.silver_grams ELSE 0 END), 0) as total_silver_grams,
+        COUNT(t.id) as total_installments
+      FROM schemes s
+      LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
+      WHERE s.customer_phone = @customer_phone AND s.business_id = @business_id AND s.status = 'ACTIVE'
     `);
+
+    console.log('✅ Schemes retrieved:', updatedSchemes.length);
+    console.log('📊 Portfolio Summary:', portfolioSummary.recordset[0]);
 
     res.json({
       success: true,
       customer_phone,
-      schemes: schemes.recordset,
+      schemes: updatedSchemes,
       portfolio_summary: portfolioSummary.recordset[0] || {
         total_schemes: 0,
         total_invested: 0,
@@ -2291,18 +2393,19 @@ app.post('/api/schemes/:scheme_id/invest', [
     transactionRequest.input('scheme_type', sql.NVarChar(20), scheme.scheme_type);
     transactionRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
     transactionRequest.input('installment_number', sql.Int, scheme.completed_installments + 1);
+    transactionRequest.input('metal_type', sql.NVarChar(10), scheme.metal_type);
 
     await transactionRequest.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount,
         gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
         status, payment_method, gateway_transaction_id, business_id,
-        scheme_type, scheme_id, installment_number
+        scheme_type, scheme_id, installment_number, metal_type
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount,
         @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
         @status, @payment_method, @gateway_transaction_id, @business_id,
-        @scheme_type, @scheme_id, @installment_number
+        @scheme_type, @scheme_id, @installment_number, @metal_type
       )
     `);
 
@@ -2400,18 +2503,19 @@ app.post('/api/schemes/:scheme_id/flexi-payment', [
     // Add scheme context fields (no installment_number for Flexi)
     transactionRequest.input('scheme_type', sql.NVarChar(20), scheme.scheme_type);
     transactionRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    transactionRequest.input('metal_type', sql.NVarChar(10), scheme.metal_type);
 
     await transactionRequest.query(`
       INSERT INTO transactions (
         transaction_id, customer_phone, customer_name, type, amount,
         gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
         status, payment_method, gateway_transaction_id, business_id,
-        scheme_type, scheme_id
+        scheme_type, scheme_id, metal_type
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount,
         @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
         @status, @payment_method, @gateway_transaction_id, @business_id,
-        @scheme_type, @scheme_id
+        @scheme_type, @scheme_id, @metal_type
       )
     `);
 
@@ -3759,17 +3863,27 @@ app.get('/api/admin/customers/:phone', async (req, res) => {
 
     const customer = customerResult.recordset[0];
 
-    // Get all schemes for this customer
+    // Get all schemes for this customer with calculated values from transactions
     const schemesRequest = pool.request();
     schemesRequest.input('phone', sql.NVarChar(15), phone);
 
     const schemesResult = await schemesRequest.query(`
-      SELECT scheme_id, scheme_type, metal_type, monthly_amount, duration_months,
-             status, start_date, end_date, total_invested, total_metal_accumulated,
-             completed_installments, closure_date, closure_remarks, created_at, updated_at
-      FROM schemes
-      WHERE customer_phone = @phone
-      ORDER BY created_at DESC
+      SELECT
+        s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
+        s.status, s.start_date, s.end_date, s.closure_date, s.closure_remarks,
+        s.created_at, s.updated_at,
+        ISNULL(SUM(t.amount), 0) as total_invested,
+        ISNULL(SUM(CASE WHEN s.metal_type = 'GOLD' THEN t.gold_grams WHEN s.metal_type = 'SILVER' THEN t.silver_grams ELSE 0 END), 0) as total_metal_accumulated,
+        ISNULL(SUM(t.amount), 0) as total_amount_paid,
+        COUNT(CASE WHEN t.status = 'SUCCESS' THEN 1 END) as completed_installments,
+        COUNT(CASE WHEN t.status = 'SUCCESS' THEN 1 END) as paid_months
+      FROM schemes s
+      LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
+      WHERE s.customer_phone = @phone
+      GROUP BY s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
+               s.status, s.start_date, s.end_date, s.closure_date, s.closure_remarks,
+               s.created_at, s.updated_at
+      ORDER BY s.created_at DESC
     `);
 
     // Get all transactions for this customer
@@ -3922,6 +4036,397 @@ app.get('/api/schemes/:customerId', async (req, res) => {
   } catch (error) {
     console.error('❌ Error getting schemes:', error.message);
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ============================================
+// NOTIFICATION MANAGEMENT ENDPOINTS
+// ============================================
+
+// Send notification to specific user
+app.post('/api/admin/notifications/send', [
+  body('userId').notEmpty().withMessage('User ID (phone) required'),
+  body('type').notEmpty().withMessage('Notification type required'),
+  body('title').notEmpty().withMessage('Title required'),
+  body('message').notEmpty().withMessage('Message required'),
+  body('priority').optional().isIn(['low', 'normal', 'high', 'urgent']),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { userId, type, title, message, priority, imageUrl, actionUrl, data } = req.body;
+    const notificationId = `NOTIF_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(`📬 Sending notification to user ${userId}:`, { type, title });
+
+    const request = pool.request();
+    request.input('notification_id', sql.NVarChar(50), notificationId);
+    request.input('user_id', sql.NVarChar(15), userId);
+    request.input('type', sql.NVarChar(50), type);
+    request.input('title', sql.NVarChar(200), title);
+    request.input('message', sql.NVarChar(sql.MAX), message);
+    request.input('priority', sql.NVarChar(20), priority || 'normal');
+    request.input('image_url', sql.NVarChar(500), imageUrl || null);
+    request.input('action_url', sql.NVarChar(500), actionUrl || null);
+    request.input('data', sql.NVarChar(sql.MAX), data ? JSON.stringify(data) : null);
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+    request.input('sent_by', sql.NVarChar(50), 'ADMIN');
+
+    await request.query(`
+      INSERT INTO notifications (
+        notification_id, user_id, type, title, message, priority,
+        image_url, action_url, data, business_id, sent_by
+      ) VALUES (
+        @notification_id, @user_id, @type, @title, @message, @priority,
+        @image_url, @action_url, @data, @business_id, @sent_by
+      )
+    `);
+
+    console.log(`✅ Notification sent to user ${userId}:`, notificationId);
+
+    res.json({
+      success: true,
+      message: 'Notification sent successfully',
+      notificationId: notificationId
+    });
+
+  } catch (error) {
+    console.error('❌ Send notification error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send notification', error: error.message });
+  }
+});
+
+// Broadcast notification to all users
+app.post('/api/admin/notifications/broadcast', [
+  body('type').notEmpty().withMessage('Notification type required'),
+  body('title').notEmpty().withMessage('Title required'),
+  body('message').notEmpty().withMessage('Message required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { type, title, message, priority, imageUrl, actionUrl, data } = req.body;
+
+    console.log(`📢 Broadcasting notification to all users:`, { type, title });
+
+    // Get all customers
+    const customersResult = await pool.request()
+      .input('business_id', sql.NVarChar(50), 'VMURUGAN_001')
+      .query('SELECT customer_phone FROM customers WHERE business_id = @business_id');
+
+    const customers = customersResult.recordset;
+    let sentCount = 0;
+
+    // Send notification to each customer
+    for (const customer of customers) {
+      const notificationId = `NOTIF_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      const request = pool.request();
+      request.input('notification_id', sql.NVarChar(50), notificationId);
+      request.input('user_id', sql.NVarChar(15), customer.customer_phone);
+      request.input('type', sql.NVarChar(50), type);
+      request.input('title', sql.NVarChar(200), title);
+      request.input('message', sql.NVarChar(sql.MAX), message);
+      request.input('priority', sql.NVarChar(20), priority || 'normal');
+      request.input('image_url', sql.NVarChar(500), imageUrl || null);
+      request.input('action_url', sql.NVarChar(500), actionUrl || null);
+      request.input('data', sql.NVarChar(sql.MAX), data ? JSON.stringify(data) : null);
+      request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+      request.input('sent_by', sql.NVarChar(50), 'ADMIN');
+
+      await request.query(`
+        INSERT INTO notifications (
+          notification_id, user_id, type, title, message, priority,
+          image_url, action_url, data, business_id, sent_by
+        ) VALUES (
+          @notification_id, @user_id, @type, @title, @message, @priority,
+          @image_url, @action_url, @data, @business_id, @sent_by
+        )
+      `);
+
+      sentCount++;
+    }
+
+    console.log(`✅ Broadcast notification sent to ${sentCount} users`);
+
+    res.json({
+      success: true,
+      message: `Notification broadcast to ${sentCount} users`,
+      sentCount: sentCount
+    });
+
+  } catch (error) {
+    console.error('❌ Broadcast notification error:', error);
+    res.status(500).json({ success: false, message: 'Failed to broadcast notification', error: error.message });
+  }
+});
+
+// Send notification to filtered users
+app.post('/api/admin/notifications/send-filtered', [
+  body('filter').notEmpty().withMessage('Filter criteria required'),
+  body('type').notEmpty().withMessage('Notification type required'),
+  body('title').notEmpty().withMessage('Title required'),
+  body('message').notEmpty().withMessage('Message required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { filter, type, title, message, priority, imageUrl, actionUrl, data } = req.body;
+
+    console.log(`🎯 Sending filtered notification:`, { type, title, filter });
+
+    // Build SQL query based on filter
+    let query = 'SELECT DISTINCT c.customer_phone FROM customers c';
+    let whereConditions = ['c.business_id = @business_id'];
+    const request = pool.request();
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    // Add filter conditions
+    if (filter.hasScheme) {
+      query += ' INNER JOIN schemes s ON c.customer_phone = s.customer_phone';
+      whereConditions.push('s.status = \'ACTIVE\'');
+    }
+
+    if (filter.schemeType) {
+      request.input('scheme_type', sql.NVarChar(20), filter.schemeType);
+      whereConditions.push('s.scheme_type = @scheme_type');
+    }
+
+    if (filter.metalType) {
+      request.input('metal_type', sql.NVarChar(10), filter.metalType);
+      whereConditions.push('s.metal_type = @metal_type');
+    }
+
+    query += ' WHERE ' + whereConditions.join(' AND ');
+
+    const customersResult = await request.query(query);
+    const customers = customersResult.recordset;
+    let sentCount = 0;
+
+    // Send notification to each filtered customer
+    for (const customer of customers) {
+      const notificationId = `NOTIF_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+
+      const notifRequest = pool.request();
+      notifRequest.input('notification_id', sql.NVarChar(50), notificationId);
+      notifRequest.input('user_id', sql.NVarChar(15), customer.customer_phone);
+      notifRequest.input('type', sql.NVarChar(50), type);
+      notifRequest.input('title', sql.NVarChar(200), title);
+      notifRequest.input('message', sql.NVarChar(sql.MAX), message);
+      notifRequest.input('priority', sql.NVarChar(20), priority || 'normal');
+      notifRequest.input('image_url', sql.NVarChar(500), imageUrl || null);
+      notifRequest.input('action_url', sql.NVarChar(500), actionUrl || null);
+      notifRequest.input('data', sql.NVarChar(sql.MAX), data ? JSON.stringify(data) : null);
+      notifRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+      notifRequest.input('sent_by', sql.NVarChar(50), 'ADMIN');
+
+      await notifRequest.query(`
+        INSERT INTO notifications (
+          notification_id, user_id, type, title, message, priority,
+          image_url, action_url, data, business_id, sent_by
+        ) VALUES (
+          @notification_id, @user_id, @type, @title, @message, @priority,
+          @image_url, @action_url, @data, @business_id, @sent_by
+        )
+      `);
+
+      sentCount++;
+    }
+
+    console.log(`✅ Filtered notification sent to ${sentCount} users`);
+
+    res.json({
+      success: true,
+      message: `Notification sent to ${sentCount} filtered users`,
+      sentCount: sentCount,
+      filter: filter
+    });
+
+  } catch (error) {
+    console.error('❌ Send filtered notification error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send filtered notification', error: error.message });
+  }
+});
+
+// Get notification history
+app.get('/api/admin/notifications/history', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    const request = pool.request();
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+    request.input('limit', sql.Int, limit);
+    request.input('offset', sql.Int, offset);
+
+    const result = await request.query(`
+      SELECT
+        notification_id,
+        user_id,
+        type,
+        title,
+        message,
+        is_read,
+        created_at,
+        priority,
+        sent_by
+      FROM notifications
+      WHERE business_id = @business_id
+      ORDER BY created_at DESC
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `);
+
+    const countResult = await pool.request()
+      .input('business_id', sql.NVarChar(50), 'VMURUGAN_001')
+      .query('SELECT COUNT(*) as total FROM notifications WHERE business_id = @business_id');
+
+    res.json({
+      success: true,
+      notifications: result.recordset,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: countResult.recordset[0].total,
+        totalPages: Math.ceil(countResult.recordset[0].total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get notification history error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get notification history', error: error.message });
+  }
+});
+
+// Get notification statistics
+app.get('/api/admin/notifications/stats', async (req, res) => {
+  try {
+    const request = pool.request();
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+    // Get read/unread counts
+    const readStatsResult = await request.query(`
+      SELECT
+        COUNT(*) as totalSent,
+        SUM(CASE WHEN is_read = 1 THEN 1 ELSE 0 END) as totalRead,
+        SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) as totalUnread
+      FROM notifications
+      WHERE business_id = @business_id
+    `);
+
+    // Get counts by type
+    const typeStatsResult = await pool.request()
+      .input('business_id', sql.NVarChar(50), 'VMURUGAN_001')
+      .query(`
+        SELECT type, COUNT(*) as count
+        FROM notifications
+        WHERE business_id = @business_id
+        GROUP BY type
+      `);
+
+    const stats = {
+      totalSent: readStatsResult.recordset[0].totalSent || 0,
+      totalRead: readStatsResult.recordset[0].totalRead || 0,
+      totalUnread: readStatsResult.recordset[0].totalUnread || 0,
+      byType: {}
+    };
+
+    typeStatsResult.recordset.forEach(row => {
+      stats.byType[row.type] = row.count;
+    });
+
+    res.json({
+      success: true,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('❌ Get notification stats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get notification stats', error: error.message });
+  }
+});
+
+// Get user notifications (for frontend sync)
+app.get('/api/notifications/:phone', async (req, res) => {
+  try {
+    const { phone } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    const request = pool.request();
+    request.input('user_id', sql.NVarChar(15), phone);
+    request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+    request.input('limit', sql.Int, limit);
+    request.input('offset', sql.Int, offset);
+
+    const result = await request.query(`
+      SELECT
+        notification_id as id,
+        user_id as userId,
+        type,
+        title,
+        message,
+        is_read as isRead,
+        created_at as createdAt,
+        read_at as readAt,
+        data,
+        priority,
+        image_url as imageUrl,
+        action_url as actionUrl
+      FROM notifications
+      WHERE user_id = @user_id AND business_id = @business_id
+      ORDER BY created_at DESC
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `);
+
+    res.json({
+      success: true,
+      notifications: result.recordset.map(n => ({
+        ...n,
+        data: n.data ? JSON.parse(n.data) : null
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Get user notifications error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get notifications', error: error.message });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:notification_id/read', async (req, res) => {
+  try {
+    const { notification_id } = req.params;
+
+    const request = pool.request();
+    request.input('notification_id', sql.NVarChar(50), notification_id);
+
+    await request.query(`
+      UPDATE notifications
+      SET is_read = 1, read_at = GETDATE()
+      WHERE notification_id = @notification_id
+    `);
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read'
+    });
+
+  } catch (error) {
+    console.error('❌ Mark notification as read error:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: error.message });
   }
 });
 

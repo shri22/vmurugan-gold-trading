@@ -757,6 +757,17 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
       print('📱 Showing success message to user...');
 
+      // Trigger success notification
+      try {
+        await NotificationTemplates.paymentSuccess(
+          amount: response.amount,
+          transactionId: response.transactionId,
+        );
+        print('✅ Success notification triggered');
+      } catch (e) {
+        print('⚠️ Failed to trigger success notification: $e');
+      }
+
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -773,8 +784,38 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       }
 
       print('✅ Payment flow completed successfully!\n');
+    } else if (response.status == PaymentStatus.cancelled) {
+      print('⚠️ Payment cancelled by user');
+
+      // Clear any previous error information
+      setState(() {
+        _lastPaymentError = 'Payment was cancelled by user';
+        _detailedErrorInfo = response.additionalData;
+      });
+
+      // Trigger cancelled notification
+      try {
+        await NotificationTemplates.paymentCancelled(
+          amount: response.amount,
+        );
+        print('✅ Cancellation notification triggered');
+      } catch (e) {
+        print('⚠️ Failed to trigger cancellation notification: $e');
+      }
+
+      // Show cancellation message in snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment cancelled by user'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } else {
-      print('❌ Payment failed or cancelled');
+      // Payment failed
+      print('❌ Payment failed');
 
       // Capture detailed error information for display
       setState(() {
@@ -782,11 +823,22 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         _detailedErrorInfo = response.additionalData;
       });
 
+      // Trigger failure notification
+      try {
+        await NotificationTemplates.paymentFailed(
+          amount: response.amount,
+          reason: response.errorMessage ?? 'Unknown error',
+        );
+        print('✅ Failure notification triggered');
+      } catch (e) {
+        print('⚠️ Failed to trigger failure notification: $e');
+      }
+
       // Show brief error message in snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Payment failed - see details below'),
+            content: Text(response.errorMessage ?? 'Payment failed - see details below'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),

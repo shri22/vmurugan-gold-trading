@@ -1029,19 +1029,14 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
 
         SizedBox(height: Responsive.getHeight(context) * 0.06),
 
-        // OTP Input Fields - No Overlap Solution
+        // OTP Input Fields - Optimized for iPhone SE (375px width)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: IntrinsicHeight(
-            child: Row(
-              children: [
-                for (int i = 0; i < 6; i++) ...[
-                  Expanded(
-                    child: _buildOtpField(i),
-                  ),
-                  if (i < 5) const SizedBox(width: 8),
-                ],
-              ],
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              6,
+              (i) => _buildOtpField(i),
             ),
           ),
         ),
@@ -1091,63 +1086,67 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
+      width: 50,
       height: 50,
-      constraints: const BoxConstraints(
-        minWidth: 40,
-        maxWidth: 60,
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
         color: AppColors.getCardColor(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasValue
-            ? AppColors.primaryGold // Gold when filled
-            : AppColors.primaryGreen, // Green border
-          width: hasValue ? 3 : 2,
+          color: _otpFocusNodes[index].hasFocus
+            ? AppColors.primaryGold
+            : AppColors.getBorderColor(context),
+          width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: hasValue
-              ? AppColors.primaryGold.withOpacity(0.3)
-              : AppColors.primaryGreen.withOpacity(0.2),
-            blurRadius: hasValue ? 8 : 4,
+            color: AppColors.getShadowColor(context),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: TextField(
-        controller: _otpControllers[index],
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        maxLength: 1,
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: hasValue
-            ? AppColors.primaryGold // Gold when filled
-            : AppColors.primaryGreen, // Green when empty
-        ),
-        decoration: const InputDecoration(
-          counterText: '',
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
-        ),
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (value) {
-          if (value.isNotEmpty && index < 5) {
-            FocusScope.of(context).nextFocus();
-          } else if (value.isEmpty && index > 0) {
-            FocusScope.of(context).previousFocus();
-          }
+      child: Center(
+        child: TextField(
+          controller: _otpControllers[index],
+          focusNode: _otpFocusNodes[index],
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          maxLength: 1,
+          obscureText: false,
+          enableInteractiveSelection: true,
+          autofocus: index == 0,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+            letterSpacing: 0,
+          ),
+          cursorColor: AppColors.primaryGold,
+          cursorWidth: 2,
+          cursorHeight: 16,
+          decoration: const InputDecoration(
+            counterText: '',
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+          ),
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (value) {
+            if (value.isNotEmpty && index < 5) {
+              FocusScope.of(context).nextFocus();
+            } else if (value.isEmpty && index > 0) {
+              FocusScope.of(context).previousFocus();
+            }
 
-          // Auto-verify when all fields are filled
-          final otp = _otpControllers.map((c) => c.text).join();
-          if (otp.length == 6) {
-            _verifyOtp();
-          }
+            // Auto-verify when all fields are filled
+            final otp = _otpControllers.map((c) => c.text).join();
+            if (otp.length == 6) {
+              _verifyOtp();
+            }
 
-          setState(() {});
-        },
+            setState(() {});
+          },
+        ),
       ),
     );
   }

@@ -56,6 +56,8 @@ class Portfolio {
   final double currentValue;
   final double profitLoss;
   final double profitLossPercentage;
+  final double? currentGoldPrice; // Current gold price from MJDTA (for display)
+  final double? currentSilverPrice; // Current silver price from MJDTA (for display)
   final DateTime lastUpdated;
   final PortfolioBreakdown? breakdown;
 
@@ -75,6 +77,8 @@ class Portfolio {
     required this.currentValue,
     required this.profitLoss,
     required this.profitLossPercentage,
+    this.currentGoldPrice,
+    this.currentSilverPrice,
     required this.lastUpdated,
     this.breakdown,
   });
@@ -96,6 +100,8 @@ class Portfolio {
       currentValue: (map['current_value'] ?? 0.0).toDouble(),
       profitLoss: (map['profit_loss'] ?? 0.0).toDouble(),
       profitLossPercentage: (map['profit_loss_percentage'] ?? 0.0).toDouble(),
+      currentGoldPrice: map['current_gold_price'] != null ? (map['current_gold_price'] as num).toDouble() : null,
+      currentSilverPrice: map['current_silver_price'] != null ? (map['current_silver_price'] as num).toDouble() : null,
       lastUpdated: DateTime.parse(map['last_updated'] ?? DateTime.now().toIso8601String()),
       breakdown: map['breakdown'] != null ? PortfolioBreakdown.fromMap(map['breakdown']) : null,
     );
@@ -118,6 +124,8 @@ class Portfolio {
       'current_value': currentValue,
       'profit_loss': profitLoss,
       'profit_loss_percentage': profitLossPercentage,
+      if (currentGoldPrice != null) 'current_gold_price': currentGoldPrice,
+      if (currentSilverPrice != null) 'current_silver_price': currentSilverPrice,
       'last_updated': lastUpdated.toIso8601String(),
     };
   }

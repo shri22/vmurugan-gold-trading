@@ -80,26 +80,50 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary.withOpacity(0.1), Colors.transparent],
+          colors: [
+            const Color(0xFFFFD700).withOpacity(0.15),
+            Colors.transparent,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(AppBorderRadius.lg),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(
+          color: const Color(0xFFFFD700).withOpacity(0.3),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.notifications_active, color: AppColors.primary, size: 32),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.notifications_active,
+                  color: Color(0xFFFFD700),
+                  size: 24,
+                ),
+              ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                'Notification Preferences',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'Notification Preferences',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -107,9 +131,11 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Choose which notifications you want to receive. You can always change these settings later.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[600],
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -209,30 +235,34 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
         borderRadius: BorderRadius.circular(AppBorderRadius.lg),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.md), // FIXED: Reduced from lg (24px) to md (16px)
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6), // FIXED: Reduced from 8 to 6
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: color, size: 20), // FIXED: Reduced from 24 to 20
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Flexible( // FIXED: Wrapped in Flexible to prevent overflow
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith( // FIXED: Changed from titleLarge to titleMedium
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md), // FIXED: Reduced from lg to md
             ...types.map((type) => _buildNotificationToggle(type)),
           ],
         ),
@@ -242,39 +272,63 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
 
   Widget _buildNotificationToggle(NotificationType type) {
     final isEnabled = _preferences[type] ?? true;
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            type.icon,
-            style: const TextStyle(fontSize: 20),
+          // Emoji icon - compact size
+          Padding(
+            padding: const EdgeInsets.only(top: 2), // FIXED: Reduced from 4 to 2
+            child: Text(
+              type.icon,
+              style: const TextStyle(fontSize: 18), // FIXED: Reduced from 20 to 18
+            ),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          const SizedBox(width: 6), // FIXED: Reduced from AppSpacing.sm (8) to 6
+
+          // Text content - takes available space
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   type.displayName,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith( // FIXED: Changed from titleMedium to bodyLarge
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 1, // FIXED: Reduced from 2 to 1 for title
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
                   _getNotificationDescription(type),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.grey[600],
+                    fontSize: 11, // FIXED: Explicit smaller font size
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          Switch(
-            value: isEnabled,
-            onChanged: (value) => _savePreference(type, value),
-            activeColor: AppColors.primary,
+
+          const SizedBox(width: 4), // FIXED: Reduced from AppSpacing.sm (8) to 4
+
+          // Switch - constrained to prevent overflow
+          SizedBox(
+            width: 50, // FIXED: Explicit width constraint for Switch
+            child: Transform.scale(
+              scale: 0.85, // FIXED: Slightly smaller switch for better fit
+              child: Switch(
+                value: isEnabled,
+                onChanged: (value) => _savePreference(type, value),
+                activeColor: AppColors.primary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // FIXED: Reduce tap target padding
+              ),
+            ),
           ),
         ],
       ),

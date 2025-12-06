@@ -48,7 +48,7 @@
         android:allowBackup="true"
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:replace="android:allowBackup">
+        tools:replace="android:label,android:allowBackup">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -94,6 +94,16 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="worldline"
+                      android:host="payment" />
+            </intent-filter>
+
+            <!-- CRITICAL: Omniware payment callback intent filter -->
+            <!-- Handles vmurugangold://payment/success, vmurugangold://payment/failure, vmurugangold://payment/cancel -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vmurugangold"
                       android:host="payment" />
             </intent-filter>
         </activity>
@@ -145,6 +155,13 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="worldline" />
+        </intent>
+
+        <!-- CRITICAL: Query for Omniware payment activities -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="vmurugangold" />
         </intent>
 
         <!-- Query for banking apps that Worldline might redirect to -->

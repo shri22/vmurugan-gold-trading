@@ -146,6 +146,7 @@ class _OmniwarePaymentPageScreenState extends State<OmniwarePaymentPageScreen> {
 
             // Handle return URLs (payment complete/cancel/failure)
             if (url.startsWith('vmurugangold://payment/')) {
+              print('🎯 Payment callback URL detected in onNavigationRequest: $url');
               _handleReturnUrl(url);
               return NavigationDecision.prevent;
             }
@@ -173,15 +174,45 @@ class _OmniwarePaymentPageScreenState extends State<OmniwarePaymentPageScreen> {
           },
           onPageStarted: (String url) {
             print('📄 Page started loading: $url');
+
+            // CRITICAL FIX: Catch payment callback URLs BEFORE error page renders
+            // This prevents the "Webpage not available" error from showing
+            if (url.startsWith('vmurugangold://payment/')) {
+              print('🎯 Payment callback URL detected in onPageStarted: $url');
+              print('⚡ Intercepting BEFORE error page renders');
+              _handleReturnUrl(url);
+
+              // Stop the WebView from trying to load this URL
+              // This prevents the ERR_UNKNOWN_URL_SCHEME error page
+              _webViewController?.loadRequest(Uri.parse('about:blank'));
+            }
           },
           onPageFinished: (String url) {
             print('✅ Page finished loading: $url');
-            setState(() {
-              _isLoading = false;
-            });
+
+            // Don't hide loading indicator if we're processing a payment callback
+            if (!url.startsWith('vmurugangold://payment/') && url != 'about:blank') {
+              setState(() {
+                _isLoading = false;
+              });
+            }
           },
           onWebResourceError: (WebResourceError error) {
             print('❌ WebView error: ${error.description}');
+            print('   Error code: ${error.errorCode}');
+            print('   Error type: ${error.errorType}');
+            print('   Failed URL: ${error.url}');
+
+            // CRITICAL FIX: Handle ERR_UNKNOWN_URL_SCHEME for payment callbacks
+            // This catches the error if onPageStarted didn't prevent it
+            if (error.url != null && error.url!.startsWith('vmurugangold://payment/')) {
+              print('🎯 Payment callback URL detected in error handler: ${error.url}');
+              print('⚡ Recovering from ERR_UNKNOWN_URL_SCHEME error');
+              _handleReturnUrl(error.url!);
+
+              // Load blank page to clear the error
+              _webViewController?.loadRequest(Uri.parse('about:blank'));
+            }
           },
         ),
       );

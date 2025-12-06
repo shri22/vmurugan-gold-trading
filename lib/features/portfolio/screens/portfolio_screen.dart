@@ -38,34 +38,74 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Load portfolio, schemes, and current prices in parallel
+      // OPTIMIZED: Load only portfolio and active schemes in parallel
+      // Transaction history is loaded separately when needed (lazy loading)
       final results = await Future.wait([
         _portfolioService.getPortfolio(),
-        _portfolioService.getTransactionHistory(limit: 10),
         _portfolioService.getActiveSchemes(),
-        _goldPriceService.getCurrentPrice(),
-        _silverPriceService.getCurrentPrice(),
       ]);
 
       _portfolio = results[0] as Portfolio;
-      _transactions = results[1] as List<Transaction>;
-      _activeSchemes = results[2] as List<Map<String, dynamic>>;
-      _currentGoldPrice = results[3] as GoldPriceModel?;
-      _currentSilverPrice = results[4] as SilverPriceModel?;
+      _activeSchemes = results[1] as List<Map<String, dynamic>>;
+
+      // Load transaction history separately (non-blocking)
+      _loadTransactionHistory();
+
+      // Use prices from portfolio API response (already fetched from MJDTA on backend)
+      // If prices are null (MJDTA unavailable), keep _currentGoldPrice and _currentSilverPrice as null
+      if (_portfolio != null) {
+        if (_portfolio!.currentGoldPrice != null) {
+          _currentGoldPrice = GoldPriceModel(
+            pricePerGram: _portfolio!.currentGoldPrice!,
+            pricePerOunce: _portfolio!.currentGoldPrice! * 31.1035, // Convert to per ounce
+            currency: 'INR',
+            timestamp: _portfolio!.lastUpdated,
+            changePercent: 0,
+            changeAmount: 0,
+            trend: 'stable',
+          );
+        } else {
+          _currentGoldPrice = null; // MJDTA unavailable
+        }
+
+        if (_portfolio!.currentSilverPrice != null) {
+          _currentSilverPrice = SilverPriceModel(
+            pricePerGram: _portfolio!.currentSilverPrice!,
+            pricePerOunce: _portfolio!.currentSilverPrice! * 31.1035, // Convert to per ounce
+            currency: 'INR',
+            timestamp: _portfolio!.lastUpdated,
+            changePercent: 0,
+            changeAmount: 0,
+            trend: 'stable',
+          );
+        } else {
+          _currentSilverPrice = null; // MJDTA unavailable
+        }
+      }
 
       print('📊 Portfolio loaded: ${_portfolio?.totalGoldGrams} g gold, ${_portfolio?.totalSilverGrams} g silver');
       print('📋 Active schemes: ${_activeSchemes.length}');
-
-      // Update portfolio value with current prices
-      if (_currentGoldPrice != null) {
-        await _portfolioService.updatePortfolioValue(_currentGoldPrice!);
-        _portfolio = await _portfolioService.getPortfolio();
-      }
+      print('💲 Gold Price: ₹${_currentGoldPrice?.pricePerGram}/g (from backend)');
+      print('💲 Silver Price: ₹${_currentSilverPrice?.pricePerGram}/g (from backend)');
 
     } catch (e) {
-      print('Error loading portfolio: $e');
+      print('❌ Error loading portfolio: $e');
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // Load transaction history separately (non-blocking)
+  Future<void> _loadTransactionHistory() async {
+    try {
+      final transactions = await _portfolioService.getTransactionHistory(limit: 10);
+      if (mounted) {
+        setState(() {
+          _transactions = transactions;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading transaction history: $e');
     }
   }
 
@@ -229,27 +269,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     '${NumberFormatter.formatToThreeDecimals(_portfolio!.totalSilverGrams)} g',
                     Icons.circle,
                     Colors.grey[400]!,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    'Total Invested',
-                    '₹${_portfolio!.totalInvested.toStringAsFixed(2)}',
-                    Icons.account_balance,
-                    Colors.green,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    'Current Value',
-                    '₹${_portfolio!.currentValue.toStringAsFixed(2)}',
-                    Icons.trending_up,
-                    Colors.blue,
                   ),
                 ),
               ],
@@ -479,23 +498,25 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
             const SizedBox(height: 12),
 
             // Gold Price Row
-            if (_currentGoldPrice != null) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('22K Gold', style: TextStyle(color: Colors.grey)),
-                      Text(
-                        '₹${_currentGoldPrice!.pricePerGram.toStringAsFixed(2)}/g',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('22K Gold', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      _currentGoldPrice != null
+                          ? '₹${_currentGoldPrice!.pricePerGram.toStringAsFixed(2)}/g'
+                          : '--',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+                if (_currentGoldPrice != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -510,30 +531,47 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         fontSize: 12,
                       ),
                     ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Unavailable',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
+              ],
+            ),
+            const SizedBox(height: 12),
 
             // Silver Price Row
-            if (_currentSilverPrice != null) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Silver', style: TextStyle(color: Colors.grey)),
-                      Text(
-                        '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(2)}/g',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Silver', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      _currentSilverPrice != null
+                          ? '₹${_currentSilverPrice!.pricePerGram.toStringAsFixed(2)}/g'
+                          : '--',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
+                if (_currentSilverPrice != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -548,10 +586,25 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         fontSize: 12,
                       ),
                     ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Unavailable',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),

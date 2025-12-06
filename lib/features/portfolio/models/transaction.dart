@@ -45,14 +45,23 @@ class Transaction {
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
+    // Determine metal type first to read correct columns
+    final metalType = map['metal_type']?.toString() ?? 'GOLD';
+    final isGold = metalType.toUpperCase() == 'GOLD';
+
     return Transaction(
       id: map['id']?.toString() ?? '',
       transactionId: map['transaction_id']?.toString() ?? '',
       type: map['type']?.toString() ?? 'BUY',
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      metalGrams: (map['metal_grams'] as num?)?.toDouble() ?? 0.0,
-      metalPricePerGram: (map['metal_price_per_gram'] as num?)?.toDouble() ?? 0.0,
-      metalType: map['metal_type']?.toString() ?? 'GOLD',
+      // Read from correct columns based on metal type
+      metalGrams: isGold
+          ? (map['gold_grams'] as num?)?.toDouble() ?? 0.0
+          : (map['silver_grams'] as num?)?.toDouble() ?? 0.0,
+      metalPricePerGram: isGold
+          ? (map['gold_price_per_gram'] as num?)?.toDouble() ?? 0.0
+          : (map['silver_price_per_gram'] as num?)?.toDouble() ?? 0.0,
+      metalType: metalType,
       paymentMethod: _parsePaymentMethod(map['payment_method']?.toString()),
       status: _parseTransactionStatus(map['status']?.toString()),
       gatewayTransactionId: map['gateway_transaction_id']?.toString(),

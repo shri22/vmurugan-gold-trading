@@ -216,6 +216,7 @@ class SchemePayment {
   final String paymentMethod;
   final String transactionId;
   final String status; // 'pending', 'completed', 'failed'
+  final String? metalType; // 'GOLD' or 'SILVER'
 
   const SchemePayment({
     required this.id,
@@ -227,6 +228,7 @@ class SchemePayment {
     required this.paymentMethod,
     required this.transactionId,
     required this.status,
+    this.metalType,
   });
 
   factory SchemePayment.fromJson(Map<String, dynamic> json) {
@@ -240,6 +242,7 @@ class SchemePayment {
       paymentMethod: json['paymentMethod'] as String,
       transactionId: json['transactionId'] as String,
       status: json['status'] as String,
+      metalType: json['metalType'] as String?,
     );
   }
 
@@ -254,6 +257,7 @@ class SchemePayment {
       'paymentMethod': paymentMethod,
       'transactionId': transactionId,
       'status': status,
+      'metalType': metalType,
     };
   }
 

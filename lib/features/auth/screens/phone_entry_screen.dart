@@ -41,9 +41,9 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   bool _isRegisteredUser = false;
   String _phoneNumber = '';
 
-  // OTP related
-  bool _canResendOtp = false;
-  int _resendTimer = 30;
+  // OTP related - Using ValueNotifier to avoid rebuilding entire widget tree
+  final ValueNotifier<bool> _canResendOtpNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> _resendTimerNotifier = ValueNotifier<int>(30);
   Timer? _timer;
 
   @override
@@ -56,6 +56,8 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
       node.dispose();
     }
     _timer?.cancel();
+    _canResendOtpNotifier.dispose();
+    _resendTimerNotifier.dispose();
     super.dispose();
   }
 
@@ -218,7 +220,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   }
 
   Future<void> _resendOTP() async {
-    if (!_canResendOtp) return;
+    if (!_canResendOtpNotifier.value) return;
 
     try {
       setState(() {
@@ -265,17 +267,13 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   }
 
   void _startResendTimer() {
-    _canResendOtp = false;
-    _resendTimer = 30;
+    _canResendOtpNotifier.value = false;
+    _resendTimerNotifier.value = 30;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_resendTimer > 0) {
-        setState(() {
-          _resendTimer--;
-        });
+      if (_resendTimerNotifier.value > 0) {
+        _resendTimerNotifier.value--;
       } else {
-        setState(() {
-          _canResendOtp = true;
-        });
+        _canResendOtpNotifier.value = true;
         timer.cancel();
       }
     });
@@ -572,7 +570,56 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
   Widget _buildOtpVerificationStep() {
     return Column(
       children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.05),
+
+        // DEMO MODE Banner - Single consolidated banner
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.orange[700]!, Colors.orange[500]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      '🎭 DEMO MODE',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Testing environment - Use OTP: 123456',
+                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
 
         // Logo
         const VMuruganLogo(
@@ -581,7 +628,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
           textColor: AppColors.primaryGold,
         ),
 
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
 
         // Title
         Text(
@@ -603,53 +650,69 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
           textAlign: TextAlign.center,
         ),
 
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
 
-              // OTP Input Fields
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(6, (index) {
-                  return Container(
-                    width: 45,
-                    height: 55,
-                    decoration: BoxDecoration(
-                      color: AppColors.getCardColor(context),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _otpControllers[index].text.isNotEmpty
-                            ? AppColors.primaryGold
-                            : AppColors.getBorderColor(context),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.getShadowColor(context),
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
+              // OTP Input Fields - Optimized for iPhone SE (375px width)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(6, (index) {
+                    return Container(
+                      width: 50,
+                      height: 50,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.getCardColor(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _focusNodes[index].hasFocus
+                              ? AppColors.primaryGold
+                              : AppColors.getBorderColor(context),
+                          width: 2,
                         ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _otpControllers[index],
-                      focusNode: _focusNodes[index],
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      maxLength: 1,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.getTextColor(context),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.getShadowColor(context),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      decoration: const InputDecoration(
-                        counterText: '',
-                        border: InputBorder.none,
+                      child: Center(
+                        child: TextField(
+                          controller: _otpControllers[index],
+                          focusNode: _focusNodes[index],
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          maxLength: 1,
+                          obscureText: false, // OTP numbers remain visible
+                          enableInteractiveSelection: true,
+                          autofocus: index == 0,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                            letterSpacing: 0,
+                          ),
+                          cursorColor: AppColors.primaryGold,
+                          cursorWidth: 2,
+                          cursorHeight: 16,
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                          ),
+                          onChanged: (value) => _onOTPChanged(value, index),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        ),
                       ),
-                      onChanged: (value) => _onOTPChanged(value, index),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
+
+              const SizedBox(height: 20),
 
               if (_errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -690,27 +753,37 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
 
               const SizedBox(height: 24),
 
-        // Resend OTP
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Didn't receive the code? ",
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            GestureDetector(
-              onTap: _canResendOtp ? _resendOTP : null,
-              child: Text(
-                _canResendOtp ? 'Resend' : 'Resend in ${_resendTimer}s',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _canResendOtp ? AppColors.primaryGold : AppColors.grey,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+        // Resend OTP - Using ValueListenableBuilder to avoid rebuilding entire screen
+        ValueListenableBuilder<bool>(
+          valueListenable: _canResendOtpNotifier,
+          builder: (context, canResend, child) {
+            return ValueListenableBuilder<int>(
+              valueListenable: _resendTimerNotifier,
+              builder: (context, timer, child) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Didn't receive the code? ",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: canResend ? _resendOTP : null,
+                      child: Text(
+                        canResend ? 'Resend' : 'Resend in ${timer}s',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: canResend ? AppColors.primaryGold : AppColors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         ),
 
         const SizedBox(height: 32),

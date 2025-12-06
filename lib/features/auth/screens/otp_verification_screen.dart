@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -109,8 +110,70 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              const SizedBox(height: AppSpacing.md),
+
+              // DEMO MODE Banner - HIGHLY VISIBLE
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.orange[700]!,
+                      Colors.orange[500]!,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '🎭 DEMO MODE',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Testing environment - Use OTP: 123456',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: AppSpacing.xl),
-              
+
               // OTP Icon
               Container(
                 width: 80,
@@ -168,48 +231,116 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               
               const SizedBox(height: AppSpacing.xxl),
               
-              // OTP Input Fields
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(
-                  6,
-                  (index) => SizedBox(
-                    width: Responsive.getWidth(context) / 8,
-                    child: TextFormField(
-                      controller: _otpControllers[index],
-                      focusNode: _focusNodes[index],
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      maxLength: 1,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryGold,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: AppColors.lightGrey,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                          borderSide: const BorderSide(color: AppColors.grey),
+              // OTP Input Fields - Optimized for iPhone SE (375px width)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    6,
+                    (index) => Container(
+                      width: 50,
+                      height: 50,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.getCardColor(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _focusNodes[index].hasFocus
+                              ? AppColors.primaryGold
+                              : AppColors.getBorderColor(context),
+                          width: 2,
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                          borderSide: const BorderSide(
-                            color: AppColors.primaryGold,
-                            width: 2,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.getShadowColor(context),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        ],
                       ),
-                      onChanged: (value) => _onOTPChanged(value, index),
+                      child: Center(
+                        child: TextField(
+                          controller: _otpControllers[index],
+                          focusNode: _focusNodes[index],
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          maxLength: 1,
+                          obscureText: false,
+                          enableInteractiveSelection: true,
+                          autofocus: index == 0,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                            letterSpacing: 0,
+                          ),
+                          cursorColor: AppColors.primaryGold,
+                          cursorWidth: 2,
+                          cursorHeight: 16,
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                          ),
+                          onChanged: (value) => _onOTPChanged(value, index),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-              
-              const SizedBox(height: AppSpacing.xxl),
-              
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // Demo OTP Hint - HIGHLY VISIBLE
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                  border: Border.all(
+                    color: Colors.green[300]!,
+                    width: 2,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      color: Colors.green[700],
+                      size: 24,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.grey[800],
+                          ),
+                          children: [
+                            const TextSpan(text: 'Demo OTP: '),
+                            TextSpan(
+                              text: '123456',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green[700],
+                                fontSize: 18,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
               // Verify Button
               CustomButton(
                 text: 'Verify OTP',
