@@ -13,6 +13,7 @@ import '../../../core/services/secure_http_client.dart';
 import '../../../core/config/client_server_config.dart';
 import '../../../main.dart';
 import 'phone_entry_screen.dart';
+import '../../../core/services/fcm_service.dart';
 
 /// Quick MPIN login screen for returning customers
 /// Shows only MPIN input with saved phone number
@@ -132,6 +133,9 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             // Start auto-logout monitoring for logged-in user
             AutoLogoutService().startMonitoring();
             print('⏰ Auto-logout monitoring started');
+
+            // Register FCM Token for notifications
+            await FCMService.registerTokenOnLogin();
 
             if (mounted) {
               // Navigate to main app

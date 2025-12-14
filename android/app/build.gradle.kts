@@ -21,6 +21,9 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.vmurugan.digi_gold"
     compileSdk = flutter.compileSdkVersion
+    // NDK r27 (27.0.12077973) - Newer than r26b, fully supports 16 KB pages
+    // Required by Firebase and other plugins for compatibility
+    // NDK r27 is backward compatible and includes all 16 KB page size support
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -82,6 +85,14 @@ android {
     splits {
         abi {
             isEnable = false  // Disable ABI splits to include all architectures in one APK
+        }
+    }
+
+    // Force 16 KB page size alignment for native libraries
+    // Required for Android 15+ devices and Omniware payment plugin
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 }

@@ -8,7 +8,24 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const crypto = require('crypto'); // ADDED: For MPIN encryption
+const admin = require('firebase-admin'); // ADDED: For Push Notifications
 require('dotenv').config();
+
+// Initialize Firebase Admin
+try {
+  // Check if service account file exists
+  if (fs.existsSync(path.join(__dirname, 'serviceAccountKey.json'))) {
+    const serviceAccount = require('./serviceAccountKey.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('✅ Firebase Admin initialized successfully');
+  } else {
+    console.log('⚠️ serviceAccountKey.json not found. Push notifications disabled.');
+  }
+} catch (error) {
+  console.log('⚠️ Firebase Admin initialization failed:', error.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -182,22 +199,22 @@ let pool;
 async function initializeDatabase() {
   try {
     console.log('📡 Connecting to SQL Server...');
-    
+
     if (pool) {
       await pool.close();
     }
-    
+
     pool = await sql.connect(sqlConfig);
     console.log('✅ SQL Server connected successfully');
-    
+
     // Test the connection
     const result = await pool.request().query('SELECT @@VERSION as version, @@SERVERNAME as servername');
     console.log('📊 Server Name:', result.recordset[0].servername);
     console.log('📊 SQL Version:', result.recordset[0].version.substring(0, 50) + '...');
-    
+
     // Create tables
     await createTablesIfNotExist();
-    
+
     return true;
   } catch (error) {
     console.error('❌ SQL Server connection failed:', error.message);
@@ -209,7 +226,7 @@ async function initializeDatabase() {
 async function createTablesIfNotExist() {
   try {
     console.log('📋 Creating tables if not exist...');
-    
+
     // Create customers table - Using SQL Server 2019 features
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='customers')
@@ -495,6 +512,49 @@ async function createTablesIfNotExist() {
       END
     `);
 
+    // Create notifications table - for in-app history
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='notifications')
+      BEGIN
+        CREATE TABLE notifications (
+          notification_id NVARCHAR(50) PRIMARY KEY,
+          user_id NVARCHAR(15) NOT NULL,
+          type NVARCHAR(50) NOT NULL,
+          title NVARCHAR(200) NOT NULL,
+          message NVARCHAR(MAX) NOT NULL,
+          is_read BIT DEFAULT 0,
+          created_at DATETIME2(3) DEFAULT SYSDATETIME(),
+          read_at DATETIME2(3) NULL,
+          data NVARCHAR(MAX) NULL,
+          priority NVARCHAR(20) DEFAULT 'normal',
+          image_url NVARCHAR(500) NULL,
+          action_url NVARCHAR(500) NULL,
+          business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
+          sent_by NVARCHAR(50) DEFAULT 'SYSTEM'
+        )
+        CREATE INDEX IX_notifications_user_id ON notifications (user_id)
+        CREATE INDEX IX_notifications_created_at ON notifications (created_at)
+        PRINT 'Notifications table created'
+      END
+    `);
+
+    // Create user_tokens table - for Push Notifications (FCM)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='user_tokens')
+      BEGIN
+        CREATE TABLE user_tokens (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          user_phone NVARCHAR(15) NOT NULL,
+          fcm_token NVARCHAR(MAX) NOT NULL,
+          device_type NVARCHAR(20) DEFAULT 'mobile',
+          last_updated DATETIME2(3) DEFAULT SYSDATETIME(),
+          is_active BIT DEFAULT 1
+        )
+        CREATE INDEX IX_user_tokens_phone ON user_tokens (user_phone)
+        PRINT 'User tokens table created'
+      END
+    `);
+
     console.log('✅ Tables created successfully');
   } catch (error) {
     console.error('❌ Error creating tables:', error.message);
@@ -502,6 +562,44 @@ async function createTablesIfNotExist() {
 }
 
 // ROUTES START HERE
+
+// Register FCM Token Endpoint
+app.post('/api/notifications/register-token', async (req, res) => {
+  try {
+    const { phone, fcm_token, device_type } = req.body;
+
+    if (!phone || !fcm_token) {
+      return res.status(400).json({ success: false, message: 'Phone and Token are required' });
+    }
+
+    // Check if token exists for this user
+    const checkResult = await pool.request()
+      .input('phone', sql.NVarChar, phone)
+      .input('token', sql.NVarChar, fcm_token)
+      .query('SELECT id FROM user_tokens WHERE user_phone = @phone AND fcm_token = @token');
+
+    if (checkResult.recordset.length > 0) {
+      // Update last_updated
+      await pool.request()
+        .input('id', sql.Int, checkResult.recordset[0].id)
+        .query('UPDATE user_tokens SET last_updated = SYSDATETIME(), is_active = 1 WHERE id = @id');
+    } else {
+      // Insert new token
+      await pool.request()
+        .input('phone', sql.NVarChar, phone)
+        .input('token', sql.NVarChar, fcm_token)
+        .input('device_type', sql.NVarChar, device_type || 'mobile')
+        .query('INSERT INTO user_tokens (user_phone, fcm_token, device_type) VALUES (@phone, @token, @device_type)');
+    }
+
+    console.log(`🔔 FCM Token registered for ${phone}`);
+    res.json({ success: true, message: 'Token registered successfully' });
+  } catch (error) {
+    console.error('❌ Error registering token:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -579,6 +677,27 @@ app.get('/terms-of-service', (req, res) => {
       success: false,
       message: 'Terms of Service not found',
       path: termsPath
+    });
+  }
+});
+
+// Serve Account Deletion Request Page
+app.get('/account-deletion', (req, res) => {
+  const accountDeletionPath = path.join(__dirname, '..', 'account-deletion.html');
+  console.log('🗑️ Serving Account Deletion page from:', accountDeletionPath);
+
+  // Set security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  if (require('fs').existsSync(accountDeletionPath)) {
+    res.sendFile(accountDeletionPath);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Account Deletion page not found',
+      path: accountDeletionPath
     });
   }
 });
@@ -940,7 +1059,7 @@ app.post('/api/customers', [
 ], async (req, res) => {
   try {
     console.log('👤 Customer registration request:', req.body.phone);
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
@@ -1042,7 +1161,7 @@ app.post('/api/login', [
 ], async (req, res) => {
   try {
     console.log('🔐 Login request:', req.body.phone);
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
@@ -1052,7 +1171,7 @@ app.post('/api/login', [
 
     const request = pool.request();
     request.input('phone', sql.NVarChar(15), phone);
-    
+
     const result = await request.query('SELECT * FROM customers WHERE phone = @phone');
 
     if (result.recordset.length === 0) {
@@ -1831,7 +1950,7 @@ app.post('/api/schemes', [
     schemeRequest.input('customer_name', sql.NVarChar(100), customer_name);
     schemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
     schemeRequest.input('metal_type', sql.NVarChar(10), metalType);
-    schemeRequest.input('monthly_amount', sql.Decimal(12,2), monthly_amount);
+    schemeRequest.input('monthly_amount', sql.Decimal(12, 2), monthly_amount);
     schemeRequest.input('duration_months', sql.Int, duration);
     schemeRequest.input('end_date', sql.DateTime, endDate);
     schemeRequest.input('terms_accepted', sql.Bit, terms_accepted);
@@ -1962,26 +2081,50 @@ app.post('/api/schemes/create-after-payment', [
         `);
 
         if (monthlyCheckResult.recordset.length > 0) {
+          // Customer already paid this month
           const lastPayment = monthlyCheckResult.recordset[0];
           const lastPaymentDate = new Date(lastPayment.created_at);
-          const nextPaymentDate = new Date(lastPaymentDate);
-          nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
-          console.log(`❌ Customer already paid for ${scheme_type} this month on ${lastPaymentDate.toISOString()}`);
-          console.log(`⏰ Next payment allowed from: ${nextPaymentDate.toISOString()}`);
+          console.log(`⚠️ Customer already paid for ${scheme_type} this month on ${lastPaymentDate.toISOString()}`);
+          console.log(`ℹ️ Linking transaction to existing scheme as an extra installment/duplicate payment`);
 
-          return res.status(400).json({
-            success: false,
-            message: `You have already paid for this month. Next payment is due from ${nextPaymentDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
-            error_code: 'MONTHLY_PAYMENT_ALREADY_MADE',
-            last_payment_date: lastPaymentDate.toISOString(),
-            next_payment_date: nextPaymentDate.toISOString(),
-            scheme_id: existingScheme.scheme_id
+          // Update transaction with scheme_id to prevent orphan transaction
+          const updateTxnRequest = pool.request();
+          updateTxnRequest.input('transaction_id', sql.NVarChar(100), transaction_id);
+          updateTxnRequest.input('scheme_id', sql.NVarChar(100), existingScheme.scheme_id);
+
+          await updateTxnRequest.query(`
+            UPDATE transactions
+            SET scheme_id = @scheme_id
+            WHERE transaction_id = @transaction_id
+          `);
+
+          console.log(`✅ Transaction ${transaction_id} updated with scheme_id: ${existingScheme.scheme_id}`);
+
+          // Return success so frontend knows it's handled (even if it's a duplicate/extra)
+          return res.json({
+            success: true,
+            message: 'Payment recorded for existing PLUS scheme',
+            scheme_id: existingScheme.scheme_id,
+            is_new: false,
+            warning: 'Payment for this month was already made. This has been recorded as an additional transaction.'
           });
         }
 
         // No payment this month, allow payment
         console.log(`✅ No payment found for ${scheme_type} this month, allowing payment`);
+
+        // Update transaction with scheme_id
+        const updateTxnRequest = pool.request();
+        updateTxnRequest.input('transaction_id', sql.NVarChar(100), transaction_id);
+        updateTxnRequest.input('scheme_id', sql.NVarChar(100), existingScheme.scheme_id);
+
+        await updateTxnRequest.query(`
+        UPDATE transactions
+        SET scheme_id = @scheme_id
+        WHERE transaction_id = @transaction_id
+      `);
+
         return res.json({
           success: true,
           message: 'Using existing PLUS scheme',
@@ -2039,7 +2182,7 @@ app.post('/api/schemes/create-after-payment', [
     schemeRequest.input('customer_name', sql.NVarChar(100), customer_name);
     schemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
     schemeRequest.input('metal_type', sql.NVarChar(10), metalType);
-    schemeRequest.input('monthly_amount', sql.Decimal(12,2), monthly_amount);
+    schemeRequest.input('monthly_amount', sql.Decimal(12, 2), monthly_amount);
     schemeRequest.input('duration_months', sql.Int, duration);
     schemeRequest.input('end_date', sql.DateTime, endDate);
     schemeRequest.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
@@ -2104,7 +2247,8 @@ app.get('/api/schemes/:customer_phone', async (req, res) => {
         c.email as customer_email,
         ISNULL(SUM(t.amount), 0) as calculated_invested,
         ISNULL(SUM(CASE WHEN s.metal_type = 'GOLD' THEN t.gold_grams WHEN s.metal_type = 'SILVER' THEN t.silver_grams ELSE 0 END), 0) as calculated_metal_accumulated,
-        COUNT(t.id) as payment_count
+        COUNT(t.id) as payment_count,
+        ISNULL(SUM(CASE WHEN t.status = 'SUCCESS' AND YEAR(t.created_at) = YEAR(GETDATE()) AND MONTH(t.created_at) = MONTH(GETDATE()) THEN 1 ELSE 0 END), 0) as current_month_payments
       FROM schemes s
       INNER JOIN customers c ON s.customer_id = c.id
       LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
@@ -2113,20 +2257,41 @@ app.get('/api/schemes/:customer_phone', async (req, res) => {
                s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
                s.status, s.start_date, s.end_date, s.total_invested,
                s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
+               s.terms_accepted, s.terms_accepted_at, s.closure_remarks, s.closure_date,
                s.business_id, s.created_at, s.updated_at,
                c.name, c.email
       ORDER BY s.created_at DESC
     `);
 
     // Update the schemes with calculated values
-    const updatedSchemes = schemes.recordset.map(scheme => ({
-      ...scheme,
-      total_invested: scheme.calculated_invested || 0,
-      total_metal_accumulated: scheme.calculated_metal_accumulated || 0,
-      total_amount_paid: scheme.calculated_invested || 0, // Frontend expects this field
-      completed_installments: scheme.payment_count || 0,
-      paid_months: scheme.payment_count || 0 // Frontend expects this field
-    }));
+    const updatedSchemes = schemes.recordset.map(scheme => {
+      // Ensure current_month_payments is a number, not null
+      const monthPayments = parseInt(scheme.current_month_payments) || 0;
+
+      // Calculate hasPaidThisMonth - true if any payments this month
+      const hasPaidThisMonth = monthPayments > 0;
+
+      // Debug logging for PLUS schemes
+      if (scheme.scheme_type && scheme.scheme_type.includes('PLUS')) {
+        console.log(`🔍 Scheme ${scheme.scheme_id} (${scheme.scheme_type}):`);
+        console.log(`   current_month_payments (raw): ${scheme.current_month_payments}`);
+        console.log(`   monthPayments (parsed): ${monthPayments}`);
+        console.log(`   hasPaidThisMonth: ${hasPaidThisMonth}`);
+      }
+
+      return {
+        ...scheme,
+        total_invested: scheme.calculated_invested || 0,
+        total_metal_accumulated: scheme.calculated_metal_accumulated || 0,
+        total_amount_paid: scheme.calculated_invested || 0, // Frontend expects this field
+        completed_installments: scheme.payment_count || 0,
+        paid_months: scheme.payment_count || 0, // Frontend expects this field
+        // CRITICAL: Return hasPaidThisMonth as boolean
+        has_paid_this_month: hasPaidThisMonth,
+        hasPaidThisMonth: hasPaidThisMonth, // Also include camelCase version
+        next_payment_allowed: scheme.scheme_type.includes('FLEXI') || monthPayments === 0
+      };
+    });
 
     // Calculate portfolio summary from actual payments
     const portfolioRequest = pool.request();
@@ -2145,7 +2310,14 @@ app.get('/api/schemes/:customer_phone', async (req, res) => {
       WHERE s.customer_phone = @customer_phone AND s.business_id = @business_id AND s.status = 'ACTIVE'
     `);
 
+
     console.log('✅ Schemes retrieved:', updatedSchemes.length);
+
+    // Debug: Log validation values for each scheme
+    updatedSchemes.forEach(scheme => {
+      console.log(`🔍 ${scheme.scheme_type}: has_paid_this_month=${scheme.has_paid_this_month}, next_payment_allowed=${scheme.next_payment_allowed}, current_month_payments=${scheme.current_month_payments}`);
+    });
+
     console.log('📊 Portfolio Summary:', portfolioSummary.recordset[0]);
 
     res.json({
@@ -2205,7 +2377,7 @@ app.put('/api/schemes/:scheme_id', [
         if (!monthly_amount) {
           return res.status(400).json({ success: false, message: 'Monthly amount required for UPDATE_AMOUNT action' });
         }
-        updateRequest.input('monthly_amount', sql.Decimal(12,2), monthly_amount);
+        updateRequest.input('monthly_amount', sql.Decimal(12, 2), monthly_amount);
         updateQuery = 'UPDATE schemes SET monthly_amount = @monthly_amount, updated_at = @updated_at WHERE scheme_id = @scheme_id';
         break;
       default:
@@ -2356,11 +2528,35 @@ app.post('/api/schemes/:scheme_id/invest', [
 
     const scheme = schemeResult.recordset[0];
 
+    // Check for monthly payment restriction (GOLDPLUS/SILVERPLUS)
+    if (scheme.scheme_type === 'GOLDPLUS' || scheme.scheme_type === 'SILVERPLUS') {
+      const monthlyCheckRequest = pool.request();
+      monthlyCheckRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+
+      const monthlyCheckResult = await monthlyCheckRequest.query(`
+        SELECT TOP 1 created_at 
+        FROM transactions 
+        WHERE scheme_id = @scheme_id 
+          AND status = 'SUCCESS' 
+          AND YEAR(created_at) = YEAR(GETDATE()) 
+          AND MONTH(created_at) = MONTH(GETDATE())
+      `);
+
+      if (monthlyCheckResult.recordset.length > 0) {
+        const lastPaymentDate = new Date(monthlyCheckResult.recordset[0].created_at);
+        return res.status(400).json({
+          success: false,
+          message: `Payment for this month already received on ${lastPaymentDate.toLocaleDateString()}`,
+          error_code: 'MONTHLY_PAYMENT_ALREADY_MADE'
+        });
+      }
+    }
+
     // Update scheme with new investment
     const updateSchemeRequest = pool.request();
     updateSchemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
-    updateSchemeRequest.input('amount', sql.Decimal(12,2), amount);
-    updateSchemeRequest.input('metal_grams', sql.Decimal(10,4), metal_grams);
+    updateSchemeRequest.input('amount', sql.Decimal(12, 2), amount);
+    updateSchemeRequest.input('metal_grams', sql.Decimal(10, 4), metal_grams);
     updateSchemeRequest.input('updated_at', sql.DateTime, new Date());
 
     await updateSchemeRequest.query(`
@@ -2379,11 +2575,11 @@ app.post('/api/schemes/:scheme_id/invest', [
     transactionRequest.input('customer_phone', sql.NVarChar(15), scheme.customer_phone);
     transactionRequest.input('customer_name', sql.NVarChar(100), scheme.customer_name);
     transactionRequest.input('type', sql.NVarChar(10), 'BUY');
-    transactionRequest.input('amount', sql.Decimal(12,2), amount);
-    transactionRequest.input('gold_grams', sql.Decimal(10,4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
-    transactionRequest.input('gold_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'GOLD' ? current_rate : 0);
-    transactionRequest.input('silver_grams', sql.Decimal(10,4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
-    transactionRequest.input('silver_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'SILVER' ? current_rate : 0);
+    transactionRequest.input('amount', sql.Decimal(12, 2), amount);
+    transactionRequest.input('gold_grams', sql.Decimal(10, 4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
+    transactionRequest.input('gold_price_per_gram', sql.Decimal(10, 2), scheme.metal_type === 'GOLD' ? current_rate : 0);
+    transactionRequest.input('silver_grams', sql.Decimal(10, 4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
+    transactionRequest.input('silver_price_per_gram', sql.Decimal(10, 2), scheme.metal_type === 'SILVER' ? current_rate : 0);
     transactionRequest.input('status', sql.NVarChar(20), 'SUCCESS');
     transactionRequest.input('payment_method', sql.NVarChar(50), 'SCHEME_INVESTMENT');
     transactionRequest.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id || `SCHEME_${transaction_id}`);
@@ -2471,8 +2667,8 @@ app.post('/api/schemes/:scheme_id/flexi-payment', [
     // Update scheme with new payment
     const updateSchemeRequest = pool.request();
     updateSchemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
-    updateSchemeRequest.input('amount', sql.Decimal(12,2), amount);
-    updateSchemeRequest.input('metal_grams', sql.Decimal(10,4), metal_grams);
+    updateSchemeRequest.input('amount', sql.Decimal(12, 2), amount);
+    updateSchemeRequest.input('metal_grams', sql.Decimal(10, 4), metal_grams);
     updateSchemeRequest.input('updated_at', sql.DateTime, new Date());
 
     await updateSchemeRequest.query(`
@@ -2490,11 +2686,11 @@ app.post('/api/schemes/:scheme_id/flexi-payment', [
     transactionRequest.input('customer_phone', sql.NVarChar(15), scheme.customer_phone);
     transactionRequest.input('customer_name', sql.NVarChar(100), scheme.customer_name);
     transactionRequest.input('type', sql.NVarChar(10), 'BUY');
-    transactionRequest.input('amount', sql.Decimal(12,2), amount);
-    transactionRequest.input('gold_grams', sql.Decimal(10,4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
-    transactionRequest.input('gold_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'GOLD' ? current_rate : 0);
-    transactionRequest.input('silver_grams', sql.Decimal(10,4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
-    transactionRequest.input('silver_price_per_gram', sql.Decimal(10,2), scheme.metal_type === 'SILVER' ? current_rate : 0);
+    transactionRequest.input('amount', sql.Decimal(12, 2), amount);
+    transactionRequest.input('gold_grams', sql.Decimal(10, 4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
+    transactionRequest.input('gold_price_per_gram', sql.Decimal(10, 2), scheme.metal_type === 'GOLD' ? current_rate : 0);
+    transactionRequest.input('silver_grams', sql.Decimal(10, 4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
+    transactionRequest.input('silver_price_per_gram', sql.Decimal(10, 2), scheme.metal_type === 'SILVER' ? current_rate : 0);
     transactionRequest.input('status', sql.NVarChar(20), 'SUCCESS');
     transactionRequest.input('payment_method', sql.NVarChar(50), payment_method || 'FLEXI_PAYMENT');
     transactionRequest.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id || `FLEXI_${transaction_id}`);
@@ -2644,17 +2840,14 @@ app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
     paymentRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
     paymentRequest.input('month', sql.Int, parseInt(month));
     paymentRequest.input('year', sql.Int, parseInt(year));
-
     const paymentResult = await paymentRequest.query(`
       SELECT COUNT(*) as payment_count
       FROM transactions
       WHERE customer_phone = @customer_phone
-        AND payment_method = 'SCHEME_INVESTMENT'
+        AND scheme_id = @scheme_id
         AND status = 'SUCCESS'
         AND MONTH(timestamp) = @month
         AND YEAR(timestamp) = @year
-        AND (additional_data LIKE '%"scheme_id":"' + @scheme_id + '"%'
-             OR description LIKE '%' + @scheme_id + '%')
     `);
 
     const hasPayment = paymentResult.recordset[0].payment_count > 0;
@@ -3337,6 +3530,30 @@ app.post('/api/payments/worldline/verify', async (req, res) => {
             updated_at = GETDATE()
         WHERE transaction_id = @transaction_id
       `);
+
+      // SEND NOTIFICATION TO OWNER (New)
+      if (mappedStatus === 'SUCCESS') {
+        try {
+          const detailResult = await pool.request()
+            .input('tid', sql.NVarChar, txnId)
+            .query('SELECT amount, customer_name, type, customer_phone FROM transactions WHERE transaction_id = @tid');
+
+          if (detailResult.recordset.length > 0) {
+            const tx = detailResult.recordset[0];
+            // Call helper function asynchronously
+            notifyOwnerOfPayment({
+              amount: tx.amount,
+              customer_name: tx.customer_name,
+              type: tx.type,
+              transaction_id: txnId,
+              customer_phone: tx.customer_phone
+            }).catch(err => console.error('Notification failed:', err));
+          }
+        } catch (notifErr) {
+          console.error('Notification fetch error:', notifErr);
+        }
+      }
+
 
       console.log(`✅ [${requestId}] STEP 3: Database updated successfully`);
 
@@ -4469,6 +4686,7 @@ app.use('*', (req, res) => {
       '/worldline-checkout',
       '/privacy-policy',
       '/terms-of-service',
+      '/account-deletion',
       '/admin_portal/index.html'
     ]
   });
@@ -4537,7 +4755,7 @@ async function startServer() {
 
 
 
-          console.error('� To fix ASN1 encoding errors:');
+        console.error('� To fix ASN1 encoding errors:');
 
 
 
@@ -4618,6 +4836,7 @@ async function startServer() {
       console.log(`🔒 Privacy & Legal URLs:`);
       console.log(`   Privacy:  https://api.vmuruganjewellery.co.in:${httpsPort}/privacy-policy`);
       console.log(`   Terms:    https://api.vmuruganjewellery.co.in:${httpsPort}/terms-of-service`);
+      console.log(`   Account Deletion: https://api.vmuruganjewellery.co.in:${httpsPort}/account-deletion`);
       console.log(`💳 Worldline Payment Integration (Clean Slate Rebuild):`);
       console.log(`   Token:    https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/token`);
       console.log(`   Verify:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/verify`);
@@ -5811,5 +6030,99 @@ startServer().catch(error => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
 });
+
+// ==========================================
+// NOTIFICATION HELPER FUNCTIONS
+// ==========================================
+
+async function sendPushNotification(tokens, title, body, data = {}) {
+  if (!tokens || tokens.length === 0) return;
+
+  const payload = {
+    notification: {
+      title: title,
+      body: body
+    },
+    data: data,
+    tokens: tokens
+  };
+
+  try {
+    const response = await admin.messaging().sendMulticast(payload);
+    console.log(`🔔 Notifications sent: ${response.successCount} successful, ${response.failureCount} failed`);
+
+    // Handle failed tokens (cleanup)
+    if (response.failureCount > 0) {
+      const failedTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          failedTokens.push(tokens[idx]);
+        }
+      });
+      // Optional: Remove failed tokens from DB
+      if (failedTokens.length > 0) {
+        console.log(`⚠️ Failed tokens: ${failedTokens.length}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error sending push notification:', error);
+  }
+}
+
+// Function to notify owner about new payment
+async function notifyOwnerOfPayment(paymentData) {
+  try {
+    // 1. Get Owner Phone from Environment Variable or Config
+    // Default fallback to likely owner number (VMurugan)
+    const ownerPhone = process.env.OWNER_PHONE || '9840248889';
+
+    // 2. Get Owner's FCM Tokens
+    const result = await pool.request()
+      .input('phone', sql.NVarChar, ownerPhone)
+      .query('SELECT fcm_token FROM user_tokens WHERE user_phone = @phone AND is_active = 1');
+
+    const tokens = result.recordset.map(r => r.fcm_token);
+
+    if (tokens.length === 0) {
+      console.log(`⚠️ No active tokens found for owner (${ownerPhone})`);
+      return;
+    }
+
+    // 3. Construct Message
+    const title = '💰 New Payment Received';
+    const amount = paymentData.amount || 0;
+    const customer = paymentData.customer_name || 'Customer';
+    const type = paymentData.type === 'BUY' ? 'Gold Purchase' : 'Transaction';
+
+    // Clean body text
+    const body = `₹${amount} received from ${customer} for ${type}`;
+
+    // 4. Send Notification
+    await sendPushNotification(tokens, title, body, {
+      type: 'payment_success',
+      transaction_id: paymentData.transaction_id || '',
+      amount: amount.toString()
+    });
+
+    console.log(`🔔 Payment notification sent to owner (${ownerPhone})`);
+
+    // 5. Also save to notifications table for history
+    const notificationId = `NOTIF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    await pool.request()
+      .input('id', sql.NVarChar, notificationId)
+      .input('user_id', sql.NVarChar, ownerPhone)
+      .input('type', sql.NVarChar, 'PAYMENT_RECEIVED')
+      .input('title', sql.NVarChar, title)
+      .input('message', sql.NVarChar, body)
+      .input('data', sql.NVarChar, JSON.stringify(paymentData))
+      .query(`
+        INSERT INTO notifications (notification_id, user_id, type, title, message, data, created_at)
+        VALUES (@id, @user_id, @type, @title, @message, @data, SYSDATETIME())
+      `);
+
+  } catch (error) {
+    console.error('❌ Error notifying owner:', error);
+  }
+}
 
 module.exports = app;

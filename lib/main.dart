@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_spacing.dart';
@@ -31,6 +32,7 @@ import 'core/services/scheme_management_service.dart';
 import 'core/services/customer_service.dart';
 import 'features/payment/services/worldline_payment_service.dart';
 import 'features/notifications/models/notification_model.dart';
+import 'core/services/fcm_service.dart';
 
 // Global navigator key for auto-logout navigation
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -39,15 +41,29 @@ void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Enable edge-to-edge display for Android 15+ compatibility
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
+
   // Initialize secure HTTP client for SSL certificate handling
   SecureHttpClient.initialize();
 
   // Initialize Firebase for free SMS OTP functionality
-  // TEMPORARY FIX: Disable Firebase to test if it's causing iOS crash
+  // Critical for Phone Authentication
   try {
     await FirebaseInit.initialize();
+    print('✅ Firebase initialized successfully');
+    
+    // Initialize FCM for Push Notifications
+    try {
+      await FCMService.initialize();
+      print('✅ FCM initialized successfully');
+    } catch (fcmError) {
+      print('⚠️ FCM initialization failed: $fcmError');
+    }
   } catch (e) {
-    print('⚠️ Firebase initialization failed (app will work without it): $e');
+    print('⚠️ Firebase initialization failed: $e');
   }
 
   // Worldline Payment Service will auto-initialize when first used

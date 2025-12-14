@@ -384,19 +384,41 @@ class PortfolioService {
           print('📋 Processing transactions...');
           final processedTransactions = transactions.map((txnData) {
             print('  🔄 Processing transaction: ${txnData['transaction_id']}');
+            
+            // Helper to safe parse double
+            double safeDouble(dynamic value) {
+              if (value == null) return 0.0;
+              if (value is num) return value.toDouble();
+              try {
+                return double.parse(value.toString());
+              } catch (_) {
+                return 0.0;
+              }
+            }
+
+            final goldGrams = safeDouble(txnData['gold_grams']);
+            final silverGrams = safeDouble(txnData['silver_grams']);
+            
+            // Infer metal type if missing or ambiguous
+            String metalType = txnData['metal_type'] ?? 'GOLD';
+            if ((metalType == 'GOLD' || metalType.isEmpty) && silverGrams > 0 && goldGrams == 0) {
+              metalType = 'SILVER';
+            }
+
             return Transaction.fromMap({
               'id': txnData['id'],
               'transaction_id': txnData['transaction_id'],
               'type': txnData['transaction_type'] ?? 'BUY',
               'amount': txnData['amount'],
-              'metal_grams': (txnData['gold_grams'] ?? 0.0) + (txnData['silver_grams'] ?? 0.0),
+              'metal_grams': goldGrams + silverGrams,
               'metal_price_per_gram': txnData['gold_price_per_gram'] ?? txnData['silver_price_per_gram'] ?? 0.0,
-              'metal_type': txnData['metal_type'] ?? 'GOLD',
+              'metal_type': metalType,
               'payment_method': txnData['payment_method'] ?? 'NET_BANKING',
               'status': txnData['status'],
               'gateway_transaction_id': txnData['gateway_transaction_id'],
               'created_at': txnData['timestamp'],
               'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
+              'scheme_id': txnData['scheme_id'], // Ensure scheme_id is mapped
             });
           }).toList();
 

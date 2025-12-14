@@ -12,10 +12,11 @@
     <!-- Device info permissions -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- File storage permissions for downloads -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <!-- File storage permissions for downloads (only for Android 9 and below) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!-- Camera permission for QR code scanning (if needed) -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -48,6 +49,7 @@
         android:allowBackup="true"
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:enableOnBackInvokedCallback="true"
         tools:replace="android:label,android:allowBackup">
         <activity
             android:name=".MainActivity"
@@ -108,16 +110,15 @@
             </intent-filter>
         </activity>
 
-            <!-- CRITICAL: Official Worldline Checkout Activity -->
-        <activity
-            android:name="com.weipl.checkout.WLCheckoutActivity"
-            android:exported="true"
-            android:screenOrientation="portrait" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Declare 16 KB page size support for Google Play -->
+        <meta-data
+            android:name="android.app.supports_16kb_page_size"
+            android:value="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

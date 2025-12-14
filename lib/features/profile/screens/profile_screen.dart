@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -31,7 +32,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, String> _userProfile = {};
-  bool _isLoading = true;
+  bool _isLoading = false;  // ✅ Changed from true to false for instant UI
   String _errorMessage = '';
   String _currentLanguage = 'en';
   String _currentLanguageDisplay = 'English';
@@ -39,37 +40,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Load data asynchronously without blocking UI
     _loadCustomerProfile();
     _loadLanguagePreference();
   }
 
-  Future<void> _loadCustomerProfile() async {
+  Future<void> _loadCustomerProfile({bool forceRefresh = false}) async {
     try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
-
-      // Check both old and new authentication data
+      // Check authentication data
       final prefs = await SharedPreferences.getInstance();
-
-      // First try new authentication data
       final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
       final userPhone = prefs.getString('user_phone');
 
-      // CRITICAL FIX: Fetch fresh data from API instead of using cached data
-      if (isLoggedIn && userPhone != null) {
-        print('🔄 Profile: Fetching fresh customer data from API for phone: $userPhone');
+      if (!isLoggedIn || userPhone == null) {
+        setState(() {
+          _errorMessage = 'Please login to view profile';
+          _isLoading = false;
+        });
+        return;
+      }
 
-        // Fetch fresh data from API
+      // INSTANT LOAD: First, load cached data immediately for instant display
+      if (!forceRefresh) {
+        final cachedUserData = prefs.getString('user_data');
+        if (cachedUserData != null) {
+          try {
+            final userData = jsonDecode(cachedUserData);
+            print('⚡ Profile: Loading cached data instantly');
+            
+            // Format the registration date
+            String formattedJoinDate = 'Recently';
+            if (userData['registration_date'] != null) {
+              try {
+                final regDate = DateTime.parse(userData['registration_date']);
+                formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
+              } catch (e) {
+                formattedJoinDate = 'Recently';
+              }
+            }
+
+            // Determine KYC status
+            String kycStatus = 'Pending';
+            if (userData['address'] != null && userData['address'].toString().isNotEmpty &&
+                userData['address'] != 'Not Available' &&
+                userData['pan_card'] != null && userData['pan_card'].toString().isNotEmpty &&
+                userData['pan_card'] != 'Not Available') {
+              kycStatus = 'Verified';
+            }
+
+            // Use customer_id from cached data
+            String customerId = userData['customer_id']?.toString() ??
+                               userData['business_id']?.toString() ??
+                               'N/A';
+
+            // INSTANT UPDATE: Show cached data immediately
+            setState(() {
+              _userProfile = {
+                'name': userData['name'] ?? 'User',
+                'phone': userPhone,
+                'email': userData['email'] ?? 'Not Available',
+                'customer_id': customerId,
+                'address': userData['address'] ?? 'Not Available',
+                'pan': userData['pan_card'] ?? 'Not Available',
+                'joinDate': formattedJoinDate,
+                'kycStatus': kycStatus,
+              };
+              _isLoading = false; // ✅ Stop loading immediately
+            });
+            
+            print('✅ Profile: Cached data displayed instantly');
+          } catch (e) {
+            print('⚠️ Profile: Error parsing cached data: $e');
+          }
+        }
+      }
+
+      // BACKGROUND REFRESH: Fetch fresh data in background (non-blocking)
+      if (forceRefresh) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = '';
+        });
+      }
+      
+      print('🔄 Profile: Fetching fresh data in background...');
+      
+      try {
         final apiResult = await ApiService.getCustomerByPhone(userPhone);
 
         if (apiResult['success'] == true && apiResult['customer'] != null) {
           final userData = apiResult['customer'];
-          print('✅ Profile: Fresh customer data fetched successfully');
-          print('   Customer ID: ${userData['customer_id']}');
-          print('   Address: ${userData['address']}');
-          print('   PAN Card: ${userData['pan_card']}');
+          print('✅ Profile: Fresh data fetched successfully');
+          
           // Format the registration date
           String formattedJoinDate = 'Recently';
           if (userData['registration_date'] != null) {
@@ -81,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             }
           }
 
-          // Determine KYC status based on actual data
+          // Determine KYC status
           String kycStatus = 'Pending';
           if (userData['address'] != null && userData['address'].toString().isNotEmpty &&
               userData['address'] != 'Not Available' &&
@@ -90,11 +152,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             kycStatus = 'Verified';
           }
 
-          // Use customer_id from API (VM1, VM2, etc.)
           String customerId = userData['customer_id']?.toString() ??
                              userData['business_id']?.toString() ??
                              'N/A';
 
+          // Update UI with fresh data
           setState(() {
             _userProfile = {
               'name': userData['name'] ?? 'User',
@@ -109,63 +171,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _isLoading = false;
           });
 
-          // Update cached data with fresh data
+          // Update cache with fresh data
           await prefs.setString('user_data', jsonEncode(userData));
-          print('✅ Profile: Cached data updated with fresh API data');
-          return;
+          print('✅ Profile: Cache updated with fresh data');
         } else {
-          print('⚠️ Profile: Failed to fetch fresh data, falling back to cached data');
+          print('⚠️ Profile: API returned no data, keeping cached data');
+          setState(() {
+            _isLoading = false;
+          });
         }
-      }
-
-      // Fallback to old customer service data
-      final customerInfo = await CustomerService.getCustomerInfo();
-
-      if (customerInfo['phone'] != null && customerInfo['phone']!.isNotEmpty) {
-        // Format the registration date
-        String formattedJoinDate = 'Recently';
-        if (customerInfo['registration_date'] != null && customerInfo['registration_date']!.isNotEmpty) {
-          try {
-            final regDate = DateTime.parse(customerInfo['registration_date']!);
-            formattedJoinDate = '${regDate.day}/${regDate.month}/${regDate.year}';
-          } catch (e) {
-            formattedJoinDate = 'Recently';
-          }
+      } catch (e) {
+        print('⚠️ Profile: Background refresh failed: $e');
+        // Don't show error if we already have cached data displayed
+        if (_userProfile.isEmpty) {
+          setState(() {
+            _errorMessage = 'Error loading profile: $e';
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _isLoading = false;
+          });
         }
-
-        // Determine KYC status based on actual data
-        String kycStatus = 'Pending';
-        if (customerInfo['address'] != null && customerInfo['address'].toString().isNotEmpty &&
-            customerInfo['address'] != 'Not Available' &&
-            customerInfo['pan_card'] != null && customerInfo['pan_card'].toString().isNotEmpty &&
-            customerInfo['pan_card'] != 'Not Available') {
-          kycStatus = 'Verified';
-        }
-
-        // Use business_id as Customer ID if available
-        String customerId = customerInfo['business_id']?.toString() ??
-                           customerInfo['customer_id']?.toString() ??
-                           'CUST${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-
-        // Format the data for display
-        setState(() {
-          _userProfile = {
-            'name': customerInfo['name'] ?? 'Not Available',
-            'phone': customerInfo['phone'] ?? 'Not Available',
-            'email': customerInfo['email'] ?? 'Not Available',
-            'customer_id': customerId,
-            'address': customerInfo['address'] ?? 'Not Available',
-            'pan': customerInfo['pan_card'] ?? 'Not Available',
-            'joinDate': formattedJoinDate,
-            'kycStatus': kycStatus,
-          };
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Please login to view profile';
-          _isLoading = false;
-        });
       }
     } catch (e) {
       setState(() {
@@ -191,8 +218,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         iconTheme: const IconThemeData(color: AppColors.primaryGreen),  // ✅ Changed to Green
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadCustomerProfile,
+            icon: _isLoading 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : () => _loadCustomerProfile(forceRefresh: true),
           ),
           IconButton(
             icon: const Icon(Icons.edit),
@@ -200,67 +236,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
+      body: _errorMessage.isNotEmpty
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading profile...'),
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[300],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _errorMessage,
+                    style: const TextStyle(fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _loadCustomerProfile(forceRefresh: true),
+                    child: const Text('Retry'),
+                  ),
                 ],
               ),
             )
-          : _errorMessage.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red[300],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage,
-                        style: const TextStyle(fontSize: 16),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadCustomerProfile,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Column(
-                    children: [
-                      // Profile Header
-                      _buildProfileHeader(),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                children: [
+                  // Profile Header
+                  _buildProfileHeader(),
 
-            const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.lg),
 
-            // Profile Details
-            _buildProfileDetails(),
+        // Profile Details
+        _buildProfileDetails(),
 
-            const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.lg),
 
-            // Account Actions
-            _buildAccountActions(),
+        // Account Actions
+        _buildAccountActions(),
 
-            const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.lg),
 
-            // Settings
-            _buildSettings(),
+        // Settings
+        _buildSettings(),
 
-            const SizedBox(height: AppSpacing.md),
-          ],
-        ),
-      ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+    ),
+  ),
     );
   }
 
@@ -1253,63 +1278,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
-      // Save PDF to device Downloads folder
-      Directory? directory;
+      // Save PDF to device
       String fileName = 'VMurugan_Statement_${period}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final pdfBytes = await pdf.save();
 
       try {
         if (Platform.isAndroid) {
-          // Try multiple Android download locations
-          final downloadPaths = [
-            '/storage/emulated/0/Download',
-            '/storage/emulated/0/Downloads',
-            '/sdcard/Download',
-            '/sdcard/Downloads',
-          ];
+          // For Android 10+ (API 29+), use Scoped Storage (MediaStore)
+          // This doesn't require MANAGE_EXTERNAL_STORAGE permission
+          final androidInfo = await DeviceInfoPlugin().androidInfo;
+          
+          if (androidInfo.version.sdkInt >= 29) {
+            // Android 10+ - Use Scoped Storage via MediaStore
+            print('📱 Android ${androidInfo.version.sdkInt} - Using Scoped Storage');
+            
+            // Use the Downloads directory (app-specific, no permission needed)
+            final directory = await getExternalStorageDirectory();
+            if (directory != null) {
+              // Create a Downloads subfolder in app's external storage
+              final downloadsDir = Directory('${directory.path}/Downloads');
+              if (!await downloadsDir.exists()) {
+                await downloadsDir.create(recursive: true);
+              }
+              
+              final file = File('${downloadsDir.path}/$fileName');
+              await file.writeAsBytes(pdfBytes);
+              
+              print('✅ PDF saved to app storage: ${file.path}');
+              print('📂 File size: ${await file.length()} bytes');
+            } else {
+              throw Exception('Unable to access app storage');
+            }
+          } else {
+            // Android 9 and below - Use legacy external storage
+            print('📱 Android ${androidInfo.version.sdkInt} - Using legacy storage');
+            
+            final downloadPaths = [
+              '/storage/emulated/0/Download',
+              '/storage/emulated/0/Downloads',
+            ];
 
-          for (final path in downloadPaths) {
-            directory = Directory(path);
-            if (await directory.exists()) {
-              print('✅ Found Downloads directory: $path');
-              break;
+            Directory? directory;
+            for (final path in downloadPaths) {
+              directory = Directory(path);
+              if (await directory.exists()) {
+                print('✅ Found Downloads directory: $path');
+                break;
+              }
+            }
+
+            if (directory == null || !await directory.exists()) {
+              directory = await getExternalStorageDirectory();
+            }
+
+            if (directory != null) {
+              final file = File('${directory.path}/$fileName');
+              await file.writeAsBytes(pdfBytes);
+              print('✅ PDF saved: ${file.path}');
+            } else {
+              throw Exception('Unable to access storage');
             }
           }
-
-          // If no Downloads folder found, use external storage
-          if (directory == null || !await directory.exists()) {
-            directory = await getExternalStorageDirectory();
-            print('📁 Using external storage: ${directory?.path}');
-          }
         } else {
-          // For other platforms, use documents directory
-          directory = await getApplicationDocumentsDirectory();
+          // For iOS and other platforms
+          final directory = await getApplicationDocumentsDirectory();
+          final file = File('${directory.path}/$fileName');
+          await file.writeAsBytes(pdfBytes);
+          print('✅ PDF saved: ${file.path}');
         }
       } catch (e) {
-        print('❌ Error accessing storage: $e');
-        // Fallback to documents directory
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      if (directory == null) {
-        throw Exception('Unable to access device storage');
-      }
-
-      final file = File('${directory.path}/$fileName');
-
-      // Ensure directory exists
-      await directory.create(recursive: true);
-
-      // Write PDF file
-      await file.writeAsBytes(await pdf.save());
-
-      print('✅ PDF saved successfully to: ${file.path}');
-      print('📂 File size: ${await file.length()} bytes');
-
-      // Verify file was created
-      if (await file.exists()) {
-        print('✅ File verification successful');
-      } else {
-        throw Exception('File was not created successfully');
+        print('❌ Error saving PDF: $e');
+        // Fallback to text statement in clipboard
+        await _generateTextStatement(transactions, period);
+        rethrow;
       }
     } catch (e) {
       print('Error generating PDF: $e');
@@ -1412,9 +1453,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: const Text(
                 '✅ PDF statement has been generated and saved successfully!\n\n'
-                '📂 Location: Downloads folder\n'
-                '📱 Access: Open your file manager → Downloads → Look for "VMurugan_Statement_..." file\n'
-                '📄 Format: PDF document ready for viewing',
+                '📂 Location: App Files (Android/data/com.vmurugan.digi_gold/files/Downloads)\n'
+                '📱 Access: Use your file manager app to find the PDF in VMurugan app folder\n'
+                '📄 Format: PDF document ready for viewing\n\n'
+                '💡 Tip: You can share or move the file to your device Downloads folder using your file manager.',
                 style: TextStyle(fontSize: 13),
               ),
             ),

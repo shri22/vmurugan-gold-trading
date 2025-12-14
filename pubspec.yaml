@@ -1,7 +1,7 @@
 name: digi_gold
 description: "VMurugan - Digital Gold Trading Platform"
 publish_to: 'none'
-version: 1.3.2+17
+version: 1.3.3+23
 
 environment:
   sdk: ^3.8.1
@@ -24,6 +24,8 @@ dependencies:
   intl: ^0.20.2
   # Omniware Payment Gateway SDK
   omniware_payment_gateway_totalxsoftware: ^1.0.12
+  firebase_messaging: ^15.2.10
+  device_info_plus: ^11.2.0
 
 dev_dependencies:
   flutter_test:

@@ -27,6 +27,7 @@ import '../../payment/models/payment_response.dart';
 import '../../payment/widgets/payment_options_dialog.dart';
 import '../../../core/config/validation_config.dart';
 import '../../schemes/services/scheme_payment_validation_service.dart';
+import '../../../core/config/server_config.dart';
 
 class BuySilverScreen extends StatefulWidget {
   final double? prefilledAmount;
@@ -862,6 +863,120 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       }
     }
 
+    // CRITICAL: Validate PLUS schemes for monthly payment limit BEFORE payment
+    if (widget.schemeType != null && (widget.schemeType == 'GOLDPLUS' || widget.schemeType == 'SILVERPLUS')) {
+      print('🔍 PLUS SCHEME DETECTED: ${widget.schemeType}');
+      print('🔍 Checking if payment already made this month...');
+      
+      final customerInfo = await CustomerService.getCustomerInfo();
+      final customerPhone = customerInfo['phone'] ?? '';
+      
+      if (customerPhone.isNotEmpty && widget.schemeId != null) {
+        // Fetch scheme data to check has_paid_this_month
+        try {
+          final response = await SecureHttpClient.get(
+            '${ServerConfig.baseUrl}/schemes/$customerPhone',
+          );
+          
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data['success'] == true) {
+              final schemes = data['schemes'] as List<dynamic>;
+              
+              // Find the current scheme
+              final currentScheme = schemes.firstWhere(
+                (s) => s['scheme_id'] == widget.schemeId,
+                orElse: () => null,
+              );
+              
+              if (currentScheme != null) {
+                // Parse has_paid_this_month (handle both int and bool)
+                final rawHasPaid = currentScheme['has_paid_this_month'];
+                bool hasPaidThisMonth = false;
+                
+                if (rawHasPaid is bool) {
+                  hasPaidThisMonth = rawHasPaid;
+                } else if (rawHasPaid is int) {
+                  hasPaidThisMonth = rawHasPaid == 1;
+                } else if (rawHasPaid is String) {
+                  hasPaidThisMonth = rawHasPaid == '1' || rawHasPaid.toLowerCase() == 'true';
+                }
+                
+                print('🔍 Scheme ${widget.schemeType}: has_paid_this_month = $hasPaidThisMonth');
+                
+                if (hasPaidThisMonth) {
+                  print('⛔ BLOCKING PAYMENT: Already paid this month');
+                  
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Row(
+                        children: [
+                          Icon(Icons.block, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Payment Already Made'),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'You have already made your payment for this month.',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 12),
+                          Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '📅 Monthly Payment Rule',
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'PLUS schemes allow only ONE payment per calendar month.',
+                                  style: TextStyle(color: Colors.orange.shade800),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Please wait until next month to make your next payment.',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('OK', style: TextStyle(fontSize: 16)),
+                        ),
+                      ],
+                    ),
+                  );
+                  return; // STOP - Do not proceed to payment
+                }
+                
+                print('✅ Payment allowed - has not paid this month');
+              }
+            }
+          }
+        } catch (e) {
+          print('❌ Error checking payment status: $e');
+          // Continue to payment if check fails (fail open)
+        }
+      }
+    }
+
     // If this is a scheme payment, validate scheme payment rules
     if (widget.isFromScheme == true && widget.schemeId != null) {
       print('🔍 BUY SILVER: This is a scheme payment');
@@ -1225,15 +1340,31 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       // Save transaction with customer data
       print('📡 Calling CustomerService.saveTransactionWithCustomerData...');
 
+      // Prepare scheme details if applicable
+      String? schemeId;
+      String? schemeType;
+      
+      if (widget.isFromScheme == true) {
+        schemeId = widget.schemeId;
+        schemeType = widget.schemeType;
+        print('   Scheme Payment: YES');
+        print('   Scheme ID: $schemeId');
+        print('   Scheme Type: $schemeType');
+      }
+
       final success = await CustomerService.saveTransactionWithCustomerData(
         transactionId: response.transactionId,
         type: 'BUY',
         amount: response.amount,
-        goldGrams: silverGrams, // Using goldGrams field for silver grams (backward compatibility)
-        goldPricePerGram: _currentPrice!.pricePerGram,
+        goldGrams: 0.0, // Set to 0 for silver purchase
+        goldPricePerGram: 0.0, // Set to 0 for silver purchase
         paymentMethod: response.paymentMethod,
         status: 'SUCCESS',
         gatewayTransactionId: response.gatewayTransactionId ?? '',
+        schemeId: schemeId,
+        schemeType: schemeType,
+        silverGrams: silverGrams, // Correctly pass silver grams
+        silverPricePerGram: _currentPrice!.pricePerGram,
       );
 
       if (success) {

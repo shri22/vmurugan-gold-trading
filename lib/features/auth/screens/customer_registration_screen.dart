@@ -11,6 +11,7 @@ import '../../../core/services/secure_http_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/config/sql_server_config.dart';
 import 'otp_verification_screen.dart';
+import '../../../core/services/fcm_service.dart';
 
 class CustomerRegistrationScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -154,6 +155,9 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
           await CustomerService.saveLoginSession(phone);
 
           print('✅ Registration completed and phone saved for quick login: $phone');
+
+          // Register FCM Token for notifications
+          await FCMService.registerTokenOnLogin();
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

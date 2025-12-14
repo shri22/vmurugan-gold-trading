@@ -429,56 +429,38 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     });
 
     try {
-      // Use HTTPS API-based OTP verification
-      final response = await AuthService.makeSecureRequest(
-        '/auth/verify-otp',
-        method: 'POST',
-        body: {
-          'phone': widget.phoneNumber,
-          'otp': otpCode,
-        },
-      );
+      // 1. Verify OTP using AuthService (Firebase or Custom SMS validation)
+      // This happens entirely on the client side for Firebase
+      final isVerified = await AuthService.verifyOTP(otpCode);
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (isVerified) {
+        _showSnackBar('OTP verified successfully!', AppColors.success);
+        
+        // 2. Check if user is already registered on the backend
+        // We know the phone is valid now
+        final isRegistered = await AuthService.isPhoneRegistered(widget.phoneNumber);
+        
+        // Save login session basics
+        await CustomerService.saveLoginSession(widget.phoneNumber);
 
-      if (response['success'] == true) {
-        final data = response;
+        setState(() {
+          _isLoading = false;
+        });
 
-        if (data['success'] == true) {
-          // Save login state using AuthService
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('is_logged_in', true);
-          await prefs.setString('user_phone', widget.phoneNumber);
-          await prefs.setString('user_data', jsonEncode(data['customer']));
-
-          // CRITICAL FIX: Save customer data in the format CustomerService expects
-          final customerData = data['customer'] ?? {};
-          await prefs.setString('customer_phone', widget.phoneNumber);
-          await prefs.setString('customer_name', customerData['name'] ?? 'Customer');
-          await prefs.setString('customer_email', customerData['email'] ?? '');
-          await prefs.setString('customer_address', customerData['address'] ?? '');
-          await prefs.setString('customer_pan_card', customerData['pan_card'] ?? '');
-          await prefs.setString('customer_id', customerData['id']?.toString() ?? '');
-          await prefs.setBool('customer_registered', true);
-
-          print('✅ OTP Verification: Customer data saved in CustomerService format');
-
-          // Also save to CustomerService for backward compatibility
-          await CustomerService.saveLoginSession(widget.phoneNumber);
-
-          _showSnackBar('OTP verified successfully!', AppColors.success);
-
-          // Wait a moment for the success message to be visible
-          await Future.delayed(const Duration(seconds: 1));
-
-          // Navigate based on user type
-          if (mounted) {
-            if (data['isNewUser'] == true) {
-              // Case 1: First Time Install - New user goes to registration
-              // This will set up MPIN and save phone for future quick logins
-              Navigator.pushReplacement(
+        if (mounted) {
+          if (isRegistered) {
+             print('✅ Existing user verified - going to MPIN login');
+             // Existing user: Go to MPIN login
+             Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const QuickMpinLoginScreen(),
+                ),
+              );
+          } else {
+             print('✅ New user verified - going to registration');
+             // New user: Go to registration
+             Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
                   builder: (context) => CustomerRegistrationScreen(
@@ -486,40 +468,20 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   ),
                 ),
               );
-            } else {
-              // Case 3: Registered User on New Device - Existing user verified
-              // Save phone for future quick logins and go to MPIN login
-              await AuthService.savePhoneNumber(widget.phoneNumber);
-
-              // Mark as registered customer
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('customer_registered', true);
-
-              print('✅ Existing user verified - going to MPIN login');
-
-              // Go to MPIN login screen for existing users
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const QuickMpinLoginScreen(),
-                ),
-              );
-            }
           }
-        } else {
-          _showSnackBar(data['message'] ?? 'Invalid OTP. Please try again.', AppColors.error);
-          _clearOTP();
         }
       } else {
-        final errorData = response;
-        _showSnackBar(errorData['message'] ?? 'Verification failed. Please try again.', AppColors.error);
+         setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar('Invalid OTP. Please try again.', AppColors.error);
         _clearOTP();
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showSnackBar('Network error. Please check your connection.', AppColors.error);
+      _showSnackBar('Verification error: $e', AppColors.error);
       _clearOTP();
       print('OTP verification error: $e');
     }

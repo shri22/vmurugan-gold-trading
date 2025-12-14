@@ -14,6 +14,8 @@ import '../models/enhanced_scheme_model.dart';
 import 'filtered_scheme_selection_screen.dart';
 import '../../gold/screens/buy_gold_screen.dart';
 import '../../silver/screens/buy_silver_screen.dart';
+import '../../gold/services/gold_scheme_service.dart';
+import '../../gold/models/gold_scheme_model.dart';
 
 class SchemeDetailsScreen extends StatefulWidget {
   final MetalType metalType;
@@ -570,6 +572,16 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     );
   }
 
+  // Helper function to normalize scheme types - removes ALL special characters
+  String _normalizeSchemeType(String? value) {
+    if (value == null) return '';
+    return value
+        .toString()
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
+
   void _viewScheme(SchemeDetailModel scheme) async {
     try {
       // Get customer information
@@ -587,8 +599,332 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
         return;
       }
 
+      // IMMEDIATE DEBUG - Confirm _viewScheme is being called
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('🚨 FUNCTION CALLED'),
+          content: Text('_viewScheme() is running for ${scheme.name}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // CRITICAL: Check monthly payment status before proceeding
+      try {
+        // Determine scheme type
+        String targetSchemeType;
+        if (widget.metalType == MetalType.gold) {
+          targetSchemeType = scheme.name.contains('Plus') ? 'GOLDPLUS' : 'GOLDFLEXI';
+        } else {
+          targetSchemeType = scheme.name.contains('Plus') ? 'SILVERPLUS' : 'SILVERFLEXI';
+        }
+
+        print('🔍 FETCHING SCHEMES FOR VALIDATION...');
+        print('   Target Type: $targetSchemeType');
+        print('   Customer Phone: $finalPhone');
+
+        // Show a dialog BEFORE fetching to confirm we reach this point
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('📡 FETCHING DATA'),
+            content: Text('About to fetch schemes from backend for validation...'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
+
+        // Fetch fresh schemes to ensure we have latest payment status
+        List<GoldSchemeModel> userSchemes;
+        try {
+          userSchemes = await GoldSchemeService().fetchSchemesFromBackend();
+        } catch (fetchError) {
+          Navigator.pop(context); // Hide loading
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('❌ FETCH ERROR'),
+              content: Text('Failed to fetch schemes:\n\n$fetchError'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return; // STOP - cannot validate without data
+        }
+        
+        print('📊 FETCHED ${userSchemes.length} SCHEMES FROM BACKEND');
+        
+        // Show success dialog
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('✅ FETCH SUCCESS'),
+            content: Text('Fetched ${userSchemes.length} schemes successfully!\n\nNow checking validation...'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
+        
+        // DEBUG: Print RAW schemes to see exact backend format
+        print('DEBUG RAW SCHEMES ↓↓↓');
+        for (var s in userSchemes) {
+          print('schemeType="${s.schemeType}", paid=${s.hasPaidThisMonth}, active=${s.isActive}');
+        }
+        
+        // Normalize target for comparison using class method
+        final normalizedTarget = _normalizeSchemeType(targetSchemeType);
+        
+        print("Normalized Target = $normalizedTarget");
+        
+        // Find active scheme of this type with startsWith() matching
+        final activeSchemes = userSchemes.where((s) {
+          final backendType = _normalizeSchemeType(s.schemeType);
+          print("Checking backendType='$backendType' against '$normalizedTarget'");
+          return backendType.startsWith(normalizedTarget) && s.isActive == true;
+        }).toList();
+
+        print("ACTIVE SCHEMES FOUND = ${activeSchemes.length}");
+
+        Navigator.pop(context); // Hide loading
+
+        if (activeSchemes.isNotEmpty) {
+          final activeScheme = activeSchemes.first;
+          
+          // Explicit boolean checks for strict validation
+          final isPlus = normalizedTarget.contains('PLUS');
+          final hasPaid = activeScheme.hasPaidThisMonth == true;
+          
+          // CRITICAL DEBUG: Log validation check with normalized values
+          print('DEBUG VALIDATION →');
+          print('targetSchemeType = "$targetSchemeType"');
+          print('normalizedTarget = "$normalizedTarget"');
+          print('backendType = "${_normalizeSchemeType(activeScheme.schemeType)}"');
+          print('Scheme Name: ${activeScheme.schemeName}');
+          print('Scheme ID: ${activeScheme.schemeId}');
+          print('hasPaidThisMonth (raw) = ${activeScheme.hasPaidThisMonth}');
+          print('contains PLUS = $isPlus');
+          print('hasPaidThisMonth (explicit) = $hasPaid');
+          print('WILL BLOCK = ${isPlus && hasPaid}');
+
+          // TEST: Show dialog BEFORE validation dialog
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('⚠️ BEFORE VALIDATION DIALOG'),
+              content: Text('About to show validation status...'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('OK'),
+                ),
+              ],
+            ),
+          );
+
+          // VISIBLE DEBUG DIALOG - Shows validation status in app UI
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('🔍 DEBUG: Validation Status'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Target Type: $targetSchemeType', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('Normalized: $normalizedTarget'),
+                    Divider(),
+                    Text('Backend Type: ${_normalizeSchemeType(activeScheme.schemeType)}'),
+                    Text('Scheme Name: ${activeScheme.schemeName}'),
+                    Text('Scheme ID: ${activeScheme.schemeId}'),
+                    Divider(),
+                    Text('Is PLUS: $isPlus', style: TextStyle(color: isPlus ? Colors.green : Colors.grey)),
+                    Text('Has Paid: $hasPaid', style: TextStyle(color: hasPaid ? Colors.orange : Colors.grey)),
+                    Divider(),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (isPlus && hasPaid) ? Colors.red.shade50 : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: (isPlus && hasPaid) ? Colors.red : Colors.green,
+                          width: 2,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'WILL BLOCK: ${isPlus && hasPaid}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: (isPlus && hasPaid) ? Colors.red : Colors.green,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            (isPlus && hasPaid) 
+                              ? '❌ Payment will be BLOCKED'
+                              : '✅ Payment will be ALLOWED',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Continue'),
+                ),
+              ],
+            ),
+          );
+
+          // Show validation status to user via snackbar
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Validation: Type=$normalizedTarget, Paid=$hasPaid, Will Block=${isPlus && hasPaid}'),
+              duration: Duration(seconds: 5),
+              backgroundColor: Colors.blue,
+            ),
+          );
+
+          // For PLUS schemes, check if monthly payment is already done
+          if (isPlus && hasPaid) {
+             print('⛔ BLOCKING PAYMENT: Scheme ${activeScheme.schemeName} already paid this month');
+             await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.block, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Payment Already Made'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You have already made your payment for this month.',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 12),
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '📅 Monthly Payment Rule',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'PLUS schemes allow only ONE payment per calendar month.',
+                            style: TextStyle(color: Colors.orange.shade800),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'Please wait until next month to make your next payment.',
+                      style: TextStyle(color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('OK', style: TextStyle(fontSize: 16)),
+                  ),
+                ],
+              ),
+            );
+            return; // STOP HERE - Do not show investment dialog
+          }
+          
+          print('✅ VALIDATION PASSED: Payment allowed for ${activeScheme.schemeName}');
+          
+          // Pass the actual scheme ID from the database
+          final actualSchemeId = activeScheme.schemeId;
+          print('🔍 Passing schemeId to investment dialog: $actualSchemeId');
+        } else {
+           print('🔍 Validation: No active scheme found for $targetSchemeType - Treating as new scheme');
+        }
+        
+        // Validation passed - show investment dialog
+        // Pass actualSchemeId if we found an active scheme, otherwise null for new schemes
+        print('✅ Validation complete - showing investment dialog');
+        final schemeIdToPass = activeSchemes.isNotEmpty ? activeSchemes.first.schemeId : null;
+        _showSchemeInvestmentDialog(scheme, finalPhone, finalName, schemeIdToPass);
+        
+      } catch (e, stackTrace) {
+        try {
+          Navigator.pop(context); // Hide loading on error
+        } catch (_) {}
+        
+        print('❌ Error validating scheme status: $e');
+        print('Stack trace: $stackTrace');
+        
+        // Show error dialog
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('ERROR'),
+            content: SingleChildScrollView(
+              child: Text('Validation error:\n\n$e\n\nStack:\n$stackTrace'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        // Do NOT show investment dialog - validation failed
+        return; // CRITICAL: STOP HERE - Do NOT continue to investment dialog
+      }
+
       // Show amount input dialog for scheme investment
-      _showSchemeInvestmentDialog(scheme, finalPhone, finalName);
+      // _showSchemeInvestmentDialog(scheme, finalPhone, finalName); // This line is moved
     } catch (e) {
       print('Error viewing scheme: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -600,7 +936,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     }
   }
 
-  void _showSchemeInvestmentDialog(SchemeDetailModel scheme, String customerPhone, String customerName) {
+  void _showSchemeInvestmentDialog(SchemeDetailModel scheme, String customerPhone, String customerName, String? schemeId) {
     final investmentAmountController = TextEditingController(text: '100');
 
     showDialog(
@@ -614,6 +950,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
             children: [
               Text('Customer: $customerName'),
               Text('Phone: $customerPhone'),
+              if (schemeId != null) Text('Scheme ID: $schemeId'),
               const SizedBox(height: 16),
               const Text('Investment Amount:'),
               const SizedBox(height: 8),
@@ -645,7 +982,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
             onPressed: () {
               final amount = double.tryParse(investmentAmountController.text) ?? 100;
               Navigator.pop(context);
-              _navigateToInvestment(scheme, amount);
+              _navigateToInvestment(scheme, amount, schemeId);
             },
             child: const Text('Proceed'),
           ),
@@ -654,8 +991,8 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     );
   }
 
-  void _navigateToInvestment(SchemeDetailModel scheme, double amount) async {
-    print('🔍 NAVIGATE TO INVESTMENT: Scheme: ${scheme.name}, Amount: $amount');
+  void _navigateToInvestment(SchemeDetailModel scheme, double amount, String? schemeId) async {
+    print('🔍 NAVIGATE TO INVESTMENT: Scheme: ${scheme.name}, Amount: $amount, Scheme ID: $schemeId');
 
     // Get customer info
     final prefs = await SharedPreferences.getInstance();
@@ -695,6 +1032,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuyGoldScreen(
             prefilledAmount: amount,
             isFromScheme: true,
+            schemeId: schemeId, // CRITICAL: Pass scheme ID for validation
             schemeType: schemeType,
             monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
@@ -708,6 +1046,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuySilverScreen(
             prefilledAmount: amount,
             isFromScheme: true,
+            schemeId: schemeId, // CRITICAL: Pass scheme ID for validation
             schemeType: schemeType,
             monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
@@ -763,6 +1102,71 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
       }
 
       print('✅ Using customer data: phone=$finalPhone, name=$finalName');
+
+      // CRITICAL CHECK: Check if customer already has an ACTIVE scheme of this type
+      try {
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+
+        // Determine target scheme type
+        String targetSchemeType;
+        if (widget.metalType == MetalType.gold) {
+          targetSchemeType = scheme.name.contains('Plus') ? 'GOLDPLUS' : 'GOLDFLEXI';
+        } else {
+          targetSchemeType = scheme.name.contains('Plus') ? 'SILVERPLUS' : 'SILVERFLEXI';
+        }
+
+        // Fetch user schemes
+        final userSchemes = await GoldSchemeService().fetchSchemesFromBackend();
+        
+        // Hide loading
+        Navigator.pop(context);
+
+        // Check for active scheme of same type
+        final activeSchemes = userSchemes.where(
+           (s) => s.schemeType == targetSchemeType && s.isActive
+        ).toList();
+
+        if (activeSchemes.isNotEmpty) {
+           final existingScheme = activeSchemes.first;
+           print('⚠️ User already has active active scheme: ${existingScheme.schemeId}');
+           
+           showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Existing Plan Found'),
+              content: Text('You already have an active ${scheme.name} plan.\n\nWould you like to view details or pay installment for your existing plan?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Redirect to view scheme
+                    _viewScheme(scheme);
+                  },
+                  child: const Text('View Existing Plan'),
+                ),
+              ],
+            ),
+           );
+           return;
+        }
+
+      } catch (e) {
+        // If checking fails, log but allow proceeding (fail open is safer than blocking)
+        // Or fail close? Fail close is safer to prevent duplicates.
+        print('⚠️ Error checking existing schemes: $e');
+        // We'll proceed but maybe show a warning?
+        // Proceeding is standard behavior if offline.
+      }
+
       // Show scheme enrollment dialog
       _showSchemeEnrollmentDialog(scheme, finalPhone!, finalName);
     } catch (e) {

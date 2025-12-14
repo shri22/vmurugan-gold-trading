@@ -20,6 +20,8 @@ class GoldSchemeModel {
   final List<SchemePayment> payments;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool hasPaidThisMonth;
+  final bool nextPaymentAllowed;
 
   const GoldSchemeModel({
     required this.id,
@@ -39,6 +41,8 @@ class GoldSchemeModel {
     required this.payments,
     required this.createdAt,
     required this.updatedAt,
+    this.hasPaidThisMonth = false,
+    this.nextPaymentAllowed = true,
   });
 
   // Factory for parsing backend API response
@@ -101,6 +105,34 @@ class GoldSchemeModel {
       payments: [], // Payments will be loaded separately if needed
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : DateTime.now(),
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : DateTime.now(),
+      hasPaidThisMonth: () {
+        final rawValue = json['has_paid_this_month'];
+        print('🔍 PARSING hasPaidThisMonth for ${json['scheme_type']}: raw=$rawValue (type=${rawValue.runtimeType})');
+        
+        // Handle both boolean and integer (0/1) from backend
+        if (rawValue is bool) {
+          return rawValue;
+        } else if (rawValue is int) {
+          return rawValue == 1;
+        } else if (rawValue is String) {
+          return rawValue == '1' || rawValue.toLowerCase() == 'true';
+        }
+        return false;
+      }(),
+      nextPaymentAllowed: () {
+        final rawValue = json['next_payment_allowed'];
+        print('🔍 PARSING nextPaymentAllowed for ${json['scheme_type']}: raw=$rawValue (type=${rawValue.runtimeType})');
+        
+        // Handle both boolean and integer (0/1) from backend
+        if (rawValue is bool) {
+          return rawValue;
+        } else if (rawValue is int) {
+          return rawValue == 1;
+        } else if (rawValue is String) {
+          return rawValue == '1' || rawValue.toLowerCase() == 'true';
+        }
+        return true; // Default to allowing payment if parsing fails
+      }(),
     );
   }
 

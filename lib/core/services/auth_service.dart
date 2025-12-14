@@ -200,15 +200,8 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Try custom SMS service first (more reliable than Firebase billing issues)
-      print('📱 AuthService: Trying custom SMS service...');
-      final customSmsResult = await _tryCustomSmsFirst(phone);
-      if (customSmsResult != null) {
-        return customSmsResult;
-      }
-
-      // If custom SMS fails, try Firebase as fallback
-      print('🔥 AuthService: Trying Firebase Phone Authentication as fallback...');
+      // PRIORITY 1: Try Firebase Phone Authentication (Verified by User)
+      print('🔥 AuthService: Trying Firebase Phone Authentication...');
 
       try {
         // Clear any previous verification data
@@ -227,9 +220,18 @@ class AuthService {
 
           // Return a placeholder since Firebase manages the actual OTP
           return 'FIREBASE_OTP';
+        } else {
+           print('⚠️ AuthService: Firebase failed: ${firebaseResult['message']}');
         }
       } catch (firebaseError) {
         print('⚠️ AuthService: Firebase error: $firebaseError');
+      }
+
+      // PRIORITY 2: Try custom SMS service as fallback
+      print('📱 AuthService: Falling back to custom SMS service...');
+      final customSmsResult = await _tryCustomSmsFirst(phone);
+      if (customSmsResult != null) {
+        return customSmsResult;
       }
 
       throw Exception('All SMS services failed. Please check your configuration.');
@@ -684,6 +686,7 @@ class AuthService {
     }
   }
 
+
   static Future<Map<String, dynamic>> makeSecureRequest(
     String endpoint, {
     Map<String, dynamic>? data,
@@ -708,6 +711,35 @@ class AuthService {
       throw Exception('Secure request error: $e');
     }
   }
+
+  /// Update FCM Token for the user
+  static Future<bool> updateFcmToken(String phone, String token) async {
+    try {
+      print('🔔 AuthService: Updating FCM token for $phone');
+      
+      final response = await SecureHttpClient.post(
+        '$baseUrl/notifications/register-token',
+        headers: headers,
+        body: jsonEncode({
+          'phone': phone,
+          'fcm_token': token,
+          'device_type': 'mobile', // 'android' or 'ios' could be detected usually
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ AuthService: FCM Token updated successfully');
+        return true;
+      } else {
+        print('⚠️ AuthService: Failed to update FCM token: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ AuthService: Error updating FCM token: $e');
+      return false;
+    }
+  }
+
 }
 
 /// Authentication states

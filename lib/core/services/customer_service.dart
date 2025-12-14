@@ -192,6 +192,10 @@ class CustomerService {
     required String status,
     required String gatewayTransactionId,
     Map<String, dynamic>? additionalData,
+    String? schemeType,
+    String? schemeId,
+    double? silverGrams,
+    double? silverPricePerGram,
   }) async {
     print('');
     print('🔄🔄🔄 CustomerService.saveTransactionWithCustomerData CALLED 🔄🔄🔄');
@@ -201,9 +205,12 @@ class CustomerService {
     print('  📊 Status: "$status"');
     print('  💰 Amount: ₹$amount');
     print('  🥇 Gold Grams: $goldGrams');
+    print('  🥈 Silver Grams: ${silverGrams ?? 0.0}');
     print('  💳 Payment Method: "$paymentMethod"');
     print('  🏦 Gateway Transaction ID: "$gatewayTransactionId"');
     print('  📋 Additional Data Present: ${additionalData != null}');
+    print('  🎯 Scheme Type: ${schemeType ?? "N/A"}');
+    print('  🎯 Scheme ID: ${schemeId ?? "N/A"}');
 
     try {
       print('🔄 Getting customer info...');
@@ -263,6 +270,10 @@ class CustomerService {
         deviceInfo: deviceInfo.toString(),
         location: location?.toString() ?? 'Location not available',
         additionalData: additionalData,
+        schemeType: schemeType,
+        schemeId: schemeId,
+        silverGrams: silverGrams,
+        silverPricePerGram: silverPricePerGram,
       );
 
       print('📥 ApiService.saveTransaction returned: $result');
