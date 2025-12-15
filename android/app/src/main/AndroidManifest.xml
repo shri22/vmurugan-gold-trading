@@ -5,12 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- Location permissions for transaction tracking -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- Device info permissions -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Device info permissions removed - not core functionality -->
 
     <!-- File storage permissions for downloads (only for Android 9 and below) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -18,8 +13,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Camera permission for QR code scanning (if needed) -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Camera permission removed - not core functionality -->
 
     <!-- Vibration permission for notifications -->
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -27,14 +21,12 @@
     <!-- Wake lock for background processing -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Foreground service permission -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Foreground service permission removed - not used -->
 
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Worldline SMS OTP auto-read permission -->
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- SMS permission removed - not core functionality -->
 
     <!-- Support for older devices -->
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
@@ -74,7 +66,7 @@
             </intent-filter>
 
             <!-- Intent filter for UPI payments -->
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -82,7 +74,7 @@
             </intent-filter>
 
             <!-- Intent filter for payment callbacks -->
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -90,18 +82,9 @@
                       android:host="vmuruganjewellery.co.in" />
             </intent-filter>
 
-            <!-- CRITICAL: Worldline payment callback intent filter -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="worldline"
-                      android:host="payment" />
-            </intent-filter>
-
             <!-- CRITICAL: Omniware payment callback intent filter -->
             <!-- Handles vmurugangold://payment/success, vmurugangold://payment/failure, vmurugangold://payment/cancel -->
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
