@@ -36,6 +36,8 @@ class BuySilverScreen extends StatefulWidget {
   final String? schemeType; // SILVERPLUS, SILVERFLEXI, etc.
   final double? monthlyAmount; // For PLUS schemes
   final String? schemeName;
+  final bool isFirstMonth; // NEW: Determines if this is the first month payment
+  final bool isAmountEditable; // NEW: Controls if amount field is editable
 
   const BuySilverScreen({
     super.key,
@@ -45,6 +47,8 @@ class BuySilverScreen extends StatefulWidget {
     this.schemeType,
     this.monthlyAmount,
     this.schemeName,
+    this.isFirstMonth = true, // Default to first month
+    this.isAmountEditable = true, // Default to editable
   });
 
   @override
@@ -325,12 +329,39 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          widget.isFromScheme == true ? 'Monthly Investment Amount' : 'Enter Investment Amount',
+          widget.isFirstMonth 
+            ? 'Enter Investment Amount' 
+            : 'Monthly Payment Amount',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
+
+        // Show info for subsequent months (read-only)
+        if (!widget.isFirstMonth) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This is your monthly payment amount. It cannot be changed.',
+                    style: TextStyle(fontSize: 14, color: Colors.blue.shade900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // Show scheme info if coming from scheme
         if (widget.isFromScheme == true && widget.schemeName != null) ...[
@@ -371,22 +402,27 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
 
         // Custom Amount Input
         CustomTextField(
-          label: widget.isFromScheme == true ? 'Monthly Investment Amount (Fixed)' : 'Investment Amount',
-          hint: widget.isFromScheme == true ? 'Amount set by scheme' : 'Enter amount in ₹',
+          label: widget.isAmountEditable 
+            ? 'Investment Amount' 
+            : 'Monthly Payment Amount (Fixed)',
+          hint: widget.isAmountEditable 
+            ? 'Enter amount in ₹' 
+            : 'Amount set by scheme',
           controller: _amountController,
           keyboardType: TextInputType.number,
           prefixIcon: Icons.currency_rupee,
-          enabled: widget.isFromScheme != true, // Disable if from scheme
-          onChanged: widget.isFromScheme == true ? null : (value) {
+          enabled: widget.isAmountEditable, // Disable if not editable
+          readOnly: !widget.isAmountEditable, // Explicitly set read-only
+          onChanged: widget.isAmountEditable ? (value) {
             final amount = double.tryParse(value) ?? 0.0;
             setState(() {
               _selectedAmount = amount;
             });
-          },
-          inputFormatters: widget.isFromScheme == true ? [] : [
+          } : null,
+          inputFormatters: widget.isAmountEditable ? [
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(7), // Max 10 lakh
-          ],
+          ] : [],
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Please enter an amount';

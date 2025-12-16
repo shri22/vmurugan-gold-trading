@@ -39,6 +39,8 @@ class BuyGoldScreen extends StatefulWidget {
   final String? schemeType; // GOLDPLUS, GOLDFLEXI, etc.
   final double? monthlyAmount; // For PLUS schemes
   final String? schemeName;
+  final bool isFirstMonth; // NEW: Determines if this is the first month payment
+  final bool isAmountEditable; // NEW: Controls if amount field is editable
 
   const BuyGoldScreen({
     super.key,
@@ -48,6 +50,8 @@ class BuyGoldScreen extends StatefulWidget {
     this.schemeType,
     this.monthlyAmount,
     this.schemeName,
+    this.isFirstMonth = true, // Default to first month
+    this.isAmountEditable = true, // Default to editable
   });
 
   @override
@@ -326,12 +330,39 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Enter Investment Amount',
+          widget.isFirstMonth 
+            ? 'Enter Investment Amount' 
+            : 'Monthly Payment Amount',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
+
+        // Show info for subsequent months (read-only)
+        if (!widget.isFirstMonth) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This is your monthly payment amount. It cannot be changed.',
+                    style: TextStyle(fontSize: 14, color: Colors.blue.shade900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
 
         // Show scheme info if coming from scheme
         if (widget.isFromScheme == true && widget.schemeName != null) ...[
@@ -372,22 +403,27 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
 
         // Custom Amount Input
         CustomTextField(
-          label: widget.isFromScheme == true ? 'Monthly Investment Amount (Fixed)' : 'Investment Amount',
-          hint: widget.isFromScheme == true ? 'Amount set by scheme' : 'Enter amount in ₹',
+          label: widget.isAmountEditable 
+            ? 'Investment Amount' 
+            : 'Monthly Payment Amount (Fixed)',
+          hint: widget.isAmountEditable 
+            ? 'Enter amount in ₹' 
+            : 'Amount set by scheme',
           controller: _amountController,
           keyboardType: TextInputType.number,
           prefixIcon: Icons.currency_rupee,
-          enabled: widget.isFromScheme != true, // Disable if from scheme
-          onChanged: widget.isFromScheme == true ? null : (value) {
+          enabled: widget.isAmountEditable, // Disable if not editable
+          readOnly: !widget.isAmountEditable, // Explicitly set read-only
+          onChanged: widget.isAmountEditable ? (value) {
             final amount = double.tryParse(value) ?? 0.0;
             setState(() {
               _selectedAmount = amount;
             });
-          },
-          inputFormatters: widget.isFromScheme == true ? [] : [
+          } : null,
+          inputFormatters: widget.isAmountEditable ? [
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(7), // Max 10 lakh
-          ],
+          ] : [],
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Please enter an amount';
@@ -640,161 +676,11 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       }
     }
 
-    // CRITICAL: Validate PLUS schemes for monthly payment limit BEFORE payment
-    print('🔍 VALIDATION CHECK START');
-    print('🔍 widget.schemeType = ${widget.schemeType}');
-    print('🔍 widget.schemeId = ${widget.schemeId}');
-    print('🔍 widget.isFromScheme = ${widget.isFromScheme}');
-    
-    if (widget.schemeType != null && (widget.schemeType == 'GOLDPLUS' || widget.schemeType == 'SILVERPLUS')) {
-      print('✅ PLUS SCHEME DETECTED: ${widget.schemeType}');
-      print('🔍 Checking if payment already made this month...');
-      
-      final customerInfo = await CustomerService.getCustomerInfo();
-      final customerPhone = customerInfo['phone'] ?? '';
-      
-      print('🔍 Customer phone: $customerPhone');
-      print('🔍 Scheme ID check: ${widget.schemeId}');
-      
-      if (customerPhone.isNotEmpty && widget.schemeId != null) {
-        print('✅ Phone and Scheme ID are valid, fetching scheme data...');
-        
-        // Fetch scheme data to check has_paid_this_month
-        try {
-          final response = await SecureHttpClient.get(
-            '${ServerConfig.baseUrl}/schemes/$customerPhone',
-          );
-          
-          print('🔍 API Response Status: ${response.statusCode}');
-          
-          if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
-            print('🔍 API Response Success: ${data['success']}');
-            
-            if (data['success'] == true) {
-              final schemes = data['schemes'] as List<dynamic>;
-              print('🔍 Total schemes fetched: ${schemes.length}');
-              
-              // Print all scheme IDs for debugging
-              for (var s in schemes) {
-                print('🔍 Scheme: ${s['scheme_id']} - Type: ${s['scheme_type']} - Paid: ${s['has_paid_this_month']}');
-              }
-              
-              // Find the current scheme
-              final currentScheme = schemes.firstWhere(
-                (s) => s['scheme_id'] == widget.schemeId,
-                orElse: () => null,
-              );
-              
-              if (currentScheme != null) {
-                print('✅ FOUND MATCHING SCHEME: ${currentScheme['scheme_id']}');
-                
-                // Parse has_paid_this_month (handle both int and bool)
-                final rawHasPaid = currentScheme['has_paid_this_month'];
-                bool hasPaidThisMonth = false;
-                
-                print('🔍 RAW has_paid_this_month value: $rawHasPaid (type: ${rawHasPaid.runtimeType})');
-                
-                if (rawHasPaid is bool) {
-                  hasPaidThisMonth = rawHasPaid;
-                  print('🔍 Parsed as bool: $hasPaidThisMonth');
-                } else if (rawHasPaid is int) {
-                  hasPaidThisMonth = rawHasPaid == 1;
-                  print('🔍 Parsed as int: $rawHasPaid -> $hasPaidThisMonth');
-                } else if (rawHasPaid is String) {
-                  hasPaidThisMonth = rawHasPaid == '1' || rawHasPaid.toLowerCase() == 'true';
-                  print('🔍 Parsed as string: $rawHasPaid -> $hasPaidThisMonth');
-                }
-                
-                print('🔍 FINAL hasPaidThisMonth = $hasPaidThisMonth');
-                
-                if (hasPaidThisMonth) {
-                  print('⛔⛔⛔ BLOCKING PAYMENT: Already paid this month ⛔⛔⛔');
-                  
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Row(
-                        children: [
-                          Icon(Icons.block, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Payment Already Made'),
-                        ],
-                      ),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'You have already made your payment for this month.',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 12),
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '📅 Monthly Payment Rule',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'PLUS schemes allow only ONE payment per calendar month.',
-                                  style: TextStyle(color: Colors.orange.shade800),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Please wait until next month to make your next payment.',
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text('OK', style: TextStyle(fontSize: 16)),
-                        ),
-                      ],
-                    ),
-                  );
-                  return; // STOP - Do not proceed to payment
-                } else {
-                  print('✅ Payment allowed - has not paid this month');
-                }
-              } else {
-                print('❌ SCHEME NOT FOUND: ${widget.schemeId}');
-              }
-            } else {
-              print('❌ API returned success=false');
-            }
-          } else {
-            print('❌ API request failed with status: ${response.statusCode}');
-          }
-        } catch (e) {
-          print('❌ Error checking payment status: $e');
-          // Continue to payment if check fails (fail open)
-        }
-      } else {
-        print('❌ VALIDATION SKIPPED: customerPhone=$customerPhone, schemeId=${widget.schemeId}');
-      }
-    } else {
-      print('❌ NOT A PLUS SCHEME or schemeType is null');
-      print('   schemeType=${widget.schemeType}');
-      print('   Is GOLDPLUS? ${widget.schemeType == 'GOLDPLUS'}');
-      print('   Is SILVERPLUS? ${widget.schemeType == 'SILVERPLUS'}');
-    }
-    
-    print('🔍 VALIDATION CHECK END - Proceeding to payment');
+
+    // Monthly payment validation is now handled at navigation level in scheme_details_screen.dart
+    // This ensures users are blocked BEFORE reaching this screen if they've already paid
+    print('🔍 Proceeding to payment - validation passed at navigation level');
+
 
     // If this is a scheme payment, validate scheme payment rules
     if (widget.isFromScheme == true && widget.schemeId != null) {
