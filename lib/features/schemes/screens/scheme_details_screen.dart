@@ -1022,7 +1022,42 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
     // For FLEXI schemes, set monthly_amount to 0
     final monthlyAmount = scheme.name.contains('Plus') ? amount : 0.0;
 
+    // Determine if this is the first month payment
+    // If schemeId is null, it's a new scheme (first month)
+    // If schemeId exists, check the scheme creation date
+    bool isFirstMonth = true;
+    bool isAmountEditable = true;
+
+    if (schemeId != null && scheme.name.contains('Plus')) {
+      // For existing PLUS schemes, fetch scheme details to check creation date
+      try {
+        final userSchemes = await GoldSchemeService().fetchSchemesFromBackend();
+        final matchingScheme = userSchemes.firstWhere(
+          (s) => s.schemeId == schemeId,
+          orElse: () => null,
+        );
+
+        if (matchingScheme != null) {
+          // Parse creation date
+          final createdDate = DateTime.parse(matchingScheme.createdAt);
+          final now = DateTime.now();
+          
+          // Check if created in current month
+          isFirstMonth = createdDate.year == now.year && createdDate.month == now.month;
+          isAmountEditable = isFirstMonth;
+          
+          print('🔍 Scheme created: ${matchingScheme.createdAt}');
+          print('🔍 Is first month: $isFirstMonth');
+          print('🔍 Amount editable: $isAmountEditable');
+        }
+      } catch (e) {
+        print('⚠️ Error checking scheme creation date: $e');
+        // Default to first month if error
+      }
+    }
+
     print('🔍 NAVIGATE TO INVESTMENT: Scheme type: $schemeType, Monthly amount: $monthlyAmount');
+    print('🔍 isFirstMonth: $isFirstMonth, isAmountEditable: $isAmountEditable');
 
     // Navigate to purchase screen - scheme will be created AFTER payment success
     if (widget.metalType == MetalType.gold) {
@@ -1032,10 +1067,12 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuyGoldScreen(
             prefilledAmount: amount,
             isFromScheme: true,
-            schemeId: schemeId, // CRITICAL: Pass scheme ID for validation
+            schemeId: schemeId,
             schemeType: schemeType,
             monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
+            isFirstMonth: isFirstMonth,
+            isAmountEditable: isAmountEditable,
           ),
         ),
       );
@@ -1046,10 +1083,12 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           builder: (context) => BuySilverScreen(
             prefilledAmount: amount,
             isFromScheme: true,
-            schemeId: schemeId, // CRITICAL: Pass scheme ID for validation
+            schemeId: schemeId,
             schemeType: schemeType,
             monthlyAmount: monthlyAmount,
             schemeName: scheme.name,
+            isFirstMonth: isFirstMonth,
+            isAmountEditable: isAmountEditable,
           ),
         ),
       );
@@ -1262,6 +1301,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
       print('🔍 JOIN SCHEME: Scheme type: $schemeType, Monthly amount: $monthlyAmount');
 
       // Navigate to payment - scheme will be created AFTER payment success
+      // For new schemes (JOIN), it's always the first month
       if (widget.metalType == MetalType.gold) {
         Navigator.push(
           context,
@@ -1272,6 +1312,8 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
               schemeType: schemeType,
               monthlyAmount: monthlyAmount,
               schemeName: scheme.name,
+              isFirstMonth: true, // Always first month for new schemes
+              isAmountEditable: true, // Always editable for new schemes
             ),
           ),
         );
@@ -1285,6 +1327,8 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
               schemeType: schemeType,
               monthlyAmount: monthlyAmount,
               schemeName: scheme.name,
+              isFirstMonth: true, // Always first month for new schemes
+              isAmountEditable: true, // Always editable for new schemes
             ),
           ),
         );
