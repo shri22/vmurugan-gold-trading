@@ -1032,14 +1032,11 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
       // For existing PLUS schemes, fetch scheme details to check creation date
       try {
         final userSchemes = await GoldSchemeService().fetchSchemesFromBackend();
-        final matchingScheme = userSchemes.firstWhere(
-          (s) => s.schemeId == schemeId,
-          orElse: () => null,
-        );
+        final matchingScheme = userSchemes.where((s) => s.schemeId == schemeId).firstOrNull;
 
         if (matchingScheme != null) {
-          // Parse creation date
-          final createdDate = DateTime.parse(matchingScheme.createdAt);
+          // createdAt is already a DateTime object
+          final createdDate = matchingScheme.createdAt;
           final now = DateTime.now();
           
           // Check if created in current month
