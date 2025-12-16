@@ -746,14 +746,36 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
             );
           }
         } else {
-          // No active scheme found - treat as new scheme (should not happen for "View Scheme")
-          print('⚠️ No active scheme found for $schemeType - User should use "Join Scheme" instead');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No active ${scheme.name} found. Please use "Join Scheme" to start a new plan.'),
-              backgroundColor: Colors.orange,
+          // No active scheme found - user hasn't joined this scheme yet
+          // Redirect to join flow instead of showing error
+          print('ℹ️ No active scheme found for $schemeType - Redirecting to join flow');
+          Navigator.pop(context); // Hide loading
+          
+          // Show dialog asking if they want to join
+          final shouldJoin = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Join ${scheme.name}?'),
+              content: Text(
+                'You don\'t have an active ${scheme.name} yet. Would you like to join this scheme?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Join Scheme'),
+                ),
+              ],
             ),
           );
+          
+          if (shouldJoin == true) {
+            _joinScheme(scheme);
+          }
+          return;
         }
         
       } catch (e, stackTrace) {
