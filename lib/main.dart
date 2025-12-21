@@ -55,6 +55,14 @@ void main() async {
     await FirebaseInit.initialize();
     print('✅ Firebase initialized successfully');
     
+    // Initialize Firebase App Check for invisible reCAPTCHA
+    try {
+      await FirebaseInit.initializeAppCheck();
+      print('✅ Firebase App Check initialized successfully');
+    } catch (appCheckError) {
+      print('⚠️ App Check initialization failed: $appCheckError');
+    }
+    
     // Initialize FCM for Push Notifications
     try {
       await FCMService.initialize();

@@ -20,7 +20,15 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "286337779819-6frh3mm4ave9bo9hjmd68i00nlhg5a1c.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.vmurugan.digigold"
+              }
+            }
+          ]
         }
       }
     }

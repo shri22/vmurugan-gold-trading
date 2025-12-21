@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/secure_http_client.dart';
 import '../models/gold_scheme_model.dart';
 import 'gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
@@ -44,23 +44,20 @@ class GoldSchemeService {
     try {
       final phone = await _getCustomerPhone();
       if (phone == null) {
-        print('❌ No customer phone found');
         return [];
       }
 
-      print('📊 Fetching schemes from backend for phone: $phone');
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/schemes/$phone'),
+      final response = await SecureHttpClient.get(
+        '$baseUrl/schemes/$phone',
         headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+        timeout: const Duration(seconds: 30),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
           final schemesData = data['schemes'] as List<dynamic>;
-          print('✅ Fetched ${schemesData.length} schemes from backend');
 
           _userSchemes = schemesData
               .map((schemeJson) => GoldSchemeModel.fromBackendApi(schemeJson as Map<String, dynamic>))
@@ -69,15 +66,13 @@ class GoldSchemeService {
           _lastFetchTime = DateTime.now();
           return _userSchemes;
         } else {
-          print('❌ Backend returned success: false');
           return [];
         }
       } else {
-        print('❌ Failed to fetch schemes: ${response.statusCode}');
         return [];
       }
     } catch (e) {
-      print('❌ Error fetching schemes from backend: $e');
+      print('Error fetching schemes: $e');
       return [];
     }
   }

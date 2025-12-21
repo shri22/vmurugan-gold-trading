@@ -24,18 +24,28 @@ class PortfolioBreakdown {
   });
 
   factory PortfolioBreakdown.fromMap(Map<String, dynamic> map) {
+    // Helper for safe number parsing
+    double safeDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    }
+
     final gold = map['gold'] ?? {};
     final silver = map['silver'] ?? {};
 
     return PortfolioBreakdown(
-      goldTotal: (gold['total'] ?? 0.0).toDouble(),
-      goldDirectPurchase: (gold['direct_purchase'] ?? 0.0).toDouble(),
-      goldPlus: (gold['gold_plus'] ?? 0.0).toDouble(),
-      goldFlexi: (gold['gold_flexi'] ?? 0.0).toDouble(),
-      silverTotal: (silver['total'] ?? 0.0).toDouble(),
-      silverDirectPurchase: (silver['direct_purchase'] ?? 0.0).toDouble(),
-      silverPlus: (silver['silver_plus'] ?? 0.0).toDouble(),
-      silverFlexi: (silver['silver_flexi'] ?? 0.0).toDouble(),
+      goldTotal: safeDouble(gold['total']),
+      goldDirectPurchase: safeDouble(gold['direct_purchase']),
+      goldPlus: safeDouble(gold['gold_plus']),
+      goldFlexi: safeDouble(gold['gold_flexi']),
+      silverTotal: safeDouble(silver['total']),
+      silverDirectPurchase: safeDouble(silver['direct_purchase']),
+      silverPlus: safeDouble(silver['silver_plus']),
+      silverFlexi: safeDouble(silver['silver_flexi']),
     );
   }
 }
@@ -84,6 +94,16 @@ class Portfolio {
   });
 
   factory Portfolio.fromMap(Map<String, dynamic> map) {
+    // Helper for safe number parsing
+    double safeDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    }
+
     return Portfolio(
       id: map['id'] ?? 0,
       customerId: map['customer_id'],
@@ -94,15 +114,15 @@ class Portfolio {
       customerNomineeName: map['customer_nominee_name'],
       customerNomineeRelationship: map['customer_nominee_relationship'],
       customerNomineePhone: map['customer_nominee_phone'],
-      totalGoldGrams: (map['total_gold_grams'] ?? 0.0).toDouble(),
-      totalSilverGrams: (map['total_silver_grams'] ?? 0.0).toDouble(),
-      totalInvested: (map['total_invested'] ?? 0.0).toDouble(),
-      currentValue: (map['current_value'] ?? 0.0).toDouble(),
-      profitLoss: (map['profit_loss'] ?? 0.0).toDouble(),
-      profitLossPercentage: (map['profit_loss_percentage'] ?? 0.0).toDouble(),
-      currentGoldPrice: map['current_gold_price'] != null ? (map['current_gold_price'] as num).toDouble() : null,
-      currentSilverPrice: map['current_silver_price'] != null ? (map['current_silver_price'] as num).toDouble() : null,
-      lastUpdated: DateTime.parse(map['last_updated'] ?? DateTime.now().toIso8601String()),
+      totalGoldGrams: safeDouble(map['total_gold_grams']),
+      totalSilverGrams: safeDouble(map['total_silver_grams']),
+      totalInvested: safeDouble(map['total_invested']),
+      currentValue: safeDouble(map['current_value']),
+      profitLoss: safeDouble(map['profit_loss']),
+      profitLossPercentage: safeDouble(map['profit_loss_percentage']),
+      currentGoldPrice: map['current_gold_price'] != null ? safeDouble(map['current_gold_price']) : null,
+      currentSilverPrice: map['current_silver_price'] != null ? safeDouble(map['current_silver_price']) : null,
+      lastUpdated: DateTime.tryParse(map['last_updated'] ?? '') ?? DateTime.now(),
       breakdown: map['breakdown'] != null ? PortfolioBreakdown.fromMap(map['breakdown']) : null,
     );
   }
@@ -209,6 +229,16 @@ class Transaction {
   });
 
   factory Transaction.fromMap(Map<String, dynamic> map) {
+    // Helper for safe number parsing
+    double safeDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    }
+
     return Transaction(
       id: map['id'],
       transactionId: map['transaction_id'] ?? '',
@@ -216,9 +246,9 @@ class Transaction {
         (e) => e.toString().split('.').last == map['type'],
         orElse: () => TransactionType.BUY,
       ),
-      amount: (map['amount'] ?? 0.0).toDouble(),
-      metalGrams: (map['metal_grams'] ?? map['gold_grams'] ?? 0.0).toDouble(), // Support both old and new field names
-      metalPricePerGram: (map['metal_price_per_gram'] ?? map['gold_price_per_gram'] ?? 0.0).toDouble(),
+      amount: safeDouble(map['amount']),
+      metalGrams: safeDouble(map['metal_grams'] ?? map['gold_grams']),
+      metalPricePerGram: safeDouble(map['metal_price_per_gram'] ?? map['gold_price_per_gram']),
       metalType: MetalType.values.firstWhere(
         (e) => e.name.toUpperCase() == (map['metal_type'] ?? 'GOLD').toUpperCase(),
         orElse: () => MetalType.gold,
@@ -232,8 +262,8 @@ class Transaction {
       schemeType: map['scheme_type'],
       schemeId: map['scheme_id'],
       installmentNumber: map['installment_number'],
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(map['updated_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
     );
   }
 

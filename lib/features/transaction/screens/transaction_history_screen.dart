@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
 // Ensure AppColors is imported for gradients
 import '../../../core/utils/responsive.dart';
@@ -54,25 +56,49 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   }
 
   Future<void> _loadTransactions() async {
-    setState(() => _isLoading = true);
-
     try {
-      print('🔄 Loading transaction history...');
-      print('📊 Fetching real transactions from database...');
+      final prefs = await SharedPreferences.getInstance();
+      final cachedData = prefs.getString('cached_transactions');
+      
+      if (cachedData != null && cachedData.isNotEmpty) {
+        // Load from cache immediately
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedData);
+          final cachedTransactions = cachedList.map((txnMap) {
+            return Transaction.fromMap(txnMap as Map<String, dynamic>);
+          }).toList();
+          
+          setState(() {
+            _realTransactions = cachedTransactions;
+            _isLoading = false;
+          });
+        } catch (e) {
+          print('Error loading cached transactions: $e');
+          setState(() => _isLoading = true);
+        }
+      } else {
+        // No cache, show loading
+        setState(() => _isLoading = true);
+      }
 
+      // Always fetch fresh data in background
       final realTransactions = await _portfolioService.getTransactionHistory(limit: 100);
-      print('✅ Loaded ${realTransactions.length} real transactions');
 
       setState(() {
         _realTransactions = realTransactions;
+        _isLoading = false;
       });
+      
+      // Update cache
+      if (realTransactions.isNotEmpty) {
+        final transactionMaps = realTransactions.map((t) => t.toMap()).toList();
+        await prefs.setString('cached_transactions', jsonEncode(transactionMaps));
+      }
     } catch (e) {
-      print('❌ Error loading transactions: $e');
+      print('Error loading transactions: $e');
       setState(() {
-        _realTransactions = [];
+        _isLoading = false;
       });
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -96,14 +122,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     // Filter by status
     if (_selectedFilter != 'All') {
       convertedTransactions = convertedTransactions.where((transaction) {
-        return transaction.status.toLowerCase() == _selectedFilter.toLowerCase();
+        final txnStatus = transaction.status.toLowerCase().trim();
+        final filterStatus = _selectedFilter.toLowerCase().trim();
+        return txnStatus == filterStatus;
       }).toList();
     }
 
     // Filter by scheme type
     if (_selectedSchemeType != 'All') {
       convertedTransactions = convertedTransactions.where((transaction) {
-        final schemeId = transaction.schemeId;
+        final schemeId = transaction.schemeId ?? 'REGULAR';
         switch (_selectedSchemeType) {
           case 'Gold Plus':
             return schemeId.startsWith('GP_');

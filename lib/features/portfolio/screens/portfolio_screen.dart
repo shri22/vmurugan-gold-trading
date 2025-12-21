@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/portfolio_model.dart';
 import '../services/portfolio_service.dart';
 import '../../gold/models/gold_price_model.dart';
@@ -35,9 +37,42 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Future<void> _loadPortfolioData() async {
-    setState(() => _isLoading = true);
+    // Only show loading if we don't have data yet
+    if (_portfolio == null) {
+      setState(() => _isLoading = true);
+    }
 
     try {
+      // INSTANT LOAD: Check cache first
+      final prefs = await SharedPreferences.getInstance();
+      final cachedPortfolio = prefs.getString('cached_portfolio');
+      final cachedSchemes = prefs.getString('cached_schemes');
+
+      if (cachedPortfolio != null) {
+        try {
+          final portfolioMap = jsonDecode(cachedPortfolio);
+          final portfolio = Portfolio.fromMap(portfolioMap);
+          
+          List<Map<String, dynamic>> schemes = [];
+          if (cachedSchemes != null) {
+             schemes = List<Map<String, dynamic>>.from(jsonDecode(cachedSchemes));
+          }
+
+          if (mounted) {
+            setState(() {
+              _portfolio = portfolio;
+              _activeSchemes = schemes;
+              _updatePricesFromPortfolio(portfolio);
+              _isLoading = false; // Show content immediately
+            });
+            print('⚡ Portfolio loaded from cache instantly');
+          }
+        } catch (e) {
+          print('Error parsing cached portfolio: $e');
+        }
+      }
+
+      // BACKGROUND REFRESH: Fetch fresh data
       // OPTIMIZED: Load only portfolio and active schemes in parallel
       // Transaction history is loaded separately when needed (lazy loading)
       final results = await Future.wait([
@@ -45,54 +80,61 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         _portfolioService.getActiveSchemes(),
       ]);
 
-      _portfolio = results[0] as Portfolio;
-      _activeSchemes = results[1] as List<Map<String, dynamic>>;
+      if (mounted) {
+        final portfolio = results[0] as Portfolio;
+        final schemes = results[1] as List<Map<String, dynamic>>;
+
+        setState(() {
+          _portfolio = portfolio;
+          _activeSchemes = schemes;
+          _updatePricesFromPortfolio(portfolio);
+          _isLoading = false;
+        });
+        
+        // Update cache
+        await prefs.setString('cached_portfolio', jsonEncode(portfolio.toMap()));
+        await prefs.setString('cached_schemes', jsonEncode(schemes));
+      }
 
       // Load transaction history separately (non-blocking)
       _loadTransactionHistory();
 
-      // Use prices from portfolio API response (already fetched from MJDTA on backend)
-      // If prices are null (MJDTA unavailable), keep _currentGoldPrice and _currentSilverPrice as null
-      if (_portfolio != null) {
-        if (_portfolio!.currentGoldPrice != null) {
-          _currentGoldPrice = GoldPriceModel(
-            pricePerGram: _portfolio!.currentGoldPrice!,
-            pricePerOunce: _portfolio!.currentGoldPrice! * 31.1035, // Convert to per ounce
-            currency: 'INR',
-            timestamp: _portfolio!.lastUpdated,
-            changePercent: 0,
-            changeAmount: 0,
-            trend: 'stable',
-          );
-        } else {
-          _currentGoldPrice = null; // MJDTA unavailable
-        }
-
-        if (_portfolio!.currentSilverPrice != null) {
-          _currentSilverPrice = SilverPriceModel(
-            pricePerGram: _portfolio!.currentSilverPrice!,
-            pricePerOunce: _portfolio!.currentSilverPrice! * 31.1035, // Convert to per ounce
-            currency: 'INR',
-            timestamp: _portfolio!.lastUpdated,
-            changePercent: 0,
-            changeAmount: 0,
-            trend: 'stable',
-          );
-        } else {
-          _currentSilverPrice = null; // MJDTA unavailable
-        }
-      }
-
-      print('📊 Portfolio loaded: ${_portfolio?.totalGoldGrams} g gold, ${_portfolio?.totalSilverGrams} g silver');
-      print('📋 Active schemes: ${_activeSchemes.length}');
-      print('💲 Gold Price: ₹${_currentGoldPrice?.pricePerGram}/g (from backend)');
-      print('💲 Silver Price: ₹${_currentSilverPrice?.pricePerGram}/g (from backend)');
-
     } catch (e) {
       print('❌ Error loading portfolio: $e');
-    } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  void _updatePricesFromPortfolio(Portfolio portfolio) {
+      if (portfolio.currentGoldPrice != null) {
+        _currentGoldPrice = GoldPriceModel(
+          pricePerGram: portfolio.currentGoldPrice!,
+          pricePerOunce: portfolio.currentGoldPrice! * 31.1035,
+          currency: 'INR',
+          timestamp: portfolio.lastUpdated,
+          changePercent: 0,
+          changeAmount: 0,
+          trend: 'stable',
+        );
+      } else {
+        _currentGoldPrice = null; // MJDTA unavailable
+      }
+
+      if (portfolio.currentSilverPrice != null) {
+        _currentSilverPrice = SilverPriceModel(
+          pricePerGram: portfolio.currentSilverPrice!,
+          pricePerOunce: portfolio.currentSilverPrice! * 31.1035,
+          currency: 'INR',
+          timestamp: portfolio.lastUpdated,
+          changePercent: 0,
+          changeAmount: 0,
+          trend: 'stable',
+        );
+      } else {
+        _currentSilverPrice = null; // MJDTA unavailable
+      }
   }
 
   // Load transaction history separately (non-blocking)

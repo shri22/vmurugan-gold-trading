@@ -572,52 +572,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
       children: [
         SizedBox(height: MediaQuery.of(context).size.height * 0.05),
 
-        // DEMO MODE Banner - Single consolidated banner
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.orange[700]!, Colors.orange[500]!],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.orange.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Colors.white, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      '🎭 DEMO MODE',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Testing environment - Use OTP: 123456',
-                      style: TextStyle(fontSize: 14, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        // Orange Demo Banner Removed
 
         const SizedBox(height: 20),
 

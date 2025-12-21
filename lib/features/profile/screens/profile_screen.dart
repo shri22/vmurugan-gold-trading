@@ -14,6 +14,7 @@ import '../../../core/widgets/vmurugan_logo.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/data_preloader.dart';
 import '../../../core/services/language_service.dart';
 import '../../../core/services/translation_service.dart' as TranslationService;
 import '../../../core/services/mock_data_service.dart';
@@ -60,13 +61,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      // INSTANT LOAD: First, load cached data immediately for instant display
+      // INSTANT LOAD: Load cached data immediately for instant display
       if (!forceRefresh) {
         final cachedUserData = prefs.getString('user_data');
-        if (cachedUserData != null) {
+        
+        if (cachedUserData != null && cachedUserData.isNotEmpty) {
           try {
             final userData = jsonDecode(cachedUserData);
-            print('⚡ Profile: Loading cached data instantly');
             
             // Format the registration date
             String formattedJoinDate = 'Recently';
@@ -105,17 +106,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'joinDate': formattedJoinDate,
                 'kycStatus': kycStatus,
               };
-              _isLoading = false; // ✅ Stop loading immediately
+              _isLoading = false;
             });
-            
-            print('✅ Profile: Cached data displayed instantly');
           } catch (e) {
             print('⚠️ Profile: Error parsing cached data: $e');
           }
         }
       }
 
-      // BACKGROUND REFRESH: Fetch fresh data in background (non-blocking)
+      // BACKGROUND REFRESH: Always fetch fresh data
       if (forceRefresh) {
         setState(() {
           _isLoading = true;
@@ -1963,6 +1962,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Perform logout
               await AuthService.logoutUser();
+
+              // Clear all cached data
+              await DataPreloader.clearAllData();
 
               // Clear all local data
               final prefs = await SharedPreferences.getInstance();

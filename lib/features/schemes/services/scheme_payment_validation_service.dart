@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../../../core/services/secure_http_client.dart';
 import '../../../core/config/api_config.dart';
 import '../../../core/enums/metal_type.dart';
 import '../../../core/services/customer_service.dart';
@@ -120,8 +120,8 @@ class SchemePaymentValidationService {
     int year,
   ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/schemes/$schemeId/payments/monthly-check?month=$month&year=$year'),
+      final response = await SecureHttpClient.get(
+        '$_baseUrl/api/schemes/$schemeId/payments/monthly-check?month=$month&year=$year',
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -143,8 +143,8 @@ class SchemePaymentValidationService {
       final url = '$_baseUrl/api/schemes/details/$schemeId';
       print('🔍 GET SCHEME DETAILS: Calling URL: $url');
 
-      final response = await http.get(
-        Uri.parse(url),
+      final response = await SecureHttpClient.get(
+        url,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -200,8 +200,8 @@ class SchemePaymentValidationService {
     String schemeType,
   ) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/schemes/$customerPhone'),
+      final response = await SecureHttpClient.get(
+        '$_baseUrl/api/schemes/$customerPhone',
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -236,8 +236,8 @@ class SchemePaymentValidationService {
       final customerInfo = await CustomerService.getCustomerInfo();
       final customerName = customerInfo['name'] ?? 'Customer';
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/api/schemes'),
+      final response = await SecureHttpClient.post(
+        '$_baseUrl/api/schemes',
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'customer_phone': customerPhone,

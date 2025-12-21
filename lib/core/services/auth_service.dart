@@ -499,14 +499,22 @@ class AuthService {
           final userData = data['user'];
           await _saveUserLoginState(phone, userData);
 
-          // Save user ID for server API calls
+          // Save numeric user ID for server API calls (Safe parse for int/string)
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setInt('current_user_id', userData['id']);
+          final rawId = userData['id'];
+          int numericId = 0;
+          if (rawId is int) {
+            numericId = rawId;
+          } else if (rawId != null) {
+            numericId = int.tryParse(rawId.toString()) ?? 0;
+          }
+          await prefs.setInt('current_user_id', numericId);
 
           // SECURITY FIX: Save only non-sensitive customer data locally
           await prefs.setString('customer_phone', phone);
           await prefs.setString('customer_name', name);
-          await prefs.setString('customer_id', userData['id'].toString());
+          // Store the merchant customer_id string (e.g. VM1, VM2)
+          await prefs.setString('customer_id', userData['customer_id']?.toString() ?? userData['id']?.toString() ?? '');
           await prefs.setBool('customer_registered', true);
           // SECURITY: PAN card, email, address NOT stored locally - fetch from server when needed
 
@@ -522,7 +530,7 @@ class AuthService {
               'email': email,
               'address': address,
               'pan_card': panCard,
-              'customer_id': userData['id'].toString(),
+              'customer_id': userData['customer_id']?.toString() ?? userData['id']?.toString() ?? '',
             },
           };
         } else {
@@ -576,17 +584,25 @@ class AuthService {
           final userData = data['user'];
           await _saveUserLoginState(phone, userData);
 
-          // Save user ID for server API calls
+          // Save numeric user ID for server API calls (Safe parse for int/string)
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setInt('current_user_id', userData['id']);
-
+          final rawId = userData['id'];
+          int numericId = 0;
+          if (rawId is int) {
+            numericId = rawId;
+          } else if (rawId != null) {
+            numericId = int.tryParse(rawId.toString()) ?? 0;
+          }
+          await prefs.setInt('current_user_id', numericId);
+ 
           // CRITICAL FIX: Save customer data to SharedPreferences for transaction saving
           await prefs.setString('customer_phone', phone);
           await prefs.setString('customer_name', userData['name'] ?? 'Unknown');
           await prefs.setString('customer_email', userData['email'] ?? '');
           await prefs.setString('customer_address', userData['address'] ?? '');
           await prefs.setString('customer_pan_card', userData['pan_card'] ?? '');
-          await prefs.setString('customer_id', userData['id'].toString());
+          // Store the merchant customer_id string (e.g. VM1, VM2)
+          await prefs.setString('customer_id', userData['customer_id']?.toString() ?? userData['id']?.toString() ?? '');
           await prefs.setBool('customer_registered', true);
 
           print('✅ AuthService: Login successful for: $phone');

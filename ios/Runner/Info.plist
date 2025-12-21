@@ -15,7 +15,7 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 
 	<key>CFBundleDisplayName</key>
-	<string>VMurugan Jewellery</string>
+	<string>VMurugan DigiGold</string>
 
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
@@ -27,7 +27,7 @@
 	<string>6.0</string>
 
 	<key>CFBundleName</key>
-	<string>VMurugan Jewellery</string>
+	<string>VMurugan DigiGold</string>
 
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>

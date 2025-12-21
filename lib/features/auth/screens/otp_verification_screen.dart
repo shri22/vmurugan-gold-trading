@@ -112,65 +112,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
             children: [
               const SizedBox(height: AppSpacing.md),
 
-              // DEMO MODE Banner - HIGHLY VISIBLE
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.md,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.orange[700]!,
-                      Colors.orange[500]!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '🎭 DEMO MODE',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Testing environment - Use OTP: 123456',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // Orange Demo Banner Removed
 
               const SizedBox(height: AppSpacing.xl),
 
@@ -294,50 +236,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Demo OTP Hint - HIGHLY VISIBLE
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: Colors.green[50],
-                  borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                  border: Border.all(
-                    color: Colors.green[300]!,
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.lightbulb_outline,
-                      color: Colors.green[700],
-                      size: 24,
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.grey[800],
-                          ),
-                          children: [
-                            const TextSpan(text: 'Demo OTP: '),
-                            TextSpan(
-                              text: '123456',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green[700],
-                                fontSize: 18,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // Demo Hint Removed
 
               const SizedBox(height: AppSpacing.xl),
 

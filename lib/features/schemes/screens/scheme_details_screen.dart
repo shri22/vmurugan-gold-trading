@@ -35,11 +35,62 @@ class SchemeDetailsScreen extends StatefulWidget {
 
 class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
   List<SchemeDetailModel> _schemes = [];
+  List<GoldSchemeModel> _userSchemes = [];
+  bool _isLoadingSchemes = true;
 
   @override
   void initState() {
     super.initState();
     _loadSchemes();
+    _loadUserSchemes();
+  }
+
+  Future<void> _loadUserSchemes() async {
+    try {
+      final schemes = await GoldSchemeService().fetchSchemesFromBackend();
+      
+      setState(() {
+        _userSchemes = schemes;
+        _isLoadingSchemes = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingSchemes = false;
+      });
+      
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load schemes. Please try again.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  bool _hasJoinedScheme(String schemeName) {
+    if (_isLoadingSchemes) {
+      return false;
+    }
+    
+    // Determine scheme type from name
+    String schemeType;
+    if (widget.metalType == MetalType.gold) {
+      schemeType = schemeName.contains('Plus') ? 'GOLDPLUS' : 'GOLDFLEXI';
+    } else {
+      schemeType = schemeName.contains('Plus') ? 'SILVERPLUS' : 'SILVERFLEXI';
+    }
+    
+    // Check if user has active scheme of this type
+    final normalizedTarget = _normalizeSchemeType(schemeType);
+    
+    return _userSchemes.any((s) {
+      final backendType = _normalizeSchemeType(s.schemeType);
+      return backendType.startsWith(normalizedTarget) && s.isActive == true;
+    });
   }
 
   void _loadSchemes() {
@@ -278,72 +329,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: widget.metalType == MetalType.silver
-                    ? Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Color(0xFFC0C0C0), // Bright silver
-                              Color(0xFF757575), // Silver-grey
-                              Color(0xFF4A5D23), // Dark green-silver mix
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 6,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () => _viewScheme(scheme),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                            ),
-                          ),
-                          child: Text(
-                            'View Scheme',
-                            style: AppTypography.titleSmall.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              shadows: [
-                                const Shadow(
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                  color: Colors.black45,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    : ElevatedButton(
-                        onPressed: () => _viewScheme(scheme),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: scheme.color,
-                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                          ),
-                        ),
-                        child: Text(
-                          'View Scheme',
-                          style: AppTypography.titleSmall.copyWith(
-                            color: scheme.color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                  child: _buildActionButton(scheme),
                 ),
               ],
             ),
@@ -351,6 +337,99 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildActionButton(SchemeDetailModel scheme) {
+    final hasJoined = _hasJoinedScheme(scheme.name);
+    final buttonText = hasJoined ? 'View Scheme' : 'Join Scheme';
+    final onPressed = hasJoined ? () => _viewScheme(scheme) : () => _joinScheme(scheme);
+    
+    if (widget.metalType == MetalType.silver) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFFC0C0C0), // Bright silver
+              Color(0xFF757575), // Silver-grey
+              Color(0xFF4A5D23), // Dark green-silver mix
+            ],
+          ),
+          borderRadius: BorderRadius.circular(AppBorderRadius.md),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          onPressed: _isLoadingSchemes ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.md),
+            ),
+          ),
+          child: _isLoadingSchemes
+              ? SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  buttonText,
+                  style: AppTypography.titleSmall.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    shadows: [
+                      const Shadow(
+                        offset: Offset(1, 1),
+                        blurRadius: 2,
+                        color: Colors.black45,
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      );
+    } else {
+      return ElevatedButton(
+        onPressed: _isLoadingSchemes ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: scheme.color,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppBorderRadius.md),
+          ),
+        ),
+        child: _isLoadingSchemes
+            ? SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(scheme.color),
+                ),
+              )
+            : Text(
+                buttonText,
+                style: AppTypography.titleSmall.copyWith(
+                  color: scheme.color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+      );
+    }
   }
 
   Widget _buildFeatureItem(IconData icon, String text) {
@@ -643,9 +722,14 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
               builder: (context) => AlertDialog(
                 title: Row(
                   children: [
-                    Icon(Icons.block, color: Colors.red),
+                    Icon(Icons.block, color: Colors.red, size: 24),
                     SizedBox(width: 8),
-                    Text('Payment Already Made'),
+                    Expanded(
+                      child: Text(
+                        'Payment Already Made',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    ),
                   ],
                 ),
                 content: Column(
@@ -746,36 +830,15 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
             );
           }
         } else {
-          // No active scheme found - user hasn't joined this scheme yet
-          // Redirect to join flow instead of showing error
-          print('ℹ️ No active scheme found for $schemeType - Redirecting to join flow');
-          Navigator.pop(context); // Hide loading
-          
-          // Show dialog asking if they want to join
-          final shouldJoin = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text('Join ${scheme.name}?'),
-              content: Text(
-                'You don\'t have an active ${scheme.name} yet. Would you like to join this scheme?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Join Scheme'),
-                ),
-              ],
+          // No active scheme found
+          print('⚠️ No active scheme found for $schemeType');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No active ${scheme.name} found. Please use "Join Scheme" button to start.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
             ),
           );
-          
-          if (shouldJoin == true) {
-            _joinScheme(scheme);
-          }
-          return;
         }
         
       } catch (e, stackTrace) {

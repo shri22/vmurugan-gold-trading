@@ -336,55 +336,34 @@ class PortfolioService {
   // Get transaction history - SERVER VERSION
   Future<List<Transaction>> getTransactionHistory({int? limit}) async {
     try {
-      print('');
-      print('📊📊📊 PORTFOLIO SERVICE: FETCHING TRANSACTION HISTORY 📊📊📊');
-      print('📅 Timestamp: ${DateTime.now().toIso8601String()}');
-
       final userId = await _getCurrentUserId();
-      print('👤 User ID: $userId');
       if (userId == null) {
-        print('❌ User not logged in');
         throw Exception('User not logged in');
       }
 
       final userPhone = await _getUserPhone();
-      print('📞 User Phone: $userPhone');
       if (userPhone == null) {
-        print('❌ User phone not found');
         throw Exception('User phone not found');
       }
 
       final url = '$baseUrl/transaction-history?phone=$userPhone&limit=${limit ?? 50}';
-      print('🌐 Request URL: $url');
-      print('📤 Request Headers: {"Content-Type": "application/json"}');
-      print('🔄 Making HTTP GET request...');
 
       final response = await SecureHttpClient.get(
         url,
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('📥 HTTP Response Status: ${response.statusCode}');
-      print('📥 HTTP Response Body: ${response.body}');
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('📊 Parsed Response Data: $data');
 
         if (data['success'] == true) {
           final transactions = data['transactions'] as List;
-          print('✅✅✅ TRANSACTION HISTORY FETCHED SUCCESSFULLY! ✅✅✅');
-          print('📊 Number of transactions found: ${transactions.length}');
 
           if (transactions.isEmpty) {
-            print('⚠️ No transactions found for user: $userPhone');
             return [];
           }
 
-          print('📋 Processing transactions...');
           final processedTransactions = transactions.map((txnData) {
-            print('  🔄 Processing transaction: ${txnData['transaction_id']}');
-            
             // Helper to safe parse double
             double safeDouble(dynamic value) {
               if (value == null) return 0.0;
@@ -418,29 +397,19 @@ class PortfolioService {
               'gateway_transaction_id': txnData['gateway_transaction_id'],
               'created_at': txnData['timestamp'],
               'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
-              'scheme_id': txnData['scheme_id'], // Ensure scheme_id is mapped
+              'scheme_id': txnData['scheme_id'],
             });
           }).toList();
 
-          print('✅ Successfully processed ${processedTransactions.length} transactions');
           return processedTransactions;
         } else {
-          print('❌ Server returned success=false: ${data['message']}');
           throw Exception(data['message'] ?? 'Failed to fetch transaction history');
         }
       } else {
-        print('❌ HTTP Error: ${response.statusCode}');
-        print('❌ Response Body: ${response.body}');
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      print('');
-      print('❌❌❌ PORTFOLIO SERVICE: ERROR GETTING TRANSACTION HISTORY ❌❌❌');
-      print('❌ Error: $e');
-      print('❌ Error Type: ${e.runtimeType}');
-      print('❌ Stack Trace: ${StackTrace.current}');
-      print('❌ Returning empty list');
-      print('');
+      print('Error getting transaction history: $e');
       return [];
     }
   }

@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
 /// Firebase Initialization Configuration
@@ -77,6 +78,30 @@ class FirebaseInit {
     }
     return null;
     */
+  }
+
+  /// Initialize Firebase App Check for invisible reCAPTCHA
+  static Future<void> initializeAppCheck() async {
+    try {
+      print('🛡️ App Check: Initializing...');
+      
+      await FirebaseAppCheck.instance.activate(
+        // Use Play Integrity for Android (production)
+        androidProvider: AndroidProvider.playIntegrity,
+        // Use App Attest for iOS (production)
+        appleProvider: AppleProvider.appAttest,
+        // Use reCAPTCHA for web
+        webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
+      );
+      
+      print('✅ App Check: Initialized with Play Integrity');
+      print('💡 App Check: reCAPTCHA will now be invisible');
+      
+    } catch (e) {
+      print('❌ App Check: Initialization failed - $e');
+      print('💡 App Check: Visible reCAPTCHA will be used as fallback');
+      // Don't throw - app should work without App Check
+    }
   }
 
   /// Check if Firebase is initialized

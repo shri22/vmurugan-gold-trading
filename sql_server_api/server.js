@@ -1,7 +1,8 @@
 // VMurugan Gold Trading - SQL Server API (SQL Server 2019 Compatible)
 const express = require('express');
-const https = require('https'); // ADDED: For HTTPS support
-const fs = require('fs'); // ADDED: For reading SSL certificates
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const sql = require('mssql');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -30,7 +31,6 @@ try {
 const app = express();
 const PORT = process.env.PORT || 3001;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
-const path = require('path');
 
 // SSL Certificate paths - Updated to use local ssl directory
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'ssl', 'certificate.crt');
@@ -1130,8 +1130,8 @@ app.post('/api/customers', [
       success: true,
       message: 'Customer saved successfully',
       user: {
-        id: customer.customer_id, // Use customer_id (VM1, VM2, etc.) instead of database id
-        customer_id: customer.customer_id,
+        id: parseInt(customer.id), // Numeric database id
+        customer_id: customer.customer_id, // Merchant string (VM1)
         phone: customer.phone,
         name: customer.name,
         email: customer.email,
@@ -1201,14 +1201,16 @@ app.post('/api/login', [
       res.json({
         success: true,
         message: 'Login successful',
-        customer: {  // Changed from 'user' to 'customer' for consistency
-          customer_id: customer.id,
+        customer: {
+          id: parseInt(customer.id),
+          customer_id: customer.customer_id,
           phone: customer.phone,
           name: customer.name,
           email: customer.email
         },
-        user: {  // Keep 'user' for backward compatibility
-          id: customer.id,
+        user: {
+          id: parseInt(customer.id),
+          customer_id: customer.customer_id,
           phone: customer.phone,
           name: customer.name,
           email: customer.email
@@ -1315,7 +1317,7 @@ app.get('/api/customers/:phone', async (req, res) => {
     res.json({
       success: true,
       user: {
-        id: customer.customer_id, // Use customer_id (VM1, VM2, etc.) instead of database id
+        id: parseInt(customer.id),
         customer_id: customer.customer_id,
         phone: customer.phone,
         name: customer.name,
@@ -2242,7 +2244,12 @@ app.get('/api/schemes/:customer_phone', async (req, res) => {
     // Get schemes with calculated values from transactions table
     const schemes = await schemesRequest.query(`
       SELECT
-        s.*,
+        s.id, s.scheme_id, s.customer_id, s.customer_phone, s.customer_name,
+        s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
+        s.status, s.start_date, s.end_date, s.total_invested,
+        s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
+        s.terms_accepted, s.terms_accepted_at, s.closure_remarks, s.closure_date,
+        s.business_id, s.created_at, s.updated_at,
         c.name as customer_name,
         c.email as customer_email,
         ISNULL(SUM(t.amount), 0) as calculated_invested,
@@ -2739,19 +2746,26 @@ app.post('/api/schemes/:scheme_id/flexi-payment', [
 app.get('/api/schemes/details/:scheme_id', async (req, res) => {
   try {
     const { scheme_id } = req.params;
-    console.log('📊 Getting scheme details for scheme_id:', scheme_id);
+    console.log('📊 ========== SCHEME DETAILS REQUEST ==========');
+    console.log('📊 Requested scheme_id:', scheme_id);
+    console.log('📊 scheme_id type:', typeof scheme_id);
+    console.log('📊 scheme_id length:', scheme_id.length);
 
     const schemeRequest = pool.request();
     schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
 
+    console.log('📊 Executing query with parameter:', scheme_id);
+
     const schemeResult = await schemeRequest.query(`
       SELECT
-        s.*,
+        s.id, s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, 
+        s.duration_months, s.status, s.start_date, s.end_date, s.customer_id,
+        s.customer_phone, s.business_id, s.created_at, s.updated_at,
+        s.terms_accepted, s.terms_accepted_at, s.closure_date, s.closure_remarks,
         c.name as customer_name,
-        c.email as customer_email,
-        c.phone as customer_phone
+        c.email as customer_email
       FROM schemes s
-      INNER JOIN customers c ON s.customer_id = c.id
+      INNER JOIN customers c ON s.customer_phone = c.phone
       WHERE s.scheme_id = @scheme_id
     `);
 
@@ -2766,14 +2780,30 @@ app.get('/api/schemes/details/:scheme_id', async (req, res) => {
       const debugResult = await debugRequest.query(`SELECT COUNT(*) as count FROM schemes WHERE scheme_id = @scheme_id`);
       console.log(`🔍 Debug: Schemes table has ${debugResult.recordset[0].count} records with scheme_id = ${scheme_id}`);
 
+      // Debug: Check without JOIN
+      const debugRequest2 = pool.request();
+      debugRequest2.input('scheme_id', sql.NVarChar(100), scheme_id);
+      const debugResult2 = await debugRequest2.query(`SELECT * FROM schemes WHERE scheme_id = @scheme_id`);
+      console.log(`🔍 Debug: Scheme exists without JOIN:`, debugResult2.recordset.length > 0);
+      if (debugResult2.recordset.length > 0) {
+        console.log(`🔍 Debug: Scheme customer_id:`, debugResult2.recordset[0].customer_id);
+        console.log(`🔍 Debug: Scheme customer_phone:`, debugResult2.recordset[0].customer_phone);
+      }
+
       return res.status(404).json({ success: false, message: 'Scheme not found' });
     }
 
     console.log(`✅ Scheme found: ${scheme_id}, Type: ${schemeResult.recordset[0].scheme_type}`);
 
     // Get scheme transactions
+    const customerPhone = schemeResult.recordset[0].customer_phone;
+
+    if (!customerPhone) {
+      console.log('⚠️ Warning: customer_phone not found in result!');
+    }
+
     const transactionsRequest = pool.request();
-    transactionsRequest.input('customer_phone', sql.NVarChar(15), schemeResult.recordset[0].customer_phone);
+    transactionsRequest.input('customer_phone', sql.NVarChar(15), customerPhone || '');
     transactionsRequest.input('payment_method', sql.NVarChar(50), 'SCHEME_INVESTMENT');
 
     const transactions = await transactionsRequest.query(`

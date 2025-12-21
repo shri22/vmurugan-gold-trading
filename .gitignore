@@ -70,3 +70,4 @@ android/gradle/wrapper/gradle-wrapper.jar
 ssl/
 ssl.7z
 server-cert.pem
+.env

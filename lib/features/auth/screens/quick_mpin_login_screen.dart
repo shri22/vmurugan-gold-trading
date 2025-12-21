@@ -10,6 +10,7 @@ import '../../../core/services/customer_service.dart';
 import '../../../core/services/encryption_service.dart';
 import '../../../core/services/auto_logout_service.dart';
 import '../../../core/services/secure_http_client.dart';
+import '../../../core/services/data_preloader.dart';
 import '../../../core/config/client_server_config.dart';
 import '../../../main.dart';
 import 'phone_entry_screen.dart';
@@ -136,6 +137,11 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
 
             // Register FCM Token for notifications
             await FCMService.registerTokenOnLogin();
+
+            // 🚀 PRELOAD ALL DATA FOR INSTANT APP EXPERIENCE
+            print('🚀 Starting data preload...');
+            await DataPreloader.preloadAllData(_savedPhone!);
+            print('✅ Data preload complete - app will be instant!');
 
             if (mounted) {
               // Navigate to main app
