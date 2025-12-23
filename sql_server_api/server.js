@@ -141,16 +141,16 @@ function verifyMPIN(encryptedInputMPIN, storedHashedMPIN) {
 
 // SQL Server 2019 configuration
 const sqlConfig = {
-  server: 'DESKTOP-3QPE6QQ',
-  port: 1433,
-  database: 'VMuruganGoldTrading',
-  user: 'sa',
-  password: 'git@#12345',
+  server: process.env.SQL_SERVER || 'DESKTOP-3QPE6QQ',
+  port: parseInt(process.env.SQL_PORT) || 1433,
+  database: process.env.SQL_DATABASE || 'VMuruganGoldTrading',
+  user: process.env.SQL_USERNAME || 'sa',
+  password: process.env.SQL_PASSWORD || 'git@#12345',
   options: {
-    encrypt: false, // Use true for Azure SQL
-    trustServerCertificate: true, // Use true for self-signed certificates
+    encrypt: process.env.SQL_ENCRYPT === 'true', // Use true for Azure SQL
+    trustServerCertificate: process.env.SQL_TRUST_SERVER_CERTIFICATE === 'true' || true, // Use true for self-signed certificates
     enableArithAbort: true, // Required for SQL Server 2005+
-    instanceName: '', // Leave empty for default instance
+    instanceName: process.env.SQL_INSTANCE || '', // Leave empty for default instance
     useUTC: false, // Use local time
     dateFirst: 1, // Monday as first day of week
     language: 'us_english',
@@ -2844,7 +2844,8 @@ app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
     schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
 
     const schemeResult = await schemeRequest.query(`
-      SELECT customer_phone, scheme_type FROM schemes
+      SELECT customer_phone, scheme_type, duration_months, completed_installments, status
+      FROM schemes
       WHERE scheme_id = @scheme_id
     `);
 
@@ -2852,8 +2853,29 @@ app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Scheme not found' });
     }
 
-    const customerPhone = schemeResult.recordset[0].customer_phone;
-    const schemeType = schemeResult.recordset[0].scheme_type;
+    const scheme = schemeResult.recordset[0];
+    const customerPhone = scheme.customer_phone;
+    const schemeType = scheme.scheme_type;
+    const durationMonths = scheme.duration_months;
+    const completedInstallments = scheme.completed_installments;
+    const status = scheme.status;
+
+    // Check if scheme is already completed or cancelled
+    if (status === 'COMPLETED') {
+      return res.json({
+        success: true,
+        has_payment: true,
+        message: 'Scheme is already completed. Please contact admin to redeem your gold/silver.'
+      });
+    }
+
+    if (status === 'CANCELLED') {
+      return res.json({
+        success: true,
+        has_payment: true,
+        message: 'Scheme has been cancelled.'
+      });
+    }
 
     // For FLEXI schemes, always return false (no monthly restrictions)
     if (schemeType === 'GOLDFLEXI' || schemeType === 'SILVERFLEXI') {
@@ -2862,6 +2884,21 @@ app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
         has_payment: false,
         message: 'No monthly restrictions for flexible schemes'
       });
+    }
+
+    // For PLUS schemes: Check if duration limit reached
+    if ((schemeType === 'GOLDPLUS' || schemeType === 'SILVERPLUS') && durationMonths) {
+      if (completedInstallments >= durationMonths) {
+        console.log(`⚠️ Scheme ${scheme_id} has completed ${completedInstallments}/${durationMonths} installments`);
+        return res.json({
+          success: true,
+          has_payment: true,
+          message: `Scheme completed! You have paid all ${durationMonths} installments. Please visit the store to close your scheme and redeem your ${scheme.metal_type || 'metal'}.`,
+          reason: 'SCHEME_COMPLETED',
+          completed_installments: completedInstallments,
+          duration_months: durationMonths
+        });
+      }
     }
 
     // Check for successful payments in the specified month
@@ -2886,7 +2923,9 @@ app.get('/api/schemes/:scheme_id/payments/monthly-check', async (req, res) => {
       success: true,
       has_payment: hasPayment,
       payment_count: paymentResult.recordset[0].payment_count,
-      message: hasPayment ? 'Payment found for this month' : 'No payment found for this month'
+      message: hasPayment ? 'Payment already made for this month' : 'No payment found for this month',
+      completed_installments: completedInstallments,
+      duration_months: durationMonths
     });
 
   } catch (error) {
@@ -4241,6 +4280,47 @@ app.get('/api/admin/customers/:phone', async (req, res) => {
 });
 
 // Get all transactions (for admin portal)
+// Get single transaction details by ID (must be before /api/transactions to match correctly)
+app.get('/api/transactions/:transaction_id', async (req, res) => {
+  try {
+    const { transaction_id } = req.params;
+    console.log('💳 Getting transaction details for:', transaction_id);
+
+    const result = await pool.request()
+      .input('transaction_id', sql.NVarChar(100), transaction_id)
+      .query(`
+        SELECT 
+          t.*,
+          c.customer_id,
+          c.name as customer_name,
+          c.email as customer_email
+        FROM transactions t
+        LEFT JOIN customers c ON t.customer_phone = c.phone
+        WHERE t.transaction_id = @transaction_id
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      transaction: result.recordset[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting transaction details:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/transactions', async (req, res) => {
   try {
     console.log('💳 Admin: Getting all transactions...');
@@ -4689,48 +4769,6 @@ app.use('/api/omniware', omniwareUpiRoutes);
 const omniwareWebhookRoutes = require('./routes/omniware_webhook');
 app.use('/api/omniware/webhook', omniwareWebhookRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
-  console.log('❌ 404 - Endpoint not found:', req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: 'Endpoint not found',
-    requested_url: req.originalUrl,
-    available_endpoints: [
-      '/health',
-      '/api/test-connection',
-      '/api/customers',
-      '/api/login',
-      '/api/auth/send-otp',
-      '/api/auth/verify-otp',
-      '/api/customers/:phone',
-      '/api/customers/:phone/update-mpin',
-      '/api/customers/:phone/set-mpin',
-      '/api/transactions',
-      '/api/transaction-history',
-      '/api/portfolio',
-      '/api/schemes/:customerId',
-      '/api/payments/worldline/token',
-      '/api/payments/worldline/verify',
-      '/worldline-response',
-      '/worldline-checkout',
-      '/privacy-policy',
-      '/terms-of-service',
-      '/account-deletion',
-      '/admin_portal/index.html'
-    ]
-  });
-});
-
-// Error handler
-app.use((error, req, res, next) => {
-  console.error('❌ Server error:', error.message);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-    error: error.message
-  });
-});
 
 // Start server with HTTPS support
 async function startServer() {
@@ -4914,8 +4952,8 @@ app.get('/api/admin/analytics/dashboard', async (req, res) => {
       SELECT
         COUNT(*) as total_transactions,
         SUM(amount) as total_revenue,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        SUM(gold_grams) as total_gold_sold,
+        SUM(silver_grams) as total_silver_sold,
         COUNT(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN 1 END) as transactions_this_month,
         SUM(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN amount ELSE 0 END) as revenue_this_month
       FROM transactions
@@ -5057,7 +5095,7 @@ app.get('/api/admin/reports/customer-wise', async (req, res) => {
       customerFilter = 'AND c.phone = @customer_phone';
     }
 
-    // Get customer details with aggregated data
+    // Get customer details with aggregated data (using subqueries to avoid Cartesian product)
     const customerQuery = `
       SELECT
         c.id,
@@ -5069,26 +5107,50 @@ app.get('/api/admin/reports/customer-wise', async (req, res) => {
         c.pan_card,
         c.registration_date,
         c.created_at as member_since,
-        COUNT(DISTINCT s.id) as total_schemes,
-        COUNT(DISTINCT CASE WHEN s.status = 'ACTIVE' THEN s.id END) as active_schemes,
-        SUM(s.total_invested) as total_scheme_investment,
-        SUM(CASE WHEN s.metal_type = 'GOLD' THEN s.total_metal_accumulated ELSE 0 END) as total_gold_grams,
-        SUM(CASE WHEN s.metal_type = 'SILVER' THEN s.total_metal_accumulated ELSE 0 END) as total_silver_grams,
-        COUNT(DISTINCT t.id) as total_transactions,
-        SUM(t.amount) as total_transaction_amount,
-        SUM(CASE WHEN t.metal_type = 'GOLD' THEN t.metal_grams ELSE 0 END) as total_gold_purchased,
-        SUM(CASE WHEN t.metal_type = 'SILVER' THEN t.metal_grams ELSE 0 END) as total_silver_purchased
+        ISNULL(scheme_stats.total_schemes, 0) as total_schemes,
+        ISNULL(scheme_stats.active_schemes, 0) as active_schemes,
+        ISNULL(scheme_stats.total_scheme_investment, 0) as total_scheme_investment,
+        ISNULL(scheme_stats.total_gold_grams, 0) as total_gold_grams,
+        ISNULL(scheme_stats.total_silver_grams, 0) as total_silver_grams,
+        ISNULL(txn_stats.total_transactions, 0) as total_transactions,
+        ISNULL(txn_stats.total_transaction_amount, 0) as total_transaction_amount,
+        ISNULL(txn_stats.total_gold_purchased, 0) as total_gold_purchased,
+        ISNULL(txn_stats.total_silver_purchased, 0) as total_silver_purchased
       FROM customers c
-      LEFT JOIN schemes s ON c.id = s.customer_id
-      LEFT JOIN transactions t ON c.phone = t.customer_phone AND t.status = 'SUCCESS'
+      LEFT JOIN (
+        SELECT 
+          customer_id,
+          COUNT(*) as total_schemes,
+          COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as active_schemes,
+          SUM(total_invested) as total_scheme_investment,
+          SUM(CASE WHEN metal_type = 'GOLD' THEN total_metal_accumulated ELSE 0 END) as total_gold_grams,
+          SUM(CASE WHEN metal_type = 'SILVER' THEN total_metal_accumulated ELSE 0 END) as total_silver_grams
+        FROM schemes
+        GROUP BY customer_id
+      ) scheme_stats ON c.id = scheme_stats.customer_id
+      LEFT JOIN (
+        SELECT 
+          customer_phone,
+          COUNT(*) as total_transactions,
+          SUM(amount) as total_transaction_amount,
+          SUM(gold_grams) as total_gold_purchased,
+          SUM(silver_grams) as total_silver_purchased
+        FROM transactions
+        WHERE status = 'SUCCESS'
+        GROUP BY customer_phone
+      ) txn_stats ON c.phone = txn_stats.customer_phone
       WHERE 1=1 ${customerFilter}
-      GROUP BY c.id, c.customer_id, c.phone, c.name, c.email, c.address, c.pan_card, c.registration_date, c.created_at
+      GROUP BY c.id, c.customer_id, c.phone, c.name, c.email, c.address, c.pan_card, c.registration_date, c.created_at,
+               scheme_stats.total_schemes, scheme_stats.active_schemes, scheme_stats.total_scheme_investment,
+               scheme_stats.total_gold_grams, scheme_stats.total_silver_grams,
+               txn_stats.total_transactions, txn_stats.total_transaction_amount,
+               txn_stats.total_gold_purchased, txn_stats.total_silver_purchased
     `;
 
     const customerResult = await request.query(customerQuery);
 
     if (customerResult.recordset.length === 0) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         error: 'Customer not found'
       });
@@ -5122,7 +5184,9 @@ app.get('/api/admin/reports/customer-wise', async (req, res) => {
 
     const transactionsResult = await transactionsRequest.query(`
       SELECT
-        transaction_id, amount, metal_type, metal_grams, metal_price_per_gram,
+        transaction_id, amount, metal_type, 
+        gold_grams, silver_grams,
+        gold_price_per_gram, silver_price_per_gram,
         payment_method, status, created_at, scheme_id
       FROM transactions
       WHERE customer_phone = @customer_phone_txn ${dateFilter}
@@ -5198,8 +5262,11 @@ app.get('/api/admin/reports/transaction-wise', async (req, res) => {
         c.name as customer_name,
         t.amount,
         t.metal_type,
-        t.metal_grams,
-        t.metal_price_per_gram,
+        COALESCE(t.gold_grams, 0) + COALESCE(t.silver_grams, 0) as total_grams,
+        t.gold_grams,
+        t.silver_grams,
+        t.gold_price_per_gram,
+        t.silver_price_per_gram,
         t.payment_method,
         t.status,
         t.scheme_id,
@@ -5217,10 +5284,8 @@ app.get('/api/admin/reports/transaction-wise', async (req, res) => {
     const summary = {
       total_transactions: result.recordset.length,
       total_amount: result.recordset.reduce((sum, txn) => sum + parseFloat(txn.amount || 0), 0),
-      total_gold_grams: result.recordset.reduce((sum, txn) =>
-        sum + (txn.metal_type === 'GOLD' ? parseFloat(txn.metal_grams || 0) : 0), 0),
-      total_silver_grams: result.recordset.reduce((sum, txn) =>
-        sum + (txn.metal_type === 'SILVER' ? parseFloat(txn.metal_grams || 0) : 0), 0),
+      total_gold_grams: result.recordset.reduce((sum, txn) => sum + parseFloat(txn.gold_grams || 0), 0),
+      total_silver_grams: result.recordset.reduce((sum, txn) => sum + parseFloat(txn.silver_grams || 0), 0),
       success_count: result.recordset.filter(txn => txn.status === 'SUCCESS').length,
       pending_count: result.recordset.filter(txn => txn.status === 'PENDING').length,
       failed_count: result.recordset.filter(txn => txn.status === 'FAILED').length
@@ -5278,8 +5343,8 @@ app.get('/api/admin/reports/date-wise', async (req, res) => {
         CAST(created_at AS DATE) as transaction_date,
         COUNT(*) as total_transactions,
         SUM(amount) as total_revenue,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        SUM(gold_grams) as total_gold_sold,
+        SUM(silver_grams) as total_silver_sold,
         COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as successful_transactions,
         COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_transactions,
         COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failed_transactions
@@ -5389,8 +5454,8 @@ app.get('/api/admin/reports/month-wise', async (req, res) => {
         FORMAT(created_at, 'yyyy-MM') as month_year,
         COUNT(*) as total_transactions,
         SUM(amount) as total_revenue,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        SUM(gold_grams) as total_gold_sold,
+        SUM(silver_grams) as total_silver_sold,
         AVG(amount) as avg_transaction_amount
       FROM transactions
       WHERE status = 'SUCCESS' ${dateFilter}
@@ -5493,8 +5558,8 @@ app.get('/api/admin/reports/year-wise', async (req, res) => {
         YEAR(created_at) as year,
         COUNT(*) as total_transactions,
         SUM(amount) as total_revenue,
-        SUM(CASE WHEN metal_type = 'GOLD' THEN metal_grams ELSE 0 END) as total_gold_sold,
-        SUM(CASE WHEN metal_type = 'SILVER' THEN metal_grams ELSE 0 END) as total_silver_sold,
+        SUM(gold_grams) as total_gold_sold,
+        SUM(silver_grams) as total_silver_sold,
         AVG(amount) as avg_transaction_amount
       FROM transactions
       WHERE status = 'SUCCESS' ${dateFilter}
@@ -6044,6 +6109,41 @@ app.get('/api/reports/consolidated', async (req, res) => {
     console.error('❌ Consolidated report error:', error);
     res.status(500).json({ success: false, message: 'Consolidated report failed', error: error.message });
   }
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  console.log('❌ 404 - Endpoint not found:', req.originalUrl);
+  res.status(404).json({
+    success: false,
+    message: 'Endpoint not found',
+    requested_url: req.originalUrl,
+    available_endpoints: [
+      '/health',
+      '/api/test-connection',
+      '/api/customers',
+      '/api/login',
+      '/api/auth/send-otp',
+      '/api/auth/verify-otp',
+      '/api/admin/analytics/dashboard',
+      '/api/admin/reports/scheme-wise',
+      '/api/admin/reports/customer-wise',
+      '/api/admin/reports/transaction-wise',
+      '/api/admin/reports/date-wise',
+      '/api/admin/reports/month-wise',
+      '/api/admin/reports/year-wise'
+    ]
+  });
+});
+
+// Error handler
+app.use((error, req, res, next) => {
+  console.error('❌ Server error:', error.message);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: error.message
+  });
 });
 
 // Handle graceful shutdown
