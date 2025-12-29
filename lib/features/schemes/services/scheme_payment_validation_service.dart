@@ -4,9 +4,10 @@ import '../../../core/config/api_config.dart';
 import '../../../core/enums/metal_type.dart';
 import '../../../core/services/customer_service.dart';
 import '../models/scheme_installment_model.dart';
+import '../../../core/config/client_server_config.dart';
 
 class SchemePaymentValidationService {
-  static const String _baseUrl = ApiConfig.baseUrl;
+  static String get _baseUrl => ApiConfig.baseUrl;
 
   /// Validate if customer can make payment for a scheme
   /// Returns validation result with message

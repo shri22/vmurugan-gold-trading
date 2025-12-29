@@ -281,10 +281,41 @@ class AuthService {
 
         if (firebaseResult['success'] == true) {
           print('✅ AuthService: Firebase OTP verified successfully');
+          
+          // CRITICAL: Call backend to get JWT token after Firebase verification
+          final phone = firebaseResult['phoneNumber'] ?? '';
+          if (phone.isNotEmpty) {
+            print('🔄 AuthService: Calling backend to authenticate phone: $phone');
+            final backendResult = await makeSecureRequest(
+              '/auth/verify-otp',
+              body: {
+                'phone': phone.replaceAll('+', ''), // Send without plus sign for backend compatibility
+                'otp': enteredOtp, // Send the same OTP for backend bookkeeping
+              },
+            );
+
+            if (backendResult['success'] == true) {
+              print('✅ AuthService: Backend authentication successful');
+              await _saveBackendToken(backendResult['token']);
+              
+              // Save customer data if returned
+              if (backendResult['customer'] != null) {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('user_data', jsonEncode(backendResult['customer']));
+                await prefs.setString('customer_id', backendResult['customer']['customer_id']?.toString() ?? '');
+              }
+            } else {
+              print('⚠️ AuthService: Backend auto-authentication failed: ${backendResult['message']}');
+              // We'll still return true for OTP verification since Firebase succeeded,
+              // but some backend features might be limited until next login
+            }
+          }
+
           // Clear Firebase verification data
           await prefs.remove('firebase_verification_id');
           return true;
-        } else {
+        }
+ else {
           print('❌ AuthService: Firebase OTP verification failed: ${firebaseResult['message']}');
           return false;
         }
@@ -580,8 +611,13 @@ class AuthService {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true) {
+          // Save token if present
+          if (data['token'] != null) {
+            await _saveBackendToken(data['token']);
+          }
+
           // Save login state with user ID
-          final userData = data['user'];
+          final userData = data['user'] ?? data['customer'];
           await _saveUserLoginState(phone, userData);
 
           // Save numeric user ID for server API calls (Safe parse for int/string)
@@ -635,12 +671,77 @@ class AuthService {
   static Future<void> _saveUserLoginState(String phone, Map<String, dynamic> userData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_isLoggedInKey, true);
-      await prefs.setString('user_phone', phone);
-      await prefs.setString('user_data', jsonEncode(userData));
-      print('✅ AuthService: User login state saved');
+      
+      print('💾 Saving login state...');
+      print('   Phone: $phone');
+      print('   UserData keys: ${userData.keys.join(", ")}');
+      
+      // Save all data with explicit awaits
+      final success1 = await prefs.setBool(_isLoggedInKey, true);
+      final success2 = await prefs.setString('user_phone', phone);
+      final success3 = await prefs.setString('user_data', jsonEncode(userData));
+      
+      // Force commit to disk (critical for persistence)
+      await prefs.commit();
+      
+      // Verify it was saved
+      final savedIsLoggedIn = prefs.getBool(_isLoggedInKey);
+      final savedPhone = prefs.getString('user_phone');
+      
+      if (success1 && success2 && success3 && savedIsLoggedIn == true && savedPhone == phone) {
+        print('✅ AuthService: User login state saved AND verified');
+        print('   Verified is_logged_in: $savedIsLoggedIn');
+        print('   Verified user_phone: $savedPhone');
+      } else {
+        print('⚠️ AuthService: Login state saved but verification failed!');
+        print('   success1=$success1, success2=$success2, success3=$success3');
+        print('   savedIsLoggedIn=$savedIsLoggedIn, savedPhone=$savedPhone');
+      }
     } catch (e) {
       print('❌ AuthService: Error saving user login state: $e');
+    }
+  }
+
+  /// Save backend JWT token to local storage
+  static Future<void> _saveBackendToken(String? token) async {
+    if (token == null || token.isEmpty) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final success = await prefs.setString('jwt_token', token);
+      await prefs.commit(); // Force write to disk
+      
+      if (success) {
+        print('✅ AuthService: Backend JWT token saved and committed (length: ${token.length})');
+      } else {
+        print('⚠️ AuthService: Token save returned false');
+      }
+    } catch (e) {
+      print('❌ AuthService: Error saving backend token: $e');
+    }
+  }
+
+  /// Get saved backend JWT token
+  static Future<String?> getBackendToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      
+      print('🔍 AuthService.getBackendToken() called');
+      print('   Token exists: ${token != null}');
+      if (token != null) {
+        print('   Token preview: ${token.substring(0, min(30, token.length))}...');
+      } else {
+        print('   ⚠️ No token found in SharedPreferences!');
+        // Debug: Check what keys exist
+        final allKeys = prefs.getKeys();
+        print('   Available keys: ${allKeys.take(10).join(", ")}');
+      }
+      
+      return token;
+    } catch (e) {
+      print('❌ Error getting backend token: $e');
+      return null;
     }
   }
 
@@ -712,19 +813,50 @@ class AuthService {
     try {
       final url = '${ClientServerConfig.baseUrl}$endpoint';
       final requestBody = body ?? data;
+      final token = await getBackendToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
       final response = await SecureHttpClient.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: requestBody != null ? jsonEncode(requestBody) : null,
       );
 
+      final responseData = jsonDecode(response.body);
+      
+      // Handle Unauthorized/Forbidden - Don't auto-logout, let caller handle it
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        print('⚠️ AuthService: Unauthorized request (${response.statusCode}). Token may be invalid.');
+        print('⚠️ Not logging out - allowing caller to handle authentication failure.');
+        return {
+          'success': false,
+          'message': responseData['message'] ?? 'Authentication required',
+          'status_code': response.statusCode,
+          'error_code': 'UNAUTHORIZED',
+          'requires_reauth': true,
+        };
+      }
+
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return responseData;
       } else {
-        throw Exception('Request failed: ${response.statusCode}');
+        return {
+          'success': false,
+          'message': responseData['message'] ?? 'Request failed: ${response.statusCode}',
+          'error_code': responseData['error_code'],
+          'status_code': response.statusCode,
+          ...responseData,
+        };
       }
     } catch (e) {
-      throw Exception('Secure request error: $e');
+      print('❌ AuthService.makeSecureRequest error: $e');
+      return {
+        'success': false,
+        'message': 'Network error. Please try again.',
+      };
     }
   }
 
@@ -733,23 +865,16 @@ class AuthService {
     try {
       print('🔔 AuthService: Updating FCM token for $phone');
       
-      final response = await SecureHttpClient.post(
-        '$baseUrl/notifications/register-token',
-        headers: headers,
-        body: jsonEncode({
+      final result = await makeSecureRequest(
+        '/notifications/register-token',
+        body: {
           'phone': phone,
           'fcm_token': token,
-          'device_type': 'mobile', // 'android' or 'ios' could be detected usually
-        }),
+          'device_type': 'mobile',
+        },
       );
 
-      if (response.statusCode == 200) {
-        print('✅ AuthService: FCM Token updated successfully');
-        return true;
-      } else {
-        print('⚠️ AuthService: Failed to update FCM token: ${response.statusCode}');
-        return false;
-      }
+      return result['success'] == true;
     } catch (e) {
       print('❌ AuthService: Error updating FCM token: $e');
       return false;

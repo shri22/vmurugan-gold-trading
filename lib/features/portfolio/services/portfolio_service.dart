@@ -11,7 +11,7 @@ import '../../../core/services/secure_http_client.dart';
 
 class PortfolioService {
   final DatabaseService _db = DatabaseService();
-  static const String baseUrl = ClientServerConfig.baseUrl;
+  static String get baseUrl => ClientServerConfig.baseUrl;
 
   // Get current user ID from shared preferences
   Future<int?> _getCurrentUserId() async {

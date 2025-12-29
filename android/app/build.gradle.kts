@@ -21,18 +21,17 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.vmurugan.digi_gold"
     compileSdk = flutter.compileSdkVersion
-    // NDK r27 (27.0.12077973) - Newer than r26b, fully supports 16 KB pages
-    // Required by Firebase and other plugins for compatibility
-    // NDK r27 is backward compatible and includes all 16 KB page size support
-    ndkVersion = "27.0.12077973"
+    // NDK r28 (28.2.13676358) - Required by integration_test
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "1.8"
     }
 
     signingConfigs {
@@ -103,4 +102,5 @@ flutter {
 
 dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

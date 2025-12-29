@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/services/encryption_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/config/sql_server_config.dart';
+import '../../../core/utils/validators.dart';
 
 class ChangeMpinScreen extends StatefulWidget {
   const ChangeMpinScreen({super.key});
@@ -136,8 +137,9 @@ class _ChangeMpinScreenState extends State<ChangeMpinScreen> {
       return;
     }
 
-    if (newMpin.length != 4) {
-      _showError('Please enter new 4-digit MPIN');
+    final mpinError = Validators.validateMPINStrength(newMpin);
+    if (mpinError != null) {
+      _showError(mpinError);
       return;
     }
 

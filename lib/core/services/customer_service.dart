@@ -4,6 +4,7 @@ import 'dart:io';
 // import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 
 class CustomerService {
   static const String _customerPhoneKey = 'customer_phone';
@@ -182,7 +183,7 @@ class CustomerService {
   }
 
   // Save transaction with customer details
-  static Future<bool> saveTransactionWithCustomerData({
+  static Future<Map<String, dynamic>> saveTransactionWithCustomerData({
     required String transactionId,
     required String type,
     required double amount,
@@ -234,12 +235,33 @@ class CustomerService {
       final location = await getLocation();
       print('📍 Location: $location');
 
-      // Ensure customer is registered
+      // Ensure customer has phone number (try multiple sources)
       if (customerInfo['phone'] == null || customerInfo['phone']!.isEmpty) {
-        print('❌❌❌ CUSTOMER NOT REGISTERED - CANNOT SAVE TRANSACTION ❌❌❌');
-        print('❌ Customer phone is null or empty: "${customerInfo['phone']}"');
-        print('❌ Please ensure user is properly logged in and registered');
-        return false;
+        print('⚠️ Customer phone not in registration data, using login phone...');
+        print('🔍 Checking all SharedPreferences keys:');
+        print('   user_phone: ${prefs.getString('user_phone')}');
+        print('   customer_phone: ${prefs.getString('customer_phone')}');
+        print('   is_logged_in: ${prefs.getBool('is_logged_in')}');
+        print('   All keys: ${prefs.getKeys()}');
+        
+        final userPhone = prefs.getString('user_phone');
+        if (userPhone != null && userPhone.isNotEmpty) {
+          customerInfo['phone'] = userPhone;
+          if (customerInfo['name'] == null || customerInfo['name']!.isEmpty) {
+            customerInfo['name'] = 'Customer $userPhone';
+          }
+          print('✅ Using phone from login state: $userPhone');
+        } else {
+          print('❌❌❌ CRITICAL: No phone number found anywhere! ❌❌❌');
+          print('❌ Cannot save transaction without customer phone');
+          print('❌ User must be logged in to make payments');
+          
+          final allKeys = prefs.getKeys().join(', ');
+          return {
+            'success': false, 
+            'message': 'User not logged in. Keys in storage: $allKeys'
+          };
+        }
       }
 
       // Additional validation
@@ -248,59 +270,115 @@ class CustomerService {
         customerInfo['name'] = 'VMurugan Customer';
       }
 
+      // CRITICAL: Check if we have a valid token (but proceed anyway)
+      print('🔐 Verifying authentication token...');
+      final currentToken = await AuthService.getBackendToken();
+      
+      if (currentToken == null || currentToken.isEmpty) {
+        print('⚠️ No JWT token found - will use admin token for authentication');
+        print('⚠️ This is normal after returning from payment gateway');
+      } else {
+        print('✅ Valid JWT token found (length: ${currentToken.length})');
+      }
+
       print('✅ Customer registered with phone: ${customerInfo['phone']}');
 
-      print('🔄 Calling ApiService.saveTransaction...');
-      print('📤 Data being sent to ApiService:');
-      print('  📞 Customer Phone: ${customerInfo['phone']}');
-      print('  👤 Customer Name: ${customerInfo['name'] ?? 'Unknown'}');
-      print('  📋 Additional Data: ${additionalData != null ? 'Present' : 'Not provided'}');
-
-      final result = await ApiService.saveTransaction(
-        transactionId: transactionId,
-        customerPhone: customerInfo['phone']!,
-        customerName: customerInfo['name'] ?? 'Unknown',
-        type: type,
-        amount: amount,
-        goldGrams: goldGrams,
-        goldPricePerGram: goldPricePerGram,
-        paymentMethod: paymentMethod,
-        status: status,
-        gatewayTransactionId: gatewayTransactionId,
-        deviceInfo: deviceInfo.toString(),
-        location: location?.toString() ?? 'Location not available',
-        additionalData: additionalData,
-        schemeType: schemeType,
-        schemeId: schemeId,
-        silverGrams: silverGrams,
-        silverPricePerGram: silverPricePerGram,
-      );
+      final result;
+      
+      // If it's a scheme payment, route to specialized endpoint for server-side processing and progress updates
+      if (schemeId != null && schemeId.isNotEmpty && status == 'SUCCESS') {
+        print('🎯 CustomerService: Routing to specialized scheme endpoint ($schemeType)');
+        
+        if (schemeType == 'GOLDPLUS' || schemeType == 'SILVERPLUS') {
+          result = await ApiService.investInScheme(
+            schemeId: schemeId,
+            amount: amount,
+            transactionId: transactionId,
+            gatewayTransactionId: gatewayTransactionId,
+            deviceInfo: deviceInfo.toString(),
+            location: location?.toString() ?? 'Location not available',
+          );
+        } else if (schemeType == 'GOLDFLEXI' || schemeType == 'SILVERFLEXI') {
+          result = await ApiService.makeFlexiPayment(
+            schemeId: schemeId,
+            amount: amount,
+            transactionId: transactionId,
+            gatewayTransactionId: gatewayTransactionId,
+            paymentMethod: paymentMethod,
+            deviceInfo: deviceInfo.toString(),
+            location: location?.toString() ?? 'Location not available',
+          );
+        } else {
+          // Fallback to regular save if scheme type unknown but ID exists
+          result = await ApiService.saveTransaction(
+            transactionId: transactionId,
+            customerPhone: customerInfo['phone']!,
+            customerName: customerInfo['name'] ?? 'Unknown',
+            type: type,
+            amount: amount,
+            goldGrams: goldGrams,
+            goldPricePerGram: goldPricePerGram,
+            paymentMethod: paymentMethod,
+            status: status,
+            gatewayTransactionId: gatewayTransactionId,
+            deviceInfo: deviceInfo.toString(),
+            location: location?.toString() ?? 'Location not available',
+            additionalData: additionalData,
+            schemeType: schemeType,
+            schemeId: schemeId,
+            silverGrams: silverGrams,
+            silverPricePerGram: silverPricePerGram,
+          );
+        }
+      } else {
+        // Regular transaction (not a scheme payment or failed payment)
+        result = await ApiService.saveTransaction(
+          transactionId: transactionId,
+          customerPhone: customerInfo['phone']!,
+          customerName: customerInfo['name'] ?? 'Unknown',
+          type: type,
+          amount: amount,
+          goldGrams: goldGrams,
+          goldPricePerGram: goldPricePerGram,
+          paymentMethod: paymentMethod,
+          status: status,
+          gatewayTransactionId: gatewayTransactionId,
+          deviceInfo: deviceInfo.toString(),
+          location: location?.toString() ?? 'Location not available',
+          additionalData: additionalData,
+          schemeType: schemeType,
+          schemeId: schemeId,
+          silverGrams: silverGrams,
+          silverPricePerGram: silverPricePerGram,
+        );
+      }
 
       print('📥 ApiService.saveTransaction returned: $result');
 
       if (result['success']) {
         print('✅✅✅ TRANSACTION SAVED TO SERVER SUCCESSFULLY! ✅✅✅');
         
-        // Log analytics
-        await ApiService.logAnalytics(
-          event: 'transaction_completed',
-          data: {
-            'transaction_id': transactionId,
-            'amount': amount,
-            'gold_grams': goldGrams,
-            'payment_method': paymentMethod,
-            'customer_phone': customerInfo['phone'],
-          },
-        );
+        // Log analytics - DISABLED: endpoint not implemented
+        // await ApiService.logAnalytics(
+        //   event: 'transaction_completed',
+        //   data: {
+        //     'transaction_id': transactionId,
+        //     'amount': amount,
+        //     'gold_grams': goldGrams,
+        //     'payment_method': paymentMethod,
+        //     'customer_phone': customerInfo['phone'],
+        //   },
+        // );
         
-        return true;
+        return result;
       } else {
-        print('Failed to save transaction to server: ${result['message']}');
-        return false;
+        print('📡 Global routing completed. Success: ${result['success']}');
+      
+        return result;
       }
     } catch (e) {
-      print('Error saving transaction with customer data: $e');
-      return false;
+      print('❌ Error in CustomerService.saveTransactionWithCustomerData: $e');
+      return {'success': false, 'message': e.toString()};
     }
   }
 

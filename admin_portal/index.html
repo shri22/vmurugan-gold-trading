@@ -693,11 +693,6 @@
                 <button type="submit" class="login-btn">Login to Admin Portal</button>
             </form>
 
-            <div class="demo-creds">
-                <h4>🔑 Demo Credentials</h4>
-                <p>Username: <strong>admin</strong></p>
-                <p>Password: <strong>VMURUGAN_ADMIN_2025</strong></p>
-            </div>
 
             <p style="color: #666; font-size: 12px; margin-top: 20px;">
                 🔒 Secure admin access only
@@ -1430,8 +1425,8 @@
         }
 
         // Configuration
-        const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'https://localhost:3001/api'
+        const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.'))
+            ? 'http://' + window.location.hostname + ':3001/api'
             : 'https://api.vmuruganjewellery.co.in:3001/api';
         const HEALTH_URL = API_BASE_URL.replace('/api', '/health');
 
@@ -1439,13 +1434,15 @@
             try {
                 // Remove /api prefix if provided in endpoint to avoid double /api/api
                 const cleanEndpoint = endpoint.startsWith('/api') ? endpoint.substring(4) : endpoint;
+                const token = localStorage.getItem('admin_token');
                 const response = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
                     ...options,
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         'User-Agent': 'VMurugan-Admin-Portal/1.0',
-                        'admin-token': 'VMURUGAN_ADMIN_2025',
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'admin-token': 'VMURUGAN_ADMIN_2025', // Legacy support
                         ...options.headers
                     },
                     mode: 'cors'
@@ -1459,19 +1456,47 @@
         }
 
         // Login functionality
-        document.getElementById('loginForm').addEventListener('submit', function (e) {
+        document.getElementById('loginForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
-            if (username === 'admin' && password === 'VMURUGAN_ADMIN_2025') {
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                // Load initial dashboard data
-                loadDashboardAnalytics();
-            } else {
-                alert('❌ Invalid credentials. Please try again.');
+            const btn = e.target.querySelector('button');
+            const originalText = btn.textContent;
+            btn.textContent = 'Authenticating...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Save token if provided
+                    if (data.token) {
+                        localStorage.setItem('admin_token', data.token);
+                    }
+
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    // Load initial dashboard data
+                    loadDashboardAnalytics();
+                } else {
+                    alert('❌ ' + (data.message || 'Invalid credentials. Please try again.'));
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('❌ Connection error. Please ensure the backend is running.');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
         });
 

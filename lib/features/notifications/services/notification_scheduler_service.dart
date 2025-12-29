@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 import '../models/notification_model.dart';
 import 'notification_service.dart';
 
@@ -19,7 +19,7 @@ class NotificationSchedulerService {
     if (_initialized) return;
 
     // Initialize timezone data
-    tz.initializeTimeZones();
+    tz_data.initializeTimeZones();
     
     // Initialize notifications plugin
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -53,10 +53,10 @@ class NotificationSchedulerService {
 
       // Schedule notification 3 days before due date
       final reminderDate = dueDate.subtract(const Duration(days: 3));
-      final scheduledDate = tz.TzDateTime.from(reminderDate, tz.local);
+      final scheduledDate = tz.TZDateTime.from(reminderDate, tz.local);
 
       // Only schedule if the date is in the future
-      if (scheduledDate.isBefore(tz.TzDateTime.now(tz.local))) {
+      if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
         print('⚠️ Reminder date is in the past, skipping: $reminderDate');
         return;
       }

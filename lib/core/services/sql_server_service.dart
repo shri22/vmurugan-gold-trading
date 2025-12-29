@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/sql_server_config.dart';
 import 'secure_http_client.dart';
+import 'auth_service.dart';
 
 /// SQL Server Database Service
 /// Connects to local SQL Server (SSMS) database via HTTP API
@@ -9,11 +10,56 @@ class SqlServerService {
   // Base URL for the SQL Server API bridge
   static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001/api';
   
-  // Headers for API requests
-  static Map<String, String> get headers => {
-    'Content-Type': 'application/json',
-    'admin-token': 'VMURUGAN_ADMIN_2025',
-  };
+  // Helper to get headers with JWT token
+  static Future<Map<String, String>> _getHeaders() async {
+    final token = await AuthService.getBackendToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+      'admin-token': 'VMURUGAN_ADMIN_2025', // Keep for admin endpoints
+    };
+  }
+
+  // Handle server responses centrally
+  static Future<Map<String, dynamic>> _handleResponse(http.Response response) async {
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      print('⚠️ SqlServerService: Unauthorized access (${response.statusCode}).');
+      print('⚠️ Not logging out - returning error for caller to handle.');
+      return {
+        'success': false,
+        'message': 'Authentication required',
+        'error_code': 'UNAUTHORIZED',
+        'status_code': response.statusCode,
+      };
+    }
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      try {
+        return jsonDecode(response.body);
+      } catch (e) {
+        return {
+          'success': true,
+          'message': 'Operation completed',
+        };
+      }
+    } else {
+      try {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Request failed',
+          'error': errorData['error'],
+          'status_code': response.statusCode,
+        };
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Request failed with status ${response.statusCode}',
+          'status_code': response.statusCode,
+        };
+      }
+    }
+  }
 
   // =============================================================================
   // CONNECTION MANAGEMENT
@@ -24,7 +70,7 @@ class SqlServerService {
     try {
       final response = await SecureHttpClient.get(
         '$baseUrl/test-connection',
-        headers: headers,
+        headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -91,21 +137,11 @@ class SqlServerService {
 
       final response = await SecureHttpClient.post(
         '$baseUrl/customers',
-        headers: headers,
+        headers: await _getHeaders(),
         body: jsonEncode(customerData),
       ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('✅ Customer saved to SQL Server: $phone');
-        return data;
-      } else {
-        final errorData = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': errorData['message'] ?? 'Failed to save customer',
-        };
-      }
+      return await _handleResponse(response);
     } catch (e) {
       print('❌ Error saving customer to SQL Server: $e');
       return {
@@ -120,7 +156,7 @@ class SqlServerService {
     try {
       final response = await SecureHttpClient.get(
         '$baseUrl/customers/$phone',
-        headers: headers,
+        headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -154,7 +190,7 @@ class SqlServerService {
     try {
       final response = await SecureHttpClient.get(
         '$baseUrl/customers',
-        headers: headers,
+        headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -218,10 +254,7 @@ class SqlServerService {
         'customer_name': customerName,
         'type': type,
         'amount': amount,
-        'gold_grams': goldGrams,
-        'gold_price_per_gram': goldPricePerGram,
-        'silver_grams': silverGrams ?? 0.0,
-        'silver_price_per_gram': silverPricePerGram ?? 0.0,
+        // Removed client-side calculations - backend now enforces server-side calculation
         'payment_method': paymentMethod,
         'status': status,
         'gateway_transaction_id': gatewayTransactionId,
@@ -237,35 +270,95 @@ class SqlServerService {
       print(jsonEncode(transactionData));
 
       print('🌐 Making HTTP POST request to: $baseUrl/transactions');
-      print('📤 Request Headers: $headers');
+      print('📤 Request Headers: ${await _getHeaders()}');
 
       final response = await SecureHttpClient.post(
         '$baseUrl/transactions',
-        headers: headers,
+        headers: await _getHeaders(),
         body: jsonEncode(transactionData),
       ).timeout(const Duration(seconds: 30));
 
       print('📥 HTTP Response Status: ${response.statusCode}');
-      print('📥 HTTP Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('✅✅✅ TRANSACTION SAVED TO SQL SERVER SUCCESSFULLY! ✅✅✅');
-        print('✅ Transaction ID: $transactionId');
-        print('✅ Server Response: $data');
-        return data;
-      } else {
-        final errorData = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': errorData['message'] ?? 'Failed to save transaction',
-        };
-      }
-    } catch (e) {
-      print('❌ Error saving transaction to SQL Server: $e');
+      return await _handleResponse(response);
+    } catch (error) {
+      print('❌ Error in saveTransaction: $error');
       return {
         'success': false,
-        'message': 'Failed to save transaction: $e',
+        'message': 'Failed to save transaction: $error',
+      };
+    }
+  }
+  
+  /// Invest in a PLUS scheme (GOLDPLUS/SILVERPLUS)
+  static Future<Map<String, dynamic>> investInScheme({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    try {
+      final body = {
+        'amount': amount,
+        'transaction_id': transactionId,
+        'gateway_transaction_id': gatewayTransactionId,
+        'device_info': deviceInfo,
+        'location': location,
+      };
+
+      print('🌐 Making HTTP POST request to: $baseUrl/schemes/$schemeId/invest');
+      
+      final response = await SecureHttpClient.post(
+        '$baseUrl/schemes/$schemeId/invest',
+        headers: await _getHeaders(),
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 30));
+
+      return await _handleResponse(response);
+    } catch (e) {
+      print('❌ Error in investInScheme: $e');
+      return {
+        'success': false,
+        'message': 'Failed to add investment to scheme: $e',
+      };
+    }
+  }
+
+  /// Make a FLEXI scheme payment (GOLDFLEXI/SILVERFLEXI)
+  static Future<Map<String, dynamic>> makeFlexiPayment({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? paymentMethod,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    try {
+      final body = {
+        'amount': amount,
+        'transaction_id': transactionId,
+        'gateway_transaction_id': gatewayTransactionId,
+        'payment_method': paymentMethod ?? 'FLEXI_PAYMENT',
+        'device_info': deviceInfo,
+        'location': location,
+      };
+
+      print('🌐 Making HTTP POST request to: $baseUrl/schemes/$schemeId/flexi-payment');
+      
+      final response = await SecureHttpClient.post(
+        '$baseUrl/schemes/$schemeId/flexi-payment',
+        headers: await _getHeaders(),
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 30));
+
+      return await _handleResponse(response);
+    } catch (e) {
+      print('❌ Error in makeFlexiPayment: $e');
+      return {
+        'success': false,
+        'message': 'Failed to add flexi payment: $e',
       };
     }
   }
@@ -291,7 +384,7 @@ class SqlServerService {
 
       final response = await SecureHttpClient.get(
         '$baseUrl/transactions$queryParams',
-        headers: headers,
+        headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -378,7 +471,7 @@ class SqlServerService {
     try {
       final response = await SecureHttpClient.get(
         '$baseUrl/admin/dashboard',
-        headers: headers,
+        headers: await _getHeaders(),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

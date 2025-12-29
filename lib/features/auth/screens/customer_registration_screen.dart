@@ -12,6 +12,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/config/sql_server_config.dart';
 import 'otp_verification_screen.dart';
 import '../../../core/services/fcm_service.dart';
+import '../../../core/utils/validators.dart';
 
 class CustomerRegistrationScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -82,9 +83,11 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
     final mpin = _mpinController.text.trim();
     final confirmMpin = _confirmMpinController.text.trim();
 
-    if (mpin.length != 4) {
+    // Validate MPIN Strength
+    final mpinError = Validators.validateMPINStrength(mpin);
+    if (mpinError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('MPIN must be 4 digits')),
+        SnackBar(content: Text(mpinError)),
       );
       return;
     }
@@ -569,16 +572,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                   },
                 ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'MPIN is required';
-                  }
-                  if (value.length != 4) {
-                    return 'MPIN must be 4 digits';
-                  }
-                  if (!RegExp(r'^[0-9]{4}$').hasMatch(value)) {
-                    return 'MPIN must contain only numbers';
-                  }
-                  return null;
+                  return Validators.validateMPINStrength(value ?? '');
                 },
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,

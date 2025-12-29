@@ -36,7 +36,7 @@ class PaymentOptionsDialog extends StatefulWidget {
 }
 
 class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
-  PaymentMethod? _selectedMethod;
+  PaymentMethod? _selectedMethod = PaymentMethod.upi; // Auto-select UPI (only option)
   bool _isProcessing = false;
 
   final List<PaymentMethodOption> _paymentMethods = [
@@ -46,34 +46,6 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
       subtitle: 'Pay using UPI apps like GPay, PhonePe, Paytm',
       icon: Icons.account_balance_wallet,
       isRecommended: true,
-    ),
-    PaymentMethodOption(
-      method: PaymentMethod.netBanking,
-      title: 'Net Banking',
-      subtitle: 'Pay using your bank account',
-      icon: Icons.account_balance,
-      isRecommended: false,
-    ),
-    PaymentMethodOption(
-      method: PaymentMethod.debitCard,
-      title: 'Debit Card',
-      subtitle: 'Pay using your debit card',
-      icon: Icons.credit_card,
-      isRecommended: false,
-    ),
-    PaymentMethodOption(
-      method: PaymentMethod.creditCard,
-      title: 'Credit Card',
-      subtitle: 'Pay using your credit card',
-      icon: Icons.credit_card_outlined,
-      isRecommended: false,
-    ),
-    PaymentMethodOption(
-      method: PaymentMethod.wallet,
-      title: 'Digital Wallet',
-      subtitle: 'Pay using digital wallets',
-      icon: Icons.wallet,
-      isRecommended: false,
     ),
   ];
 

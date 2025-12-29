@@ -172,7 +172,7 @@ class _ServerTestWidgetState extends State<ServerTestWidget> {
       // Test health endpoint using secure HTTP client
       final healthUrl = ServerConfig.baseUrl.replaceAll('/api', '/health');
       final response = await SecureHttpClient.get(
-        Uri.parse(healthUrl),
+        healthUrl,
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 10));
 

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 // CLIENT'S SERVER CONFIGURATION
 // Configuration for deploying APIs on client's own server
 
@@ -8,53 +10,52 @@ class ClientServerConfig {
   
   // PRODUCTION DEPLOYMENT ON WINDOWS SERVER
   // ✅ CONFIGURED WITH ACTUAL DOMAIN
-  static const String serverDomain = 'api.vmuruganjewellery.co.in'; // Your actual domain
-
-  // For local testing, you can temporarily use:
-  // static const String serverDomain = 'localhost'; // Local testing
+  static String get serverDomain => kReleaseMode 
+    ? 'api.vmuruganjewellery.co.in' 
+    : '192.168.29.150';
 
   // API port (HTTPS server runs on port 3001 for secure API endpoints)
   static const int serverPort = 3001;
 
   // Protocol (HTTPS ONLY for secure production)
-  static const String protocol = 'https';
+  static String get protocol => kReleaseMode ? 'https' : 'http';
 
   // =============================================================================
   // AUTOMATIC API ENDPOINT GENERATION
   // =============================================================================
 
-  // Base URL for all APIs (your Node.js server) - HTTPS ONLY
-  static const String baseUrl = '$protocol://$serverDomain:$serverPort/api';
+  // Base URL for all APIs (your Node.js server) - Dynamic based on mode
+  static String get baseUrl => '$protocol://$serverDomain:$serverPort/api';
 
   // User Management APIs (your Node.js endpoints)
-  static const String userRegisterEndpoint = '$baseUrl/customers';
-  static const String userLoginEndpoint = '$baseUrl/login';
-  static const String sendOtpEndpoint = '$baseUrl/auth/send-otp';
-  static const String verifyOtpEndpoint = '$baseUrl/auth/verify-otp';
+  static String get userRegisterEndpoint => '$baseUrl/customers';
+  static String get userLoginEndpoint => '$baseUrl/login';
+  static String get sendOtpEndpoint => '$baseUrl/auth/send-otp';
+  static String get verifyOtpEndpoint => '$baseUrl/auth/verify-otp';
 
   // Transaction Management APIs (your Node.js endpoints)
-  static const String transactionCreateEndpoint = '$baseUrl/api/transactions';
-  static const String transactionUpdateEndpoint = '$baseUrl/api/transaction-status';
-  static const String transactionHistoryEndpoint = '$baseUrl/api/transaction-history';
+  static String get transactionCreateEndpoint => '$baseUrl/api/transactions';
+  static String get transactionUpdateEndpoint => '$baseUrl/api/transaction-status';
+  static String get transactionHistoryEndpoint => '$baseUrl/api/transaction-history';
 
   // Portfolio Management APIs (your Node.js endpoints)
-  static const String portfolioGetEndpoint = '$baseUrl/api/portfolio';
-  static const String portfolioUpdateEndpoint = '$baseUrl/api/portfolio-update';
+  static String get portfolioGetEndpoint => '$baseUrl/api/portfolio';
+  static String get portfolioUpdateEndpoint => '$baseUrl/api/portfolio-update';
 
   // Scheme Management APIs (your Node.js endpoints) - NEW
-  static const String schemeCreateEndpoint = '$baseUrl/schemes';
-  static const String schemeGetEndpoint = '$baseUrl/schemes'; // GET /schemes/:phone
-  static const String schemeUpdateEndpoint = '$baseUrl/schemes'; // PUT /schemes/:scheme_id
-  static const String schemeInvestEndpoint = '$baseUrl/schemes'; // POST /schemes/:scheme_id/invest
-  static const String schemeDetailsEndpoint = '$baseUrl/schemes/details'; // GET /schemes/details/:scheme_id
+  static String get schemeCreateEndpoint => '$baseUrl/schemes';
+  static String get schemeGetEndpoint => '$baseUrl/schemes'; // GET /schemes/:phone
+  static String get schemeUpdateEndpoint => '$baseUrl/schemes'; // PUT /schemes/:scheme_id
+  static String get schemeInvestEndpoint => '$baseUrl/schemes'; // POST /schemes/:scheme_id/invest
+  static String get schemeDetailsEndpoint => '$baseUrl/schemes/details'; // GET /schemes/details/:scheme_id
 
   // Admin APIs (your Node.js endpoints)
-  static const String adminCustomersEndpoint = '$baseUrl/admin/customers';
-  static const String adminTransactionsEndpoint = '$baseUrl/admin/transactions';
-  static const String adminStatsEndpoint = '$baseUrl/admin/stats';
+  static String get adminCustomersEndpoint => '$baseUrl/admin/customers';
+  static String get adminTransactionsEndpoint => '$baseUrl/admin/transactions';
+  static String get adminStatsEndpoint => '$baseUrl/admin/stats';
 
   // Health check (your Node.js endpoint)
-  static const String healthCheckEndpoint = '$protocol://$serverDomain:$serverPort/health';
+  static String get healthCheckEndpoint => '$protocol://$serverDomain:$serverPort/health';
   
   // =============================================================================
   // CONFIGURATION VALIDATION

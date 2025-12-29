@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/secure_http_client.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/config/sql_server_config.dart';
 import '../models/gold_scheme_model.dart';
 import 'gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
@@ -20,7 +22,8 @@ class GoldSchemeService {
   static const _cacheValidityDuration = Duration(minutes: 5);
 
   // Backend API base URL
-  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001/api';
+  // Backend API base URL - Use the same one as SqlServerService
+  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001/api';
 
   // Initialize service
   void initialize() {
@@ -44,12 +47,26 @@ class GoldSchemeService {
     try {
       final phone = await _getCustomerPhone();
       if (phone == null) {
+        print('⚠️ GoldSchemeService: Customer phone not found. Cannot fetch schemes.');
         return [];
+      }
+
+      print('📊 GoldSchemeService: Fetching schemes for: $phone');
+
+      // Try to get token, but proceed even if not available
+      final token = await AuthService.getBackendToken();
+      if (token != null) {
+        print('🔐 GoldSchemeService: Using authenticated request');
+      } else {
+        print('⚠️ GoldSchemeService: No token - attempting unauthenticated request');
       }
 
       final response = await SecureHttpClient.get(
         '$baseUrl/schemes/$phone',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
         timeout: const Duration(seconds: 30),
       );
 

@@ -44,6 +44,7 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
   final List<FocusNode> _mpinFocusNodes = List.generate(4, (index) => FocusNode());
   final List<FocusNode> _confirmMpinFocusNodes = List.generate(4, (index) => FocusNode());
   final List<FocusNode> _loginMpinFocusNodes = List.generate(4, (index) => FocusNode());
+  final List<FocusNode> _otpFocusNodes = List.generate(6, (index) => FocusNode());
 
   // Form keys
   final GlobalKey<FormState> _phoneFormKey = GlobalKey<FormState>();
@@ -90,6 +91,9 @@ class _EnhancedPhoneEntryScreenState extends State<EnhancedPhoneEntryScreen> {
       focusNode.dispose();
     }
     for (var focusNode in _loginMpinFocusNodes) {
+      focusNode.dispose();
+    }
+    for (var focusNode in _otpFocusNodes) {
       focusNode.dispose();
     }
     _timer?.cancel();

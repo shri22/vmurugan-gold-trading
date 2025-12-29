@@ -27,9 +27,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     _loadTransactions();
   }
 
-  void _loadTransactions() {
+  Future<void> _loadTransactions() async {
     _schemeService.initialize();
-    final schemes = _schemeService.getUserSchemes();
+    final schemes = await _schemeService.getUserSchemes();
     
     // Collect all payments from all schemes
     final allPayments = <SchemePayment>[];
@@ -40,9 +40,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     // Sort by date (newest first)
     allPayments.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
     
-    setState(() {
-      _allTransactions = allPayments;
-    });
+    if (mounted) {
+      setState(() {
+        _allTransactions = allPayments;
+      });
+    }
   }
 
   List<SchemePayment> get _filteredTransactions {

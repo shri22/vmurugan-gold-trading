@@ -19,6 +19,7 @@ import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
 import '../../portfolio/models/portfolio_model.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
 import '../../notifications/services/notification_service.dart';
@@ -1108,10 +1109,9 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       print('💾 Starting database save operation (SILVER)...');
 
       // Save transaction to database only after successful payment
-      await _saveSuccessfulTransaction(response);
+      final result = await _saveSuccessfulTransaction(response);
 
-      print('✅ Database save completed (SILVER)');
-
+      print('✅ Database save completed');
       // If this is a scheme payment, create the scheme AFTER payment success
       if (widget.isFromScheme == true && widget.schemeType != null) {
         print('🎯 PAYMENT SUCCESS: Creating scheme after payment...');
@@ -1123,8 +1123,19 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       try {
         final customerInfo = await CustomerService.getCustomerInfo();
         final customerId = customerInfo['customer_id'];
+        
+        // Include server-calculated metal details if available
+        String metalInfo = '';
+        if (result != null && result['metal_grams'] != null) {
+          final grams = result['metal_grams'];
+          final rate = result['current_rate'];
+          metalInfo = '\nSilver: $grams g @ ₹$rate/g';
+        }
+
         if (customerId != null) {
-          successMessage = 'Silver purchase successful!\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+          successMessage = 'Silver purchase successful!$metalInfo\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+        } else if (metalInfo.isNotEmpty) {
+          successMessage = 'Silver purchase successful!$metalInfo\nTransaction ID: ${response.transactionId}';
         }
       } catch (e) {
         print('❌ Error getting customer ID: $e');
@@ -1222,6 +1233,80 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
     }
   }
 
+  Future<Map<String, dynamic>?> _saveSuccessfulTransaction(PaymentResponse response) async {
+    try {
+      print('\n💾 ========== SAVING TRANSACTION DATA (SILVER) ========== 💾');
+
+      print('📊 Transaction Details:');
+      print('   Transaction ID: ${response.transactionId}');
+      print('   Type: BUY');
+      print('   Amount: ₹${response.amount}');
+      print('   Payment Method: ${response.paymentMethod}');
+      print('   Gateway Transaction ID: ${response.gatewayTransactionId ?? 'N/A'}');
+      print('   Status: SUCCESS');
+
+      // Save transaction with customer data
+      print('📡 Calling CustomerService.saveTransactionWithCustomerData...');
+
+      // Prepare scheme details if applicable
+      String? schemeId;
+      String? schemeType;
+      
+      if (widget.isFromScheme == true) {
+        schemeId = widget.schemeId;
+        schemeType = widget.schemeType;
+        print('   Scheme Payment: YES');
+        print('   Scheme ID: $schemeId');
+        print('   Scheme Type: $schemeType');
+      }
+
+      final result = await CustomerService.saveTransactionWithCustomerData(
+        transactionId: response.transactionId,
+        type: 'BUY',
+        amount: response.amount,
+        goldGrams: 0.0, // This is a silver purchase - backend handles metal detection
+        goldPricePerGram: 0.0,
+        paymentMethod: response.paymentMethod,
+        status: 'SUCCESS',
+        gatewayTransactionId: response.gatewayTransactionId ?? '',
+        schemeId: schemeId,
+        schemeType: schemeType,
+      );
+
+      if (result['success'] == true) {
+        print('✅ ========== TRANSACTION SAVED SUCCESSFULLY (SILVER) ========== ✅');
+        print('   Transaction ID: ${response.transactionId}');
+
+        // Show server-calculated values if available
+        if (result['metal_grams'] != null) {
+          print('   🥈 Server Calculated Silver: ${result['metal_grams']}g');
+          print('   📈 Server Rate: ₹${result['current_rate']}');
+        }
+
+        print('   The transaction will now appear in:');
+        print('   - Customer Portfolio (updated silver balance)');
+        print('   - Transaction History');
+        print('   - Admin Dashboard');
+        print('   - All Reports');
+        print('================================================================\n');
+        return result;
+      } else {
+        print('❌ ========== FAILED TO SAVE TRANSACTION ========== ❌');
+        print('   Transaction ID: ${response.transactionId}');
+        print('   Error Message: ${result['message'] ?? 'Unknown error'}');
+        print('   Please check server logs for details');
+        print('====================================================\n');
+        return null;
+      }
+    } catch (e) {
+      print('❌ ========== ERROR SAVING TRANSACTION ========== ❌');
+      print('   Error: $e');
+      print('   Transaction ID: ${response.transactionId}');
+      print('=================================================\n');
+      return null;
+    }
+  }
+
   Future<void> _createSchemeAfterPayment(PaymentResponse response) async {
     try {
       print('🎯 CREATE SCHEME AFTER PAYMENT: Starting...');
@@ -1238,6 +1323,15 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         return;
       }
 
+      // Check if token exists
+      final token = await AuthService.getBackendToken();
+      
+      if (token == null) {
+        print('⚠️ CREATE SCHEME: No auth token - attempting without authentication');
+      } else {
+        print('🔐 CREATE SCHEME: Using authenticated request');
+      }
+
       final requestBody = {
         'customer_phone': customerPhone,
         'customer_name': customerName,
@@ -1249,9 +1343,13 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       print('🔍 CREATE SCHEME: Request body: $requestBody');
 
       final apiResponse = await SecureHttpClient.post(
-        'https://api.vmuruganjewellery.co.in:3001/api/schemes/create-after-payment',
-        headers: {'Content-Type': 'application/json'},
-        body: requestBody,
+        '${ServerConfig.baseUrl}/api/schemes/create-after-payment',
+        headers: {
+          'Content-Type': 'application/json',
+          'admin-token': 'VMURUGAN_ADMIN_2025',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(requestBody),
       );
 
       print('🔍 CREATE SCHEME: Response status: ${apiResponse.statusCode}');
@@ -1341,88 +1439,10 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
               ),
             );
           }
-        } else {
-          print('❌ CREATE SCHEME: HTTP 400 error: ${data['message']}');
         }
-      } else {
-        print('❌ CREATE SCHEME: HTTP error ${apiResponse.statusCode}');
       }
     } catch (e) {
       print('❌ CREATE SCHEME: Exception: $e');
-    }
-  }
-
-  Future<void> _saveSuccessfulTransaction(PaymentResponse response) async {
-    try {
-      print('\n💾 ========== SAVING TRANSACTION TO DATABASE (SILVER) ========== 💾');
-
-      if (_currentPrice == null) {
-        print('❌ Cannot save transaction: Silver price not available');
-        return;
-      }
-
-      final silverGrams = _selectedAmount / _currentPrice!.pricePerGram;
-
-      print('📊 Transaction Details:');
-      print('   Transaction ID: ${response.transactionId}');
-      print('   Type: BUY');
-      print('   Amount: ₹${response.amount}');
-      print('   Silver Grams: ${silverGrams.toStringAsFixed(4)}g');
-      print('   Silver Price/Gram: ₹${_currentPrice!.pricePerGram}');
-      print('   Payment Method: ${response.paymentMethod}');
-      print('   Gateway Transaction ID: ${response.gatewayTransactionId ?? 'N/A'}');
-      print('   Status: SUCCESS');
-
-      // Save transaction with customer data
-      print('📡 Calling CustomerService.saveTransactionWithCustomerData...');
-
-      // Prepare scheme details if applicable
-      String? schemeId;
-      String? schemeType;
-      
-      if (widget.isFromScheme == true) {
-        schemeId = widget.schemeId;
-        schemeType = widget.schemeType;
-        print('   Scheme Payment: YES');
-        print('   Scheme ID: $schemeId');
-        print('   Scheme Type: $schemeType');
-      }
-
-      final success = await CustomerService.saveTransactionWithCustomerData(
-        transactionId: response.transactionId,
-        type: 'BUY',
-        amount: response.amount,
-        goldGrams: 0.0, // Set to 0 for silver purchase
-        goldPricePerGram: 0.0, // Set to 0 for silver purchase
-        paymentMethod: response.paymentMethod,
-        status: 'SUCCESS',
-        gatewayTransactionId: response.gatewayTransactionId ?? '',
-        schemeId: schemeId,
-        schemeType: schemeType,
-        silverGrams: silverGrams, // Correctly pass silver grams
-        silverPricePerGram: _currentPrice!.pricePerGram,
-      );
-
-      if (success) {
-        print('✅ ========== TRANSACTION SAVED SUCCESSFULLY (SILVER) ========== ✅');
-        print('   Transaction ID: ${response.transactionId}');
-        print('   The transaction will now appear in:');
-        print('   - Customer Portfolio (updated silver balance)');
-        print('   - Transaction History');
-        print('   - Admin Dashboard');
-        print('   - All Reports');
-        print('================================================================\n');
-      } else {
-        print('❌ ========== FAILED TO SAVE TRANSACTION (SILVER) ========== ❌');
-        print('   Transaction ID: ${response.transactionId}');
-        print('   Please check server logs for details');
-        print('============================================================\n');
-      }
-    } catch (e) {
-      print('❌ ========== ERROR SAVING TRANSACTION (SILVER) ========== ❌');
-      print('   Error: $e');
-      print('   Transaction ID: ${response.transactionId}');
-      print('===========================================================\n');
     }
   }
 

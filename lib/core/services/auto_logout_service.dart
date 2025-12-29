@@ -17,6 +17,7 @@ class AutoLogoutService {
   bool _isPaymentInProgress = false;
   bool _isLoggedIn = false;
   DateTime? _lastActivityTime;
+  DateTime? _backgroundTime; // Track when app went to background
   
   // Callback for logout
   VoidCallback? _onAutoLogout;
@@ -31,6 +32,7 @@ class AutoLogoutService {
   Future<void> _checkLoginStatus() async {
     _isLoggedIn = await AuthService.isLoggedIn();
     if (_isLoggedIn) {
+      _lastActivityTime = DateTime.now(); // Initialize activity time
       _startInactivityTimer();
     }
   }
@@ -38,12 +40,14 @@ class AutoLogoutService {
   /// Start monitoring user activity
   void startMonitoring() {
     _isLoggedIn = true;
+    _lastActivityTime = DateTime.now(); // Initialize activity time
     _startInactivityTimer();
   }
 
   /// Stop monitoring (when user logs out)
   void stopMonitoring() {
     _isLoggedIn = false;
+    _lastActivityTime = null; // Clear activity time
     _stopInactivityTimer();
   }
 
@@ -75,6 +79,9 @@ class AutoLogoutService {
   void _startInactivityTimer() {
     _stopInactivityTimer(); // Clear any existing timer
     
+    // Ensure activity time is initialized
+    _lastActivityTime ??= DateTime.now();
+    
     _inactivityTimer = Timer(_inactivityTimeout, () {
       _handleInactivityTimeout();
     });
@@ -96,7 +103,7 @@ class AutoLogoutService {
   }
 
   /// Handle inactivity timeout
-  void _handleInactivityTimeout() async {
+  Future<void> _handleInactivityTimeout() async {
     // Don't logout if payment is in progress
     if (_isPaymentInProgress) {
       print('💳 AutoLogout: Skipping logout - payment in progress');
@@ -146,10 +153,53 @@ class AutoLogoutService {
   /// Get current payment status
   bool get isPaymentInProgress => _isPaymentInProgress;
 
+  /// Handle app going to background
+  void onAppPaused() {
+    if (!_isLoggedIn) return;
+    
+    // Record when app went to background
+    _backgroundTime = DateTime.now();
+    
+    // Pause the inactivity timer (we'll check elapsed time on resume)
+    _stopInactivityTimer();
+    
+    print('📱 AutoLogout: App went to background at ${_backgroundTime}');
+  }
+
+  /// Handle app coming back to foreground
+  Future<void> onAppResumed() async {
+    if (!_isLoggedIn) return;
+    
+    print('📱 AutoLogout: App resumed from background');
+    
+    // Check if user was in background for too long
+    if (_backgroundTime != null) {
+      final backgroundDuration = DateTime.now().difference(_backgroundTime!);
+      print('📱 AutoLogout: Was in background for ${backgroundDuration.inMinutes} minutes');
+      
+      // If user was away for more than the timeout period, logout immediately
+      if (backgroundDuration >= _inactivityTimeout) {
+        print('⏰ AutoLogout: Background time exceeded timeout - logging out');
+        await _handleInactivityTimeout();
+        return;
+      }
+      
+      // Clear background time
+      _backgroundTime = null;
+    }
+    
+    // Resume monitoring if not in payment
+    if (!_isPaymentInProgress) {
+      _lastActivityTime = DateTime.now(); // Reset activity time
+      _startInactivityTimer();
+    }
+  }
+
   /// Dispose resources
   void dispose() {
     _stopInactivityTimer();
     _onAutoLogout = null;
+    _backgroundTime = null;
   }
 }
 
@@ -168,19 +218,49 @@ class AutoLogoutWrapper extends StatefulWidget {
   State<AutoLogoutWrapper> createState() => _AutoLogoutWrapperState();
 }
 
-class _AutoLogoutWrapperState extends State<AutoLogoutWrapper> {
+class _AutoLogoutWrapperState extends State<AutoLogoutWrapper> with WidgetsBindingObserver {
   final AutoLogoutService _autoLogoutService = AutoLogoutService();
 
   @override
   void initState() {
     super.initState();
     _autoLogoutService.initialize(onAutoLogout: widget.onAutoLogout);
+    // Start observing app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    // Stop observing app lifecycle changes
+    WidgetsBinding.instance.removeObserver(this);
     _autoLogoutService.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    switch (state) {
+      case AppLifecycleState.paused:
+        // App went to background (user switched to another app)
+        _autoLogoutService.onAppPaused();
+        break;
+      case AppLifecycleState.resumed:
+        // App came back to foreground
+        _autoLogoutService.onAppResumed();
+        break;
+      case AppLifecycleState.inactive:
+        // App is transitioning (e.g., incoming call, app switcher)
+        // Don't do anything here, wait for paused or resumed
+        break;
+      case AppLifecycleState.detached:
+        // App is being terminated
+        break;
+      case AppLifecycleState.hidden:
+        // App is hidden (iOS specific)
+        break;
+    }
   }
 
   @override

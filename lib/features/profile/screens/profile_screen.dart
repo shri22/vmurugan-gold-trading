@@ -53,13 +53,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
       final userPhone = prefs.getString('user_phone');
 
+      print('🔍 ProfileScreen: Checking login state...');
+      print('   is_logged_in: $isLoggedIn');
+      print('   user_phone: $userPhone');
+      print('   All keys: ${prefs.getKeys().take(15).join(", ")}');
+
       if (!isLoggedIn || userPhone == null) {
+        print('❌ ProfileScreen: Login check failed!');
+        print('   isLoggedIn=$isLoggedIn, userPhone=$userPhone');
         setState(() {
           _errorMessage = 'Please login to view profile';
           _isLoading = false;
         });
         return;
       }
+
+      print('✅ ProfileScreen: Login check passed. Loading profile for: $userPhone');
 
       // INSTANT LOAD: Load cached data immediately for instant display
       if (!forceRefresh) {

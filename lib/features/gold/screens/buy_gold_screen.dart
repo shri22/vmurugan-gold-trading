@@ -20,6 +20,7 @@ import '../../schemes/models/scheme_installment_model.dart';
 import '../../portfolio/services/portfolio_service.dart';
 import '../../portfolio/models/portfolio_model.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/services/auto_logout_service.dart';
 import '../../../core/services/api_service.dart';
 import '../../auth/screens/customer_registration_screen.dart';
@@ -772,12 +773,30 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         _detailedErrorInfo = null;
       });
 
+
       print('💾 Starting database save operation...');
 
       // Save transaction to database only after successful payment
-      await _saveSuccessfulTransaction(response);
+      final result = await _saveSuccessfulTransaction(response);
 
       print('✅ Database save completed');
+      
+      // CHECK IF TRANSACTION SAVE FAILED
+      if (result == null || result['success'] != true) {
+        print('❌ TRANSACTION SAVE FAILED!');
+        print('❌ Result: $result');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment successful but failed to save transaction!\nError: ${result?['message'] ?? 'Unknown error'}\nPlease contact support with Transaction ID: ${response.transactionId}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 10),
+            ),
+          );
+        }
+        return; // Don't show success message
+      }
 
       // If this is a scheme payment, create the scheme AFTER payment success
       if (widget.isFromScheme == true && widget.schemeType != null) {
@@ -790,8 +809,19 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       try {
         final customerInfo = await CustomerService.getCustomerInfo();
         final customerId = customerInfo['customer_id'];
+        
+        // Include server-calculated metal details if available
+        String metalInfo = '';
+        if (result != null && result['metal_grams'] != null) {
+          final grams = result['metal_grams'];
+          final rate = result['current_rate'];
+          metalInfo = '\nGold: $grams g @ ₹$rate/g';
+        }
+
         if (customerId != null) {
-          successMessage = 'Gold purchase successful!\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+          successMessage = 'Gold purchase successful!$metalInfo\nCustomer ID: $customerId\nTransaction ID: ${response.transactionId}';
+        } else if (metalInfo.isNotEmpty) {
+          successMessage = 'Gold purchase successful!$metalInfo\nTransaction ID: ${response.transactionId}';
         }
       } catch (e) {
         print('❌ Error getting customer ID: $e');
@@ -889,23 +919,14 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
     }
   }
 
-  Future<void> _saveSuccessfulTransaction(PaymentResponse response) async {
+  Future<Map<String, dynamic>?> _saveSuccessfulTransaction(PaymentResponse response) async {
     try {
-      print('\n💾 ========== SAVING TRANSACTION TO DATABASE ========== 💾');
-
-      if (_currentPrice == null) {
-        print('❌ Cannot save transaction: Gold price not available');
-        return;
-      }
-
-      final goldGrams = _selectedAmount / _currentPrice!.pricePerGram;
+      print('\n💾 ========== SAVING TRANSACTION DATA ========== 💾');
 
       print('📊 Transaction Details:');
       print('   Transaction ID: ${response.transactionId}');
       print('   Type: BUY');
       print('   Amount: ₹${response.amount}');
-      print('   Gold Grams: ${goldGrams.toStringAsFixed(4)}g');
-      print('   Gold Price/Gram: ₹${_currentPrice!.pricePerGram}');
       print('   Payment Method: ${response.paymentMethod}');
       print('   Gateway Transaction ID: ${response.gatewayTransactionId ?? 'N/A'}');
       print('   Status: SUCCESS');
@@ -925,12 +946,12 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         print('   Scheme Type: $schemeType');
       }
 
-      final success = await CustomerService.saveTransactionWithCustomerData(
+      final result = await CustomerService.saveTransactionWithCustomerData(
         transactionId: response.transactionId,
         type: 'BUY',
         amount: response.amount,
-        goldGrams: goldGrams,
-        goldPricePerGram: _currentPrice!.pricePerGram,
+        goldGrams: 0.0, // Backend will calculate this server-side
+        goldPricePerGram: 0.0, // Backend will calculate this server-side
         paymentMethod: response.paymentMethod,
         status: 'SUCCESS',
         gatewayTransactionId: response.gatewayTransactionId ?? '',
@@ -938,26 +959,37 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         schemeType: schemeType,
       );
 
-      if (success) {
+      if (result['success'] == true) {
         print('✅ ========== TRANSACTION SAVED SUCCESSFULLY ========== ✅');
         print('   Transaction ID: ${response.transactionId}');
+        
+        // Show server-calculated values if available
+        if (result['metal_grams'] != null) {
+          print('   🥇 Server Calculated Gold: ${result['metal_grams']}g');
+          print('   📈 Server Rate: ₹${result['current_rate']}');
+        }
+        
         print('   The transaction will now appear in:');
         print('   - Customer Portfolio (updated gold balance)');
         print('   - Transaction History');
         print('   - Admin Dashboard');
         print('   - All Reports');
         print('======================================================\n');
+        return result;
       } else {
         print('❌ ========== FAILED TO SAVE TRANSACTION ========== ❌');
         print('   Transaction ID: ${response.transactionId}');
+        print('   Error Message: ${result['message'] ?? 'Unknown error'}');
         print('   Please check server logs for details');
         print('====================================================\n');
+        return result; // Return the error result, not null
       }
     } catch (e) {
       print('❌ ========== ERROR SAVING TRANSACTION ========== ❌');
       print('   Error: $e');
       print('   Transaction ID: ${response.transactionId}');
       print('=================================================\n');
+      return {'success': false, 'message': e.toString()}; // Return error, not null
     }
   }
 
@@ -977,6 +1009,15 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         return;
       }
 
+      // Check if token exists
+      final token = await AuthService.getBackendToken();
+      
+      if (token == null) {
+        print('⚠️ CREATE SCHEME: No auth token - attempting without authentication');
+      } else {
+        print('🔐 CREATE SCHEME: Using authenticated request');
+      }
+
       final requestBody = {
         'customer_phone': customerPhone,
         'customer_name': customerName,
@@ -988,9 +1029,13 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       print('🔍 CREATE SCHEME: Request body: $requestBody');
 
       final apiResponse = await SecureHttpClient.post(
-        'https://api.vmuruganjewellery.co.in:3001/api/schemes/create-after-payment',
-        headers: {'Content-Type': 'application/json'},
-        body: requestBody,
+        '${ServerConfig.baseUrl}/api/schemes/create-after-payment',
+        headers: {
+          'Content-Type': 'application/json',
+          'admin-token': 'VMURUGAN_ADMIN_2025',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(requestBody),
       );
 
       print('🔍 CREATE SCHEME: Response status: ${apiResponse.statusCode}');

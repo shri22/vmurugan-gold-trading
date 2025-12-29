@@ -149,6 +149,60 @@ class ApiService {
     }
   }
 
+  /// Smart router: Invest in a PLUS scheme (GOLDPLUS/SILVERPLUS)
+  static Future<Map<String, dynamic>> investInScheme({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    print('ApiService: Routing to $mode for scheme investment');
+    
+    if (storageMode == 'sqlserver') {
+      return await SqlServerApiService.investInScheme(
+        schemeId: schemeId,
+        amount: amount,
+        transactionId: transactionId,
+        gatewayTransactionId: gatewayTransactionId,
+        deviceInfo: deviceInfo,
+        location: location,
+      );
+    } else {
+      // Fallback for other modes if needed
+      return {'success': false, 'message': 'Scheme investment not supported in $storageMode mode'};
+    }
+  }
+
+  /// Smart router: Make a FLEXI scheme payment (GOLDFLEXI/SILVERFLEXI)
+  static Future<Map<String, dynamic>> makeFlexiPayment({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? paymentMethod,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    print('ApiService: Routing to $mode for flexi scheme payment');
+    
+    if (storageMode == 'sqlserver') {
+      return await SqlServerApiService.makeFlexiPayment(
+        schemeId: schemeId,
+        amount: amount,
+        transactionId: transactionId,
+        gatewayTransactionId: gatewayTransactionId,
+        paymentMethod: paymentMethod,
+        deviceInfo: deviceInfo,
+        location: location,
+      );
+    } else {
+      // Fallback for other modes if needed
+      return {'success': false, 'message': 'Flexi payment not supported in $storageMode mode'};
+    }
+  }
+
   // Update transaction status
   static Future<Map<String, dynamic>> updateTransactionStatus({
     required String transactionId,

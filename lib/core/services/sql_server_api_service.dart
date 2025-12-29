@@ -102,6 +102,48 @@ class SqlServerApiService {
     return result;
   }
 
+  /// Invest in a PLUS scheme (GOLDPLUS/SILVERPLUS)
+  static Future<Map<String, dynamic>> investInScheme({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    print('SqlServerApiService: Investing in PLUS scheme $schemeId');
+    return await SqlServerService.investInScheme(
+      schemeId: schemeId,
+      amount: amount,
+      transactionId: transactionId,
+      gatewayTransactionId: gatewayTransactionId,
+      deviceInfo: deviceInfo,
+      location: location,
+    );
+  }
+
+  /// Make a FLEXI scheme payment (GOLDFLEXI/SILVERFLEXI)
+  static Future<Map<String, dynamic>> makeFlexiPayment({
+    required String schemeId,
+    required double amount,
+    required String transactionId,
+    String? gatewayTransactionId,
+    String? paymentMethod,
+    String? deviceInfo,
+    String? location,
+  }) async {
+    print('SqlServerApiService: Making FLEXI payment for scheme $schemeId');
+    return await SqlServerService.makeFlexiPayment(
+      schemeId: schemeId,
+      amount: amount,
+      transactionId: transactionId,
+      gatewayTransactionId: gatewayTransactionId,
+      paymentMethod: paymentMethod,
+      deviceInfo: deviceInfo,
+      location: location,
+    );
+  }
+
   // =============================================================================
   // CUSTOMER OPERATIONS
   // =============================================================================
