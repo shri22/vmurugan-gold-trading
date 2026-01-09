@@ -7,6 +7,7 @@
         <domain includeSubdomains="true">192.168.0.1</domain>
         <domain includeSubdomains="true">192.168.1.100</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">api.vmuruganjewellery.co.in</domain>
     </domain-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>

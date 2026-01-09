@@ -107,6 +107,10 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             await prefs.setBool('is_logged_in', true);
             await prefs.setString('user_phone', _savedPhone!);
             await prefs.setString('user_data', jsonEncode(data['customer']));
+            if (data['token'] != null) {
+              await prefs.setString('jwt_token', data['token']);
+              print('✅ JWT token saved for secure API access');
+            }
 
             // CRITICAL FIX: Save customer data in the format CustomerService expects
             final customerData = data['customer'] ?? {};
@@ -135,8 +139,14 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             AutoLogoutService().startMonitoring();
             print('⏰ Auto-logout monitoring started');
 
-            // Register FCM Token for notifications
-            await FCMService.registerTokenOnLogin();
+            // Register FCM Token for notifications - Wrapped in try-catch to prevent login failure if notifications aren't ready
+            try {
+              await FCMService.registerTokenOnLogin();
+              print('✅ FCM registration attempted on login');
+            } catch (fcmError) {
+              print('⚠️ Push notification registration skipped: $fcmError');
+              // Don't rethrow - we want login to proceed even if notifications fail
+            }
 
             // 🚀 PRELOAD ALL DATA FOR INSTANT APP EXPERIENCE
             print('🚀 Starting data preload...');
@@ -161,7 +171,7 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
         _showError('No saved phone number found.');
       }
     } catch (e) {
-      _showError('Network error. Please check your connection.');
+      _showError('Error: ${e.toString()}');
       print('Quick MPIN login error: $e');
     } finally {
       if (mounted) {
@@ -359,23 +369,21 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
 
         return Container(
           width: 60,
-          height: 70,
+          height: 60,
           decoration: BoxDecoration(
-            color: AppColors.getCardColor(context),
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: hasFocus || hasValue
-                ? AppColors.primaryGold // Gold when focused or filled
-                : AppColors.primaryGreen, // Green when not focused
-              width: hasFocus || hasValue ? 3 : 2,
+              color: hasFocus
+                ? AppColors.primaryGold
+                : Colors.transparent, // Removed grey, making it transparent when not active
+              width: hasFocus ? 2.5 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: hasFocus
-                  ? AppColors.primaryGold.withOpacity(0.3)
-                  : AppColors.getShadowColor(context),
-                blurRadius: hasFocus ? 8 : 4,
-                spreadRadius: hasFocus ? 1 : 0,
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
@@ -386,17 +394,25 @@ class _QuickMpinLoginScreenState extends State<QuickMpinLoginScreen> {
             maxLength: 1,
             textAlign: TextAlign.center,
             obscureText: _obscureText,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: hasValue ? AppColors.primaryGold : AppColors.primaryGreen,
+              color: Colors.black,
             ),
             decoration: InputDecoration(
-              counterText: '',
+              filled: true,
+              fillColor: Colors.white,
               border: InputBorder.none,
-              hintText: _obscureText ? '•' : '',
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              counterText: '',
+              hintText: _obscureText ? '●' : '',
               hintStyle: TextStyle(
-                color: AppColors.getSecondaryTextColor(context),
+                color: Colors.black.withOpacity(0.5),
                 fontSize: 24,
               ),
             ),

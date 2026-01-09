@@ -294,7 +294,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   }
 
   Widget _buildTransactionSummary() {
-    final totalAmount = _filteredTransactions.fold(0.0, (sum, transaction) => sum + transaction.amount);
+    final totalAmount = _filteredTransactions
+        .where((t) => t.status.toLowerCase() == 'completed')
+        .fold(0.0, (sum, transaction) => sum + transaction.amount);
 
     // Calculate Gold and Silver separately from all successful transactions
     final totalGold = _realTransactions

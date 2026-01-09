@@ -9,10 +9,13 @@ import '../../../core/services/customer_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/secure_http_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/config/sql_server_config.dart';
+import '../../../core/config/api_config.dart';
 import 'otp_verification_screen.dart';
 import '../../../core/services/fcm_service.dart';
 import '../../../core/utils/validators.dart';
+import '../../profile/screens/terms_conditions_screen.dart';
 
 class CustomerRegistrationScreen extends StatefulWidget {
   final String? phoneNumber;
@@ -156,11 +159,17 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
 
           // Also save to CustomerService for backward compatibility
           await CustomerService.saveLoginSession(phone);
+          await CustomerService.setTermsAccepted(true); // Persist acceptance locally
 
           print('✅ Registration completed and phone saved for quick login: $phone');
 
-          // Register FCM Token for notifications
-          await FCMService.registerTokenOnLogin();
+          // Register FCM Token for notifications - Wrapped in try-catch to prevent registration failure
+          try {
+            await FCMService.registerTokenOnLogin();
+            print('✅ FCM registration attempted after registration');
+          } catch (fcmError) {
+            print('⚠️ Push notification registration skipped: $fcmError');
+          }
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -621,9 +630,7 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                 children: [
                   Checkbox(
                     value: _agreedToTerms,
-                    onChanged: (value) {
-                      setState(() => _agreedToTerms = value ?? false);
-                    },
+                    onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
                     activeColor: const Color(0xFFFFD700),
                   ),
                   Expanded(
@@ -642,17 +649,23 @@ class _CustomerRegistrationScreenState extends State<CustomerRegistrationScreen>
                               decoration: TextDecoration.underline,
                             ),
                             recognizer: TapGestureRecognizer()
-                              ..onTap = () => _launchURL('https://api.vmuruganjewellery.co.in:3001/terms-of-service'),
+                              ..onTap = () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const TermsConditionsScreen(showAsUpdate: false)),
+                                );
+                              },
                           ),
                           const TextSpan(text: ' and '),
                           TextSpan(
                             text: 'Privacy Policy',
-                            style: const TextStyle(
-                              color: Color(0xFFDAA520),
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.primaryGold,
+                              fontWeight: FontWeight.bold,
                               decoration: TextDecoration.underline,
                             ),
                             recognizer: TapGestureRecognizer()
-                              ..onTap = () => _launchURL('https://api.vmuruganjewellery.co.in:3001/privacy-policy'),
+                              ..onTap = () => _launchURL('${ApiConfig.rawBaseUrl}/privacy-policy'),
                           ),
                           const TextSpan(text: '. My transaction data will be securely stored for business analytics.'),
                         ],

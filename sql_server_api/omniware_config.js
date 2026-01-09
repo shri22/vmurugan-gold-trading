@@ -30,15 +30,20 @@ const SILVER_MERCHANT = {
     email: 'gopinath24949991@gmail.com'
 };
 
+// Master Domain from env or default
+const MASTER_DOMAIN = process.env.DOMAIN_NAME || 'prodapi.vmuruganjewellery.co.in';
+
 // Common Configuration
 const COMMON_CONFIG = {
     currency: 'INR',
     country: 'IND',
+    // Return URLs point to the main website
     returnUrl: 'https://vmuruganjewellery.co.in/payment/success',
     returnUrlFailure: 'https://vmuruganjewellery.co.in/payment/failure',
     returnUrlCancel: 'https://vmuruganjewellery.co.in/payment/cancel',
-    // NOTE: Replace {pg_api_url} with actual Omniware API URL when provided
-    apiBaseUrl: 'https://{pg_api_url}' // PLACEHOLDER - Get actual URL from Omniware team
+
+    // API server URLs
+    apiBaseUrl: `https://${MASTER_DOMAIN}:3001`
 };
 
 /**
@@ -48,11 +53,11 @@ const COMMON_CONFIG = {
  */
 function getMerchantConfig(metalType) {
     const normalizedType = (metalType || 'gold').toLowerCase();
-    
+
     if (normalizedType === 'silver') {
         return SILVER_MERCHANT;
     }
-    
+
     // Default to Gold merchant
     return GOLD_MERCHANT;
 }
@@ -68,15 +73,26 @@ function getMerchantConfig(metalType) {
 function generateHash(params, salt) {
     // Sort parameters alphabetically by key
     const sortedKeys = Object.keys(params).sort();
-    
+
     // Create pipe-delimited string: SALT|value1|value2|value3...
-    const hashString = salt + '|' + sortedKeys.map(key => params[key]).join('|');
-    
+    // Sanitize each value to remove newlines and normalize whitespace
+    const sanitizedValues = sortedKeys.map(key => {
+        const value = params[key];
+        // Sanitize value: remove newlines (\r\n), normalize whitespace, and trim
+        // This prevents hash validation errors for customers with line breaks in their address
+        return String(value)
+            .replace(/[\r\n]+/g, ' ')  // Replace all \r and \n with space
+            .replace(/\s+/g, ' ')       // Replace multiple spaces with single space
+            .trim();                     // Remove leading/trailing whitespace
+    });
+
+    const hashString = salt + '|' + sanitizedValues.join('|');
+
     console.log('🔐 Hash String:', hashString);
-    
+
     // Generate SHA-512 hash
     const hash = crypto.createHash('sha512').update(hashString).digest('hex');
-    
+
     // Convert to uppercase
     return hash.toUpperCase();
 }
@@ -101,7 +117,7 @@ function verifyHash(params, receivedHash, salt) {
  */
 function buildPaymentRequest(paymentData, metalType) {
     const merchant = getMerchantConfig(metalType);
-    
+
     const params = {
         api_key: merchant.apiKey,
         order_id: paymentData.orderId,
@@ -118,15 +134,15 @@ function buildPaymentRequest(paymentData, metalType) {
         zip_code: paymentData.customer.zipcode,
         return_url: COMMON_CONFIG.returnUrl
     };
-    
+
     // Add optional address fields if provided
     if (paymentData.customer.address) {
         params.address_line_1 = paymentData.customer.address;
     }
-    
+
     // Generate hash
     params.hash = generateHash(params, merchant.salt);
-    
+
     return params;
 }
 

@@ -340,9 +340,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         ),
         const SizedBox(height: AppSpacing.md),
 
-        // Show info for subsequent months (read-only)
-        if (!widget.isFirstMonth) ...[
-          Container(
+        // Show info for subsequent months (read-only) - ONLY for PLUS schemes
+        if (!widget.isFirstMonth && widget.schemeType != null && widget.schemeType!.toUpperCase().contains('PLUS')) ...[          Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.blue.shade50,
@@ -753,6 +752,8 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
         description: 'Gold Purchase - ${goldGrams.toStringAsFixed(4)}g',
         metalGrams: goldGrams,
         metalType: 'gold',
+        schemeId: widget.schemeId,
+        schemeType: widget.schemeType,
         onPaymentComplete: _handlePaymentComplete,
       ),
     );
@@ -1029,7 +1030,7 @@ class _BuyGoldScreenState extends State<BuyGoldScreen> {
       print('🔍 CREATE SCHEME: Request body: $requestBody');
 
       final apiResponse = await SecureHttpClient.post(
-        '${ServerConfig.baseUrl}/api/schemes/create-after-payment',
+        '${ServerConfig.baseUrl}/schemes/create-after-payment',
         headers: {
           'Content-Type': 'application/json',
           'admin-token': 'VMURUGAN_ADMIN_2025',

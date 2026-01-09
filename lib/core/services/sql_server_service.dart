@@ -3,12 +3,13 @@ import 'package:http/http.dart' as http;
 import '../config/sql_server_config.dart';
 import 'secure_http_client.dart';
 import 'auth_service.dart';
+import '../config/api_config.dart';
 
 /// SQL Server Database Service
 /// Connects to local SQL Server (SSMS) database via HTTP API
 class SqlServerService {
   // Base URL for the SQL Server API bridge
-  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001/api';
+  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:${ApiConfig.port}/api';
   
   // Helper to get headers with JWT token
   static Future<Map<String, String>> _getHeaders() async {
@@ -543,6 +544,24 @@ class SqlServerService {
         'customers_count': 0,
         'transactions_count': 0,
         'schemes_count': 0,
+      };
+    }
+  }
+
+  /// Accept terms and conditions
+  static Future<Map<String, dynamic>> acceptTerms(String phone) async {
+    try {
+      final response = await SecureHttpClient.post(
+        '$baseUrl/customers/$phone/accept-terms',
+        headers: await _getHeaders(),
+      ).timeout(const Duration(seconds: 10));
+
+      return await _handleResponse(response);
+    } catch (e) {
+      print('❌ Error accepting terms: $e');
+      return {
+        'success': false,
+        'message': 'Failed to accept terms: $e',
       };
     }
   }

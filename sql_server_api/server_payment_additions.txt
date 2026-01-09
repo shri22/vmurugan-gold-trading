@@ -1,0 +1,151 @@
+
+// ============================================================================
+// PAYMENT SAFETY MECHANISMS
+// Handles payments when users don't return to app after paying
+// ============================================================================
+
+// Payment Gateway Webhook - Called by gateway when payment succeeds/fails
+app.post('/api/payment-webhook', async (req, res) => {
+  try {
+    console.log('🔔 Payment webhook received:', req.body);
+    
+    const { transaction_id, status, gateway_transaction_id, amount } = req.body;
+
+    if (!transaction_id || !status) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    console.log(`📝 Updating transaction ${transaction_id} to status: ${status}`);
+
+    const txnResult = await pool.request()
+      .input('transaction_id', sql.NVarChar, transaction_id)
+      .query(`SELECT * FROM transactions WHERE transaction_id = @transaction_id`);
+
+    if (txnResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const transaction = txnResult.recordset[0];
+
+    await pool.request()
+      .input('transaction_id', sql.NVarChar, transaction_id)
+      .input('status', sql.NVarChar, status)
+      .input('gateway_txn_id', sql.NVarChar, gateway_transaction_id || null)
+      .query(`
+        UPDATE transactions 
+        SET status = @status, gateway_transaction_id = @gateway_txn_id, updated_at = SYSDATETIME()
+        WHERE transaction_id = @transaction_id
+      `);
+
+    if (status === 'SUCCESS') {
+      const phone = transaction.customer_phone;
+      const goldGrams = transaction.gold_grams || 0;
+      const silverGrams = transaction.silver_grams || 0;
+
+      await pool.request()
+        .input('phone', sql.NVarChar, phone)
+        .input('gold_grams', sql.Decimal(10, 4), goldGrams)
+        .input('silver_grams', sql.Decimal(10, 4), silverGrams)
+        .input('amount', sql.Decimal(12, 2), transaction.amount)
+        .query(`
+          UPDATE customers 
+          SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+              total_silver = ISNULL(total_silver, 0) + @silver_grams,
+              total_invested = ISNULL(total_invested, 0) + @amount,
+              transaction_count = ISNULL(transaction_count, 0) + 1,
+              last_transaction = SYSDATETIME(),
+              updated_at = SYSDATETIME()
+          WHERE phone = @phone
+        `);
+
+      console.log(`✅ Customer ${phone} credited via webhook: ${goldGrams}g gold, ${silverGrams}g silver`);
+    }
+
+    writeServerLog(`Payment webhook: ${transaction_id} → ${status}`, 'payments');
+    res.json({ success: true, message: 'Webhook processed', transaction_id });
+
+  } catch (error) {
+    console.error('❌ Payment webhook error:', error);
+    writeServerLog(`Payment webhook error: ${error.message}`, 'errors');
+    res.status(500).json({ success: false, message: 'Webhook processing failed' });
+  }
+});
+
+// Verify Payment Status - Called by app to check transaction status
+app.post('/api/payment/verify/:transaction_id', flexibleAuth, async (req, res) => {
+  try {
+    const { transaction_id } = req.params;
+    console.log(`🔍 Verifying payment: ${transaction_id}`);
+
+    const txnResult = await pool.request()
+      .input('transaction_id', sql.NVarChar, transaction_id)
+      .query(`SELECT * FROM transactions WHERE transaction_id = @transaction_id`);
+
+    if (txnResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const transaction = txnResult.recordset[0];
+    const currentStatus = transaction.status;
+
+    if (currentStatus === 'SUCCESS' || currentStatus === 'FAILED') {
+      return res.json({ success: true, transaction_id, status: currentStatus, needs_update: false });
+    }
+
+    const createdTime = new Date(transaction.created_at).getTime();
+    const minutesPending = (Date.now() - createdTime) / (1000 * 60);
+
+    let newStatus = currentStatus;
+    let shouldUpdate = false;
+
+    if (minutesPending > 10 && currentStatus === 'PENDING') {
+      newStatus = 'FAILED';
+      shouldUpdate = true;
+      
+      await pool.request()
+        .input('transaction_id', sql.NVarChar, transaction_id)
+        .input('status', sql.NVarChar, newStatus)
+        .query(`UPDATE transactions SET status = @status, updated_at = SYSDATETIME() WHERE transaction_id = @transaction_id`);
+    }
+
+    res.json({ success: true, transaction_id, status: newStatus, needs_update: shouldUpdate, minutes_pending: minutesPending });
+
+  } catch (error) {
+    console.error('❌ Payment verification error:', error);
+    res.status(500).json({ success: false, message: 'Verification failed' });
+  }
+});
+
+// Get Pending Payments - Auto-check on app startup
+app.get('/api/payment/pending/:phone', flexibleAuth, async (req, res) => {
+  try {
+    const { phone } = req.params;
+    console.log(`📋 Fetching pending payments for: ${phone}`);
+
+    const result = await pool.request()
+      .input('phone', sql.NVarChar, phone)
+      .query(`SELECT * FROM transactions WHERE customer_phone = @phone AND status = 'PENDING' ORDER BY created_at DESC`);
+
+    const verified = [];
+    for (const txn of result.recordset) {
+      const minutesPending = (Date.now() - new Date(txn.created_at).getTime()) / (1000 * 60);
+      let status = txn.status;
+      
+      if (minutesPending > 10) {
+        status = 'FAILED';
+        await pool.request()
+          .input('transaction_id', sql.NVarChar, txn.transaction_id)
+          .query(`UPDATE transactions SET status = 'FAILED', updated_at = SYSDATETIME() WHERE transaction_id = @transaction_id`);
+      }
+
+      verified.push({ ...txn, status, minutes_pending: minutesPending });
+    }
+
+    res.json({ success: true, pending_count: verified.length, transactions: verified });
+
+  } catch (error) {
+    console.error('❌ Error fetching pending payments:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch pending payments' });
+  }
+});
+

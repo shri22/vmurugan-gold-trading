@@ -348,68 +348,96 @@ class PortfolioService {
 
       final url = '$baseUrl/transaction-history?phone=$userPhone&limit=${limit ?? 50}';
 
+      print('📱 [iOS Debug] Fetching transaction history...');
+      print('📱 [iOS Debug] URL: $url');
+      print('📱 [iOS Debug] Phone: $userPhone');
+
       final response = await SecureHttpClient.get(
         url,
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
+      print('📱 [iOS Debug] Response Status: ${response.statusCode}');
+      print('📱 [iOS Debug] Response Body Length: ${response.body.length}');
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
+        print('📱 [iOS Debug] Response parsed successfully');
+        print('📱 [iOS Debug] Success: ${data['success']}');
+        print('📱 [iOS Debug] Transactions count: ${(data['transactions'] as List?)?.length ?? 0}');
 
         if (data['success'] == true) {
           final transactions = data['transactions'] as List;
 
           if (transactions.isEmpty) {
+            print('📱 [iOS Debug] No transactions found');
             return [];
           }
 
+          print('📱 [iOS Debug] Processing ${transactions.length} transactions...');
+          
           final processedTransactions = transactions.map((txnData) {
-            // Helper to safe parse double
-            double safeDouble(dynamic value) {
-              if (value == null) return 0.0;
-              if (value is num) return value.toDouble();
-              try {
-                return double.parse(value.toString());
-              } catch (_) {
-                return 0.0;
+            try {
+              // Helper to safe parse double
+              double safeDouble(dynamic value) {
+                if (value == null) return 0.0;
+                if (value is num) return value.toDouble();
+                try {
+                  return double.parse(value.toString());
+                } catch (_) {
+                  return 0.0;
+                }
               }
-            }
 
-            final goldGrams = safeDouble(txnData['gold_grams']);
-            final silverGrams = safeDouble(txnData['silver_grams']);
-            
-            // Infer metal type if missing or ambiguous
-            String metalType = txnData['metal_type'] ?? 'GOLD';
-            if ((metalType == 'GOLD' || metalType.isEmpty) && silverGrams > 0 && goldGrams == 0) {
-              metalType = 'SILVER';
-            }
+              final goldGrams = safeDouble(txnData['gold_grams']);
+              final silverGrams = safeDouble(txnData['silver_grams']);
+              
+              // Infer metal type if missing or ambiguous
+              String metalType = txnData['metal_type'] ?? 'GOLD';
+              if ((metalType == 'GOLD' || metalType.isEmpty) && silverGrams > 0 && goldGrams == 0) {
+                metalType = 'SILVER';
+              }
 
-            return Transaction.fromMap({
-              'id': txnData['id'],
-              'transaction_id': txnData['transaction_id'],
-              'type': txnData['transaction_type'] ?? 'BUY',
-              'amount': txnData['amount'],
-              'metal_grams': goldGrams + silverGrams,
-              'metal_price_per_gram': txnData['gold_price_per_gram'] ?? txnData['silver_price_per_gram'] ?? 0.0,
-              'metal_type': metalType,
-              'payment_method': txnData['payment_method'] ?? 'NET_BANKING',
-              'status': txnData['status'],
-              'gateway_transaction_id': txnData['gateway_transaction_id'],
-              'created_at': txnData['timestamp'],
-              'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
-              'scheme_id': txnData['scheme_id'],
-            });
+              print('📱 [iOS Debug] Transaction ${txnData['transaction_id']}: $metalType, Gold: $goldGrams, Silver: $silverGrams');
+
+              return Transaction.fromMap({
+                'id': txnData['id'],
+                'transaction_id': txnData['transaction_id'],
+                'type': txnData['transaction_type'] ?? 'BUY',
+                'amount': txnData['amount'],
+                'metal_grams': goldGrams + silverGrams,
+                'metal_price_per_gram': txnData['gold_price_per_gram'] ?? txnData['silver_price_per_gram'] ?? 0.0,
+                'metal_type': metalType,
+                'payment_method': txnData['payment_method'] ?? 'NET_BANKING',
+                'status': txnData['status'],
+                'gateway_transaction_id': txnData['gateway_transaction_id'],
+                'created_at': txnData['timestamp'],
+                'updated_at': txnData['updated_at'] ?? txnData['timestamp'],
+                'scheme_id': txnData['scheme_id'],
+              });
+            } catch (parseError) {
+              print('📱 [iOS Debug] Error parsing transaction: $parseError');
+              print('📱 [iOS Debug] Transaction data: $txnData');
+              rethrow;
+            }
           }).toList();
 
+          print('📱 [iOS Debug] Successfully processed ${processedTransactions.length} transactions');
           return processedTransactions;
         } else {
+          print('📱 [iOS Debug] Server returned success=false: ${data['message']}');
           throw Exception(data['message'] ?? 'Failed to fetch transaction history');
         }
       } else {
+        print('📱 [iOS Debug] Server error: ${response.statusCode}');
+        print('📱 [iOS Debug] Response: ${response.body}');
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error getting transaction history: $e');
+      print('📱 [iOS Debug] ❌ Error getting transaction history: $e');
+      print('📱 [iOS Debug] Error type: ${e.runtimeType}');
+      print('📱 [iOS Debug] Stack trace: ${StackTrace.current}');
       return [];
     }
   }

@@ -16,6 +16,8 @@ import '../../gold/screens/buy_gold_screen.dart';
 import '../../silver/screens/buy_silver_screen.dart';
 import '../../gold/services/gold_scheme_service.dart';
 import '../../gold/models/gold_scheme_model.dart';
+import '../../../core/config/api_config.dart';
+import '../../profile/screens/terms_conditions_screen.dart';
 
 class SchemeDetailsScreen extends StatefulWidget {
   final MetalType metalType;
@@ -113,8 +115,6 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           '12 months fixed duration',
           '97% value addition',
           '3% GST on redemption only',
-          'Premium tier benefits',
-          'Digital certificate',
         ],
       ),
       SchemeDetailModel(
@@ -130,8 +130,6 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           'Flexible duration',
           '97% value addition',
           '3% GST on redemption only',
-          'Easy withdrawal options',
-          'Digital certificate',
         ],
       ),
     ];
@@ -607,11 +605,14 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                                   borderRadius: BorderRadius.circular(AppBorderRadius.md),
                                 ),
                               ),
-                              child: Text(
-                                'View Scheme',
-                                style: AppTypography.titleSmall.copyWith(
-                                  color: scheme.color,
-                                  fontWeight: FontWeight.bold,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'View Scheme',
+                                  style: AppTypography.titleSmall.copyWith(
+                                    color: scheme.color,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -630,11 +631,14 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                               borderRadius: BorderRadius.circular(AppBorderRadius.md),
                             ),
                           ),
-                          child: Text(
-                            'Join ${scheme.name}',
-                            style: AppTypography.titleSmall.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Join ${scheme.name}',
+                              style: AppTypography.titleSmall.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -711,6 +715,12 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
         // Check if user has active scheme
         if (activeSchemes.isNotEmpty) {
           final activeScheme = activeSchemes.first;
+          
+          // Check if scheme is FLEXI (flexible amount) or PLUS (fixed amount)
+          // MOVED UP: Must be declared before first usage at line 717
+          final isFlexi = schemeType.toUpperCase().contains('FLEXI');
+          final isPlus = schemeType.toUpperCase().contains('PLUS');
+          
           final hasPaid = activeScheme.hasPaidThisMonth == true;
           
           // CRITICAL: Block if PLUS scheme and already paid this month
@@ -786,14 +796,39 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
           final now = DateTime.now();
           final isFirstMonth = createdDate.year == now.year && createdDate.month == now.month;
           
-          // Get amount - null for first month (user can enter), monthlyAmount for subsequent months
-          final amount = isFirstMonth ? null : activeScheme.monthlyAmount;
+          // Get amount based on scheme type and month
+          double? amount;
+          bool isEditable;
+          
+          if (isFlexi) {
+            // FLEXI: Always editable, no prefilled amount
+            amount = null; 
+            isEditable = true; // ALWAYS editable for FLEXI
+          } else if (isPlus) {
+            if (isFirstMonth) {
+              // PLUS First Month: User sets the amount, editable
+              amount = null;
+              isEditable = true;
+            } else {
+              // PLUS Subsequent Months: Fixed monthly amount, NOT editable
+              amount = activeScheme.monthlyAmount;
+              isEditable = false;
+            }
+          } else {
+            // Fallback (should not happen)
+            amount = null;
+            isEditable = true;
+          }
           
           print('✅ Navigating to payment screen:');
           print('   Scheme: ${activeScheme.schemeName}');
+          print('   Scheme Type: $schemeType');
+          print('   Is Flexi: $isFlexi');
+          print('   Is Plus: $isPlus');
           print('   Is First Month: $isFirstMonth');
           print('   Amount: $amount');
-          print('   Editable: $isFirstMonth');
+          print('   Monthly Amount: ${activeScheme.monthlyAmount}');
+          print('   Editable: $isEditable');
           
           // Navigate DIRECTLY to buy screen (NO DIALOG)
           if (widget.metalType == MetalType.gold) {
@@ -808,7 +843,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                   monthlyAmount: activeScheme.monthlyAmount,
                   schemeName: scheme.name,
                   isFirstMonth: isFirstMonth,
-                  isAmountEditable: isFirstMonth,
+                  isAmountEditable: isEditable, // FIXED: Use calculated editability
                 ),
               ),
             );
@@ -824,7 +859,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                   monthlyAmount: activeScheme.monthlyAmount,
                   schemeName: scheme.name,
                   isFirstMonth: isFirstMonth,
-                  isAmountEditable: isFirstMonth,
+                  isAmountEditable: isEditable, // FIXED: Use calculated editability
                 ),
               ),
             );
@@ -1006,7 +1041,7 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Customer: $customerName'),
+                Text('Customer: $customerName', style: const TextStyle(fontWeight: FontWeight.bold)),
                 Text('Phone: $customerPhone'),
                 const SizedBox(height: 16),
                 const Text('Monthly Investment Amount:'),
@@ -1017,14 +1052,57 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                   decoration: const InputDecoration(
                     prefixText: '₹ ',
                     border: OutlineInputBorder(),
-                    hintText: 'Enter amount',
+                    hintText: 'Min ₹ 100',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                
+                // CRITICAL TERMS SUMMARY
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGold.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                    border: Border.all(color: AppColors.primaryGold.withOpacity(0.5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Important Terms:',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkGold),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildBulletPoint('12 Months Minimum Lock-in period.'),
+                      _buildBulletPoint('Payments are NON-REFUNDABLE and strictly for buying gold/silver.'),
+                      _buildBulletPoint('Redeemable only for PHYSICAL JEWELLERY at V.Murugan showroom.'),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TermsConditionsScreen(showAsUpdate: false)),
+                          );
+                        },
+                        child: const Text(
+                          'View Full Terms & Conditions',
+                          style: TextStyle(
+                            color: AppColors.primaryGreen,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
+                
                 Row(
                   children: [
                     Checkbox(
                       value: termsAccepted,
+                      activeColor: AppColors.primaryGreen,
                       onChanged: (value) {
                         setState(() {
                           termsAccepted = value ?? false;
@@ -1032,7 +1110,10 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                       },
                     ),
                     const Expanded(
-                      child: Text('I accept the terms and conditions'),
+                      child: Text(
+                        'I acknowledge the lock-in period and non-refundable policy.',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
@@ -1051,10 +1132,27 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
                 customerName,
                 double.tryParse(monthlyAmountController.text) ?? 100,
               ) : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGold,
+                foregroundColor: AppColors.black,
+              ),
               child: const Text('Join Scheme'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBulletPoint(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 11))),
+        ],
       ),
     );
   }
@@ -1133,13 +1231,13 @@ class _SchemeDetailsScreenState extends State<SchemeDetailsScreen> {
       };
 
       print('🔍 SCHEME CREATION API REQUEST:');
-      print('🔍 URL: https://api.vmuruganjewellery.co.in:3001/api/schemes');
+      print('🔍 URL: ${ApiConfig.baseUrl}/schemes');
       print('🔍 Body: $requestBody');
 
       final response = await SecureHttpClient.post(
-        'https://api.vmuruganjewellery.co.in:3001/api/schemes',
+        '${ApiConfig.baseUrl}/schemes',
         headers: {'Content-Type': 'application/json'},
-        body: requestBody,
+        body: jsonEncode(requestBody),
       );
 
       print('🔍 Scheme creation response status: ${response.statusCode}');

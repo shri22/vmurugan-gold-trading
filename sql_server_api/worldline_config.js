@@ -40,18 +40,21 @@ const TEST_MERCHANT_CONFIG = {
   EMAIL: 'test@vmuruganjewellery.co.in',
 };
 
+// Master Domain from env or default
+const MASTER_DOMAIN = process.env.DOMAIN_NAME || 'prodapi.vmuruganjewellery.co.in';
+
 // Common Worldline Configuration
 const WORLDLINE_COMMON_CONFIG = {
   // Payment Gateway URL (same for production and test)
   PAYMENT_URL: 'https://www.paynimo.com/api/paynimoV2.req',
-  
-  // Return URLs
-  RETURN_URL: 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify',
-  CANCEL_URL: 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/cancel',
-  
+
+  // Return URLs (Dynamically built)
+  RETURN_URL: `https://${MASTER_DOMAIN}:3001/api/payments/worldline/verify`,
+  CANCEL_URL: `https://${MASTER_DOMAIN}:3001/api/payments/worldline/cancel`,
+
   // Currency
   CURRENCY: 'INR',
-  
+
   // Payment Methods (all enabled)
   PAYMENT_METHODS: {
     CREDIT_CARD: true,
@@ -60,12 +63,12 @@ const WORLDLINE_COMMON_CONFIG = {
     UPI: true,
     WALLETS: true,
   },
-  
+
   // Transaction Settings
   TRANSACTION_TIMEOUT: 900, // 15 minutes in seconds
   MIN_AMOUNT: 1,
   MAX_AMOUNT: 1000000, // 10 lakhs
-  
+
   // Device ID for hash generation
   DEVICE_ID: 'ANDROIDSH2',
 };
@@ -82,7 +85,7 @@ function getMerchantConfig(metalType) {
   }
 
   const normalizedMetalType = (metalType || 'gold').toLowerCase();
-  
+
   if (normalizedMetalType === 'silver') {
     console.log('✅ Using SILVER merchant (779295) for Silver schemes');
     return SILVER_MERCHANT_CONFIG;
@@ -99,7 +102,7 @@ function getMerchantConfig(metalType) {
  */
 function getWorldlineConfig(metalType) {
   const merchantConfig = getMerchantConfig(metalType);
-  
+
   return {
     ...WORLDLINE_COMMON_CONFIG,
     ...merchantConfig,
@@ -116,15 +119,15 @@ function getWorldlineConfig(metalType) {
  */
 function validateConfig(metalType) {
   const config = getMerchantConfig(metalType);
-  
+
   const required = ['MERCHANT_CODE', 'SCHEME_CODE', 'API_KEY', 'SALT'];
   const missing = required.filter(key => !config[key]);
-  
+
   if (missing.length > 0) {
     console.error(`❌ Missing required configuration: ${missing.join(', ')}`);
     return false;
   }
-  
+
   console.log(`✅ Configuration validated for ${metalType} merchant`);
   return true;
 }

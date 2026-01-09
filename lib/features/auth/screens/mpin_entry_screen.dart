@@ -101,6 +101,11 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
           await prefs.setBool('is_logged_in', true);
           await prefs.setString('user_phone', widget.phoneNumber);
           await prefs.setString('user_data', jsonEncode(data['user']));
+          
+          if (data['token'] != null) {
+            await prefs.setString('jwt_token', data['token']);
+            print('✅ JWT token saved for secure API access');
+          }
 
           // IMPORTANT: Save user ID for server API calls
           await prefs.setInt('current_user_id', data['user']['id']);
@@ -132,7 +137,7 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
         _showError(errorData['message'] ?? 'Login failed. Please try again.');
       }
     } catch (e) {
-      _showError('Network error. Please check your connection.');
+      _showError('Error: ${e.toString()}');
       print('MPIN login error: $e');
     } finally {
       if (mounted) {
@@ -218,6 +223,9 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
         _loginWithMpin();
       }
     }
+
+    // Update UI to show focus change
+    setState(() {});
   }
 
   @override
@@ -296,19 +304,19 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: AppColors.getCardColor(context),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: _focusNodes[index].hasFocus
                           ? AppColors.primaryGold
-                          : AppColors.getBorderColor(context),
-                        width: 2,
+                          : Colors.transparent, // Removed grey, making it transparent when not active
+                        width: _focusNodes[index].hasFocus ? 2.5 : 1.0,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.getShadowColor(context),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
                         ),
                       ],
                     ),
@@ -320,16 +328,32 @@ class _MpinEntryScreenState extends State<MpinEntryScreen> {
                       obscureText: true,
                       maxLength: 1,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
                         counterText: '',
+                        hintText: '●',
+                        hintStyle: TextStyle(
+                          color: Colors.black.withOpacity(0.5),
+                          fontSize: 24,
+                        ),
                       ),
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: Colors.black,
                       ),
                       onChanged: (value) => _onMpinChanged(value, index),
+                      onTap: () {
+                        setState(() {});
+                      },
                     ),
                   );
                 }),

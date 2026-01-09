@@ -1084,8 +1084,6 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
         description: 'Silver Purchase - ${silverGrams.toStringAsFixed(4)}g',
         metalGrams: silverGrams,
         metalType: 'silver',
-        schemeId: widget.schemeId,
-        schemeType: widget.schemeType,
         onPaymentComplete: _handlePaymentComplete,
       ),
     );
@@ -1345,7 +1343,7 @@ class _BuySilverScreenState extends State<BuySilverScreen> {
       print('🔍 CREATE SCHEME: Request body: $requestBody');
 
       final apiResponse = await SecureHttpClient.post(
-        '${ServerConfig.baseUrl}/schemes/create-after-payment',
+        '${ServerConfig.baseUrl}/api/schemes/create-after-payment',
         headers: {
           'Content-Type': 'application/json',
           'admin-token': 'VMURUGAN_ADMIN_2025',

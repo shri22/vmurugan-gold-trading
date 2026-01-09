@@ -1,7 +1,7 @@
 # Version Code Management - Quick Reference
 
-**Current Version:** 1.3.2+19  
-**Last Updated:** December 12, 2025, 23:36 IST
+**Current Version:** 1.4.1+32  
+**Last Updated:** January 09, 2026, 19:15 IST
 
 ---
 
@@ -13,16 +13,16 @@ Once a version code is uploaded to Google Play Console (even as a draft), it is 
 
 | Version Code | Status | Notes |
 |--------------|--------|-------|
-| 17 | ❌ Used | Previously uploaded |
-| 18 | ❌ Used | Uploaded without 16 KB support |
-| **19** | ✅ **Current** | **With 16 KB page size support - READY TO UPLOAD** |
+| 30 | ❌ Used | Already used in Play Console |
+| 31 | ❌ Used | Already used in App Store/Play Console |
+| **32** | ✅ **Current** | **Ready for upload** |
 
 ---
 
 ## Current Build Details
 
-- **Version Name:** 1.3.2
-- **Version Code:** 19
+- **Version Name:** 1.4.1
+- **Version Code:** 32
 - **File:** `app-release.aab`
 - **Location:** `build/app/outputs/bundle/release/app-release.aab`
 - **Size:** 49 MB

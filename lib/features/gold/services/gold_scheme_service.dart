@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/secure_http_client.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/config/sql_server_config.dart';
+import '../../../core/config/api_config.dart';
 import '../models/gold_scheme_model.dart';
 import 'gold_price_service.dart';
 import '../../notifications/services/notification_service.dart';
@@ -22,8 +23,8 @@ class GoldSchemeService {
   static const _cacheValidityDuration = Duration(minutes: 5);
 
   // Backend API base URL
-  // Backend API base URL - Use the same one as SqlServerService
-  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001/api';
+  // Backend API base URL - Use the standard ApiConfig
+  static String get baseUrl => ApiConfig.baseUrl;
 
   // Initialize service
   void initialize() {

@@ -1,31 +1,28 @@
-import 'package:flutter/foundation.dart';
+import 'api_config.dart';
 
 // CLIENT'S SERVER CONFIGURATION
 // Configuration for deploying APIs on client's own server
 
 class ClientServerConfig {
   // =============================================================================
-  // CLIENT'S SERVER DETAILS - UPDATE THESE VALUES
+  // CLIENT'S SERVER DETAILS - USES ApiConfig AS MASTER
   // =============================================================================
   
   // PRODUCTION DEPLOYMENT ON WINDOWS SERVER
-  // ✅ CONFIGURED WITH ACTUAL DOMAIN
-  static String get serverDomain => kReleaseMode 
-    ? 'api.vmuruganjewellery.co.in' 
-    : '192.168.29.150';
+  static const String serverDomain = ApiConfig.domain;
 
-  // API port (HTTPS server runs on port 3001 for secure API endpoints)
-  static const int serverPort = 3001;
+  // API port (linked to ApiConfig)
+  static int get serverPort => int.tryParse(ApiConfig.port) ?? 443;
 
-  // Protocol (HTTPS ONLY for secure production)
-  static String get protocol => kReleaseMode ? 'https' : 'http';
+  // Protocol (ALWAYS HTTPS)
+  static String get protocol => 'https';
 
   // =============================================================================
   // AUTOMATIC API ENDPOINT GENERATION
   // =============================================================================
 
   // Base URL for all APIs (your Node.js server) - Dynamic based on mode
-  static String get baseUrl => '$protocol://$serverDomain:$serverPort/api';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   // User Management APIs (your Node.js endpoints)
   static String get userRegisterEndpoint => '$baseUrl/customers';
@@ -34,13 +31,13 @@ class ClientServerConfig {
   static String get verifyOtpEndpoint => '$baseUrl/auth/verify-otp';
 
   // Transaction Management APIs (your Node.js endpoints)
-  static String get transactionCreateEndpoint => '$baseUrl/api/transactions';
-  static String get transactionUpdateEndpoint => '$baseUrl/api/transaction-status';
-  static String get transactionHistoryEndpoint => '$baseUrl/api/transaction-history';
+  static String get transactionCreateEndpoint => '$baseUrl/transactions';
+  static String get transactionUpdateEndpoint => '$baseUrl/transaction-status';
+  static String get transactionHistoryEndpoint => '$baseUrl/transaction-history';
 
   // Portfolio Management APIs (your Node.js endpoints)
-  static String get portfolioGetEndpoint => '$baseUrl/api/portfolio';
-  static String get portfolioUpdateEndpoint => '$baseUrl/api/portfolio-update';
+  static String get portfolioGetEndpoint => '$baseUrl/portfolio';
+  static String get portfolioUpdateEndpoint => '$baseUrl/portfolio-update';
 
   // Scheme Management APIs (your Node.js endpoints) - NEW
   static String get schemeCreateEndpoint => '$baseUrl/schemes';
@@ -55,7 +52,7 @@ class ClientServerConfig {
   static String get adminStatsEndpoint => '$baseUrl/admin/stats';
 
   // Health check (your Node.js endpoint)
-  static String get healthCheckEndpoint => '$protocol://$serverDomain:$serverPort/health';
+  static String get healthCheckEndpoint => '${ApiConfig.rawBaseUrl}/health';
   
   // =============================================================================
   // CONFIGURATION VALIDATION

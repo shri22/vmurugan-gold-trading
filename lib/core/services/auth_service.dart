@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'firebase_service.dart';
 import 'customer_service.dart';
@@ -67,7 +68,7 @@ class AuthService {
       final response = await SecureHttpClient.get(
         '$baseUrl/customers/$phone',
         headers: headers,
-      ).timeout(const Duration(seconds: 5)); // Reduced timeout for faster response
+      ).timeout(const Duration(seconds: 30)); // Increased timeout for production API over internet
 
       if (response.statusCode == 200) {
         print('✅ AuthService: Phone $phone is registered');
@@ -77,19 +78,14 @@ class AuthService {
         return false;
       } else {
         print('⚠️ AuthService: Unexpected response ${response.statusCode} for phone $phone');
-        return false;
+        throw Exception('Server returned an error (${response.statusCode}). Please try again.');
       }
     } catch (e) {
       print('❌ AuthService: Error checking phone registration: $e');
-      // Fallback to Firebase if server is unreachable
-      try {
-        print('🔄 AuthService: Falling back to Firebase check...');
-        final result = await FirebaseService.getCustomerByPhone(phone);
-        return result['success'] == true && result['customer'] != null;
-      } catch (fallbackError) {
-        print('❌ AuthService: Firebase fallback also failed: $fallbackError');
-        return false;
+      if (e is TimeoutException) {
+        throw Exception('The server is taking too long to respond. Please check your connection and try again.');
       }
+      rethrow;
     }
   }
   
@@ -528,6 +524,12 @@ class AuthService {
         if (data['success'] == true) {
           // Save login state with user ID
           final userData = data['user'];
+          final token = data['token'];
+          
+          if (token != null) {
+            await _saveBackendToken(token);
+          }
+          
           await _saveUserLoginState(phone, userData);
 
           // Save numeric user ID for server API calls (Safe parse for int/string)

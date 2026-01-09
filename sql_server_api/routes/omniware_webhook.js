@@ -28,15 +28,15 @@ function verifyWebhookHash(data, receivedHash, salt) {
     // Build hash string as per Omniware documentation
     // Format: transaction_id|order_id|amount|response_code
     const hashString = `${data.transaction_id}|${data.order_id}|${data.amount}|${data.response_code}|${salt}`;
-    
+
     // Calculate SHA-512 hash
     const calculatedHash = crypto.createHash('sha512').update(hashString).digest('hex').toUpperCase();
-    
+
     console.log('Hash Verification:');
     console.log('  Received Hash:', receivedHash);
     console.log('  Calculated Hash:', calculatedHash);
     console.log('  Match:', calculatedHash === receivedHash.toUpperCase());
-    
+
     return calculatedHash === receivedHash.toUpperCase();
   } catch (error) {
     console.error('Error verifying hash:', error);
@@ -55,12 +55,12 @@ function getMetalTypeFromOrderId(orderId) {
 }
 
 /**
- * Save transaction to database
+ * Save transaction to database AND credit gold/silver to customer
  */
 async function saveTransactionToDatabase(webhookData) {
   try {
     const pool = await sql.connect();
-    
+
     // Extract data
     const transactionId = webhookData.transaction_id;
     const orderId = webhookData.order_id;
@@ -71,17 +71,31 @@ async function saveTransactionToDatabase(webhookData) {
     const customerPhone = webhookData.phone;
     const customerEmail = webhookData.email;
     const customerName = webhookData.name;
-    
+
     // Determine status
     const status = responseCode === 0 ? 'SUCCESS' : 'FAILED';
-    
+
     console.log('💾 Saving transaction to database via webhook:');
     console.log('   Transaction ID:', transactionId);
     console.log('   Order ID:', orderId);
     console.log('   Amount: ₹' + amount);
     console.log('   Status:', status);
     console.log('   Payment DateTime:', paymentDatetime);
-    
+
+    // Get existing transaction to find gold/silver grams
+    const existingTxn = await pool.request()
+      .input('order_id', sql.VarChar(50), orderId)
+      .query(`SELECT * FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
+
+    let goldGrams = 0;
+    let silverGrams = 0;
+
+    if (existingTxn.recordset.length > 0) {
+      goldGrams = existingTxn.recordset[0].gold_grams || 0;
+      silverGrams = existingTxn.recordset[0].silver_grams || 0;
+      console.log(`   Found existing transaction: ${goldGrams}g gold, ${silverGrams}g silver`);
+    }
+
     // Insert/Update transaction in database
     const result = await pool.request()
       .input('transaction_id', sql.VarChar(50), transactionId)
@@ -98,10 +112,11 @@ async function saveTransactionToDatabase(webhookData) {
       .query(`
         MERGE transactions AS target
         USING (SELECT @order_id AS order_id) AS source
-        ON target.gateway_transaction_id = @gateway_transaction_id
+        ON target.gateway_transaction_id = @gateway_transaction_id OR target.transaction_id = @order_id
         WHEN MATCHED THEN
           UPDATE SET 
             status = @status,
+            gateway_transaction_id = @gateway_transaction_id,
             gateway_response = @gateway_response,
             updated_at = GETDATE()
         WHEN NOT MATCHED THEN
@@ -110,8 +125,75 @@ async function saveTransactionToDatabase(webhookData) {
           VALUES (@transaction_id, @customer_phone, @customer_email, @customer_name, @amount,
                   @payment_method, @status, @gateway_transaction_id, @gateway_response, GETDATE());
       `);
-    
+
     console.log('✅ Transaction saved successfully via webhook');
+
+    // PAYMENT SAFETY: Credit gold/silver if payment succeeded
+    if (status === 'SUCCESS' && customerPhone) {
+      // Check if ALREADY successful to avoid double crediting
+      if (existingTxn.recordset.length > 0 && existingTxn.recordset[0].status === 'SUCCESS') {
+        console.log('⚠️ Transaction already marked as SUCCESS. Skipping double credit.');
+        return true;
+      }
+
+      console.log('💰 Payment SUCCESS - Crediting gold/silver to customer...');
+
+      try {
+        // Find if this transaction was linked to a scheme (IMPORTANT for calculation fixes)
+        const txnWithScheme = await pool.request()
+          .input('order_id', sql.VarChar(50), orderId)
+          .query(`SELECT scheme_id, installment_number FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
+
+        if (txnWithScheme.recordset.length > 0 && txnWithScheme.recordset[0].scheme_id) {
+          const schemeId = txnWithScheme.recordset[0].scheme_id;
+          console.log('📈 Updating linked scheme via webhook:', schemeId);
+
+          await pool.request()
+            .input('scheme_id', sql.NVarChar(100), schemeId)
+            .input('amount', sql.Decimal(12, 2), amount)
+            .input('metal_grams', sql.Decimal(10, 4), goldGrams + silverGrams)
+            .query(`
+              UPDATE schemes 
+              SET total_invested = ISNULL(total_invested, 0) + @amount,
+                  total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+                  total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @metal_grams,
+                  completed_installments = completed_installments + 1,
+                  updated_at = GETDATE()
+              WHERE scheme_id = @scheme_id
+            `);
+          console.log('✅ Scheme updated successfully via webhook');
+        }
+
+        await pool.request()
+          .input('phone', sql.NVarChar(15), customerPhone)
+          .input('gold_grams', sql.Decimal(10, 4), goldGrams)
+          .input('silver_grams', sql.Decimal(10, 4), silverGrams)
+          .input('amount', sql.Decimal(12, 2), amount)
+          .query(`
+            UPDATE customers 
+            SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+                total_silver = ISNULL(total_silver, 0) + @silver_grams,
+                total_invested = ISNULL(total_invested, 0) + @amount,
+                transaction_count = ISNULL(transaction_count, 0) + 1,
+                last_transaction = GETDATE(),
+                updated_at = GETDATE()
+            WHERE phone = @phone
+          `);
+
+        console.log(`✅ Customer ${customerPhone} credited via webhook:`);
+        console.log(`   Gold: +${goldGrams}g`);
+        console.log(`   Silver: +${silverGrams}g`);
+        console.log(`   Amount: +₹${amount}`);
+
+        // TODO: Send push notification to customer
+        // notifyCustomer(customerPhone, 'Payment successful! Gold/Silver credited.');
+
+      } catch (creditError) {
+        console.error('❌ Error crediting customer:', creditError);
+        // Transaction saved but credit failed - will be picked up by reconciliation
+      }
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Error saving transaction via webhook:', error);
@@ -128,24 +210,24 @@ router.post('/payment', async (req, res) => {
     console.log('\n🔔 ========== OMNIWARE WEBHOOK RECEIVED ========== 🔔');
     console.log('Timestamp:', new Date().toISOString());
     console.log('Webhook Data:', JSON.stringify(req.body, null, 2));
-    
+
     const webhookData = req.body;
-    
+
     // Validate required fields
     if (!webhookData.transaction_id || !webhookData.order_id || !webhookData.hash) {
       console.log('❌ Missing required fields in webhook');
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
-    
+
     // Determine metal type and get appropriate SALT
     const metalType = getMetalTypeFromOrderId(webhookData.order_id);
     if (!metalType) {
       console.log('❌ Cannot determine metal type from order_id:', webhookData.order_id);
       return res.status(400).json({ success: false, error: 'Invalid order_id format' });
     }
-    
+
     const salt = OMNIWARE_CONFIG[metalType].salt;
-    
+
     // Verify hash
     const isValidHash = verifyWebhookHash(webhookData, webhookData.hash, salt);
     if (!isValidHash) {

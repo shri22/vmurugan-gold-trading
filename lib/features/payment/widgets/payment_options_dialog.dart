@@ -20,6 +20,9 @@ class PaymentOptionsDialog extends StatefulWidget {
   final VoidCallback? onCancel;
   final double? metalGrams;
   final String? metalType;
+  final String? schemeId;
+  final String? schemeType;
+  final int? installmentNumber;
 
   const PaymentOptionsDialog({
     super.key,
@@ -29,6 +32,9 @@ class PaymentOptionsDialog extends StatefulWidget {
     this.onCancel,
     this.metalGrams,
     this.metalType,
+    this.schemeId,
+    this.schemeType,
+    this.installmentNumber,
   });
 
   @override
@@ -329,6 +335,9 @@ class _PaymentOptionsDialogState extends State<PaymentOptionsDialog> {
             description: widget.description,
             goldGrams: widget.metalGrams ?? 0.0,
             metalType: widget.metalType ?? 'gold', // Pass metal type to determine merchant (779285 for gold, 779295 for silver)
+            schemeId: widget.schemeId,
+            schemeType: widget.schemeType,
+            installmentNumber: widget.installmentNumber,
             onPaymentComplete: (PaymentResponse response) {
               // This will be called when payment is actually completed
               // Note: We don't call widget.onPaymentComplete here because

@@ -11,6 +11,19 @@ class CustomerService {
   static const String _customerNameKey = 'customer_name';
   static const String _customerEmailKey = 'customer_email';
   static const String _customerRegisteredKey = 'customer_registered';
+  static const String _termsAcceptedKey = 'terms_accepted';
+
+  // Check if customer has accepted terms
+  static Future<bool> hasAcceptedTerms() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_termsAcceptedKey) ?? false;
+  }
+
+  // Set terms accepted locally
+  static Future<void> setTermsAccepted(bool accepted) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_termsAcceptedKey, accepted);
+  }
 
   // Get device information for tracking (simplified for now)
   static Future<Map<String, dynamic>> getDeviceInfo() async {
@@ -84,6 +97,7 @@ class CustomerService {
         await prefs.setString('customer_pan_card', customer['pan_card'] ?? '');
         await prefs.setString('customer_registration_date', customer['registration_date'] ?? '');
         await prefs.setBool(_customerRegisteredKey, true);
+        await prefs.setBool(_termsAcceptedKey, customer['terms_accepted'] == true);
 
         print('✅ Login session saved for customer: ${customer['customer_id']}');
         print('💾 Local storage updated with correct customer data');

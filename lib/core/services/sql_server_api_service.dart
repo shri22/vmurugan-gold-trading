@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'sql_server_service.dart';
 import '../config/sql_server_config.dart';
 import 'secure_http_client.dart';
+import '../config/api_config.dart';
 
 /// SQL Server API Service
 /// This service provides the same interface as other API services
@@ -10,7 +11,7 @@ import 'secure_http_client.dart';
 class SqlServerApiService {
 
   // Base URL for API calls
-  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:3001';
+  static String get baseUrl => 'https://${SqlServerConfig.serverIP}:${ApiConfig.port}';
 
   // Headers for API calls
   static Map<String, String> get headers => {
@@ -401,4 +402,9 @@ class SqlServerApiService {
     };
   }
 
+  /// Accept terms and conditions
+  static Future<Map<String, dynamic>> acceptTerms(String phone) async {
+    print('SqlServerApiService: Accepting terms for $phone');
+    return await SqlServerService.acceptTerms(phone);
+  }
 }

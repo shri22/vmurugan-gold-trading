@@ -77,8 +77,6 @@ class _FilteredSchemeSelectionScreenState extends State<FilteredSchemeSelectionS
           'Monthly investment of ₹${baseAmount.toStringAsFixed(0)}',
           '10% bonus $metalName on completion',
           'Flexible payment dates',
-          'Digital certificate',
-          'Free storage',
         ],
         benefits: [
           'Systematic investment approach',
@@ -107,9 +105,7 @@ class _FilteredSchemeSelectionScreenState extends State<FilteredSchemeSelectionS
         features: [
           'Monthly investment of ₹${(baseAmount * 0.8).toStringAsFixed(0)}',
           '8% bonus $metalName on completion',
-          'Shorter commitment period',
-          'Digital certificate',
-          'Free storage',
+          'Digital payment options',
         ],
         benefits: [
           'Quick investment cycle',
@@ -138,9 +134,7 @@ class _FilteredSchemeSelectionScreenState extends State<FilteredSchemeSelectionS
         features: [
           'Monthly investment of ₹${(baseAmount * 1.5).toStringAsFixed(0)}',
           '15% bonus $metalName on completion',
-          'Premium investment tier',
           'Priority customer support',
-          'Free storage and insurance',
         ],
         benefits: [
           'Higher bonus percentage',

@@ -122,7 +122,7 @@ class SchemePaymentValidationService {
   ) async {
     try {
       final response = await SecureHttpClient.get(
-        '$_baseUrl/api/schemes/$schemeId/payments/monthly-check?month=$month&year=$year',
+        '$_baseUrl/schemes/$schemeId/payments/monthly-check?month=$month&year=$year',
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -141,7 +141,7 @@ class SchemePaymentValidationService {
   /// Get scheme details
   static Future<Map<String, dynamic>?> _getSchemeDetails(String schemeId) async {
     try {
-      final url = '$_baseUrl/api/schemes/details/$schemeId';
+      final url = '$_baseUrl/schemes/details/$schemeId';
       print('🔍 GET SCHEME DETAILS: Calling URL: $url');
 
       final response = await SecureHttpClient.get(
@@ -202,7 +202,7 @@ class SchemePaymentValidationService {
   ) async {
     try {
       final response = await SecureHttpClient.get(
-        '$_baseUrl/api/schemes/$customerPhone',
+        '$_baseUrl/schemes/$customerPhone',
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -238,7 +238,7 @@ class SchemePaymentValidationService {
       final customerName = customerInfo['name'] ?? 'Customer';
 
       final response = await SecureHttpClient.post(
-        '$_baseUrl/api/schemes',
+        '$_baseUrl/schemes',
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'customer_phone': customerPhone,

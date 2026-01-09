@@ -543,13 +543,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Get your transaction statements',
             _showDownloadStatements,
           ),
-
-          _buildActionTile(
-            Icons.assessment,
-            'Reports & Analytics',
-            'View detailed reports and analytics',
-            _navigateToReports,
-          ),
         ],
       ),
     );

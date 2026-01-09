@@ -1,3 +1,5 @@
+import 'api_config.dart';
+
 // SQL SERVER CONFIGURATION
 // Update these values to connect to your local SQL Server (SSMS)
 
@@ -7,8 +9,8 @@ class SqlServerConfig {
   // =============================================================================
   
   // Your Windows Server domain where APIs are deployed
-  // ✅ CONFIGURED WITH ACTUAL DOMAIN
-  static const String serverIP = 'api.vmuruganjewellery.co.in'; // Your actual domain
+  // ✅ CONFIGURED WITH ACTUAL DOMAIN FROM ApiConfig
+  static const String serverIP = ApiConfig.domain; // Uses prodapi.vmuruganjewellery.co.in
 
   // For development/testing, you can temporarily use:
   // static const String serverIP = '192.168.1.18'; // Local network IP

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Build Script for VMurugan Gold Trading App
-# Version: 1.3.2 (Build 22)
+# Version: 1.4.1 (Build 32)
 # Purpose: Build production AAB with storage permission fix
 
-echo "🚀 Building VMurugan Gold Trading App - Version 1.3.2 (Build 22)"
+echo "🚀 Building VMurugan Gold Trading App - Version 1.4.1 (Build 32)"
 echo "=================================================="
 echo ""
 
@@ -50,8 +50,8 @@ if [ -f "$AAB_PATH" ]; then
     echo "=================================================="
     echo "📊 Build Summary"
     echo "=================================================="
-    echo "Version Name: 1.3.2"
-    echo "Version Code: 22"
+    echo "Version Name: 1.4.0"
+    echo "Version Code: 31"
     echo "File Location: $AAB_PATH"
     echo "File Size: $AAB_SIZE"
     echo ""

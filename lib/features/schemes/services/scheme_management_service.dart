@@ -2,6 +2,7 @@ import '../models/scheme_installment_model.dart';
 import '../../../core/enums/metal_type.dart';
 import '../../../core/services/customer_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/config/api_config.dart';
 import '../../../core/services/notification_scheduler_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -11,7 +12,7 @@ class SchemeManagementService {
   factory SchemeManagementService() => _instance;
   SchemeManagementService._internal();
 
-  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001/api';
+  static const String baseUrl = ApiConfig.baseUrl;
   final _notificationScheduler = NotificationSchedulerService();
 
   /// Get customer's active schemes

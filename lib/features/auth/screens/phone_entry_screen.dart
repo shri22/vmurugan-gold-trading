@@ -100,7 +100,7 @@ class _PhoneEntryScreenState extends State<PhoneEntryScreen> {
     } catch (e) {
       print('❌ PhoneEntry: Phone check error: $e');
       if (mounted) {
-        _showError('Network error. Please check your connection.');
+        _showError(e.toString().replaceAll('Exception: ', ''));
         setState(() {
           _isLoading = false;
         });

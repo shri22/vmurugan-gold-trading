@@ -29,22 +29,29 @@ const MERCHANTS = {
 function generateHash(params, salt) {
   // Sort parameters alphabetically by key
   const sortedKeys = Object.keys(params).sort();
-  
+
   // Create pipe-delimited string starting with salt
   let hashString = salt;
   sortedKeys.forEach(key => {
     const value = params[key];
     // Only include non-empty values
     if (value !== null && value !== undefined && value !== '') {
-      hashString += '|' + String(value).trim();
+      // Sanitize value: remove newlines (\r\n), normalize whitespace, and trim
+      // This prevents hash validation errors for customers with line breaks in their address
+      const sanitizedValue = String(value)
+        .replace(/[\r\n]+/g, ' ')  // Replace all \r and \n with space
+        .replace(/\s+/g, ' ')       // Replace multiple spaces with single space
+        .trim();                     // Remove leading/trailing whitespace
+
+      hashString += '|' + sanitizedValue;
     }
   });
-  
+
   console.log('Hash String:', hashString);
-  
+
   // Generate SHA-512 hash and convert to uppercase
   const hash = crypto.createHash('sha512').update(hashString).digest('hex').toUpperCase();
-  
+
   return hash;
 }
 
@@ -130,9 +137,9 @@ router.post('/check-payment-status', async (req, res) => {
       // regardless of response_code being 1030.
 
       const hasValidPaymentTime = transaction.payment_datetime &&
-                                   transaction.payment_datetime !== '' &&
-                                   transaction.payment_datetime !== null &&
-                                   transaction.payment_datetime !== '0000-00-00 00:00:00';
+        transaction.payment_datetime !== '' &&
+        transaction.payment_datetime !== null &&
+        transaction.payment_datetime !== '0000-00-00 00:00:00';
 
       // Check if amount matches (additional validation)
       const amountMatches = transaction.amount && parseFloat(transaction.amount) > 0;
@@ -167,6 +174,92 @@ router.post('/check-payment-status', async (req, res) => {
 
       console.log('Determined Status:', status);
       console.log('===========================\n');
+
+      // SAFETY NET: If payment is successful, update database and credit customer
+      // This handles cases where the webhook might be delayed or misconfigured
+      if (status === 'success') {
+        try {
+          const pool = await require('mssql').connect();
+
+          // 1. Get transaction details to find gold/silver grams
+          const existingTxn = await pool.request()
+            .input('order_id', require('mssql').VarChar(50), transaction.order_id)
+            .query(`SELECT status, customer_phone, gold_grams, silver_grams, amount FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
+
+          if (existingTxn.recordset.length > 0) {
+            const txn = existingTxn.recordset[0];
+
+            // Only proceed if not already marked success
+            if (txn.status !== 'SUCCESS') {
+              console.log('🔄 Auto-updating pending transaction to SUCCESS...');
+
+              // 2. Update transaction status
+              await pool.request()
+                .input('order_id', require('mssql').VarChar(50), transaction.order_id)
+                .input('gateway_id', require('mssql').VarChar(100), transaction.transaction_id)
+                .input('response_raw', require('mssql').NVarChar(require('mssql').MAX), JSON.stringify(transaction))
+                .query(`
+                  UPDATE transactions 
+                  SET status = 'SUCCESS', 
+                      gateway_transaction_id = @gateway_id,
+                      gateway_response = @response_raw,
+                      updated_at = GETDATE() 
+                  WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id
+                `);
+
+              // 3. Update scheme if linked (CRITICAL FOR CALCULATION ACCURACY)
+              if (txn.scheme_id) {
+                console.log('📈 Updating linked scheme:', txn.scheme_id);
+                try {
+                  const metalGrams = (txn.gold_grams || 0) + (txn.silver_grams || 0);
+                  await pool.request()
+                    .input('scheme_id', require('mssql').NVarChar(100), txn.scheme_id)
+                    .input('amount', require('mssql').Decimal(12, 2), txn.amount)
+                    .input('metal_grams', require('mssql').Decimal(10, 4), metalGrams)
+                    .query(`
+                      UPDATE schemes
+                      SET total_invested = ISNULL(total_invested, 0) + @amount,
+                          total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+                          total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @metal_grams,
+                          completed_installments = completed_installments + 1,
+                          updated_at = GETDATE()
+                      WHERE scheme_id = @scheme_id
+                    `);
+                  console.log('✅ Scheme updated successfully');
+                } catch (schemeError) {
+                  console.error('❌ Error updating scheme in safety net:', schemeError.message);
+                }
+              }
+
+              // 4. Credit customer balance
+              if (txn.customer_phone) {
+                console.log('💰 Auto-crediting customer balance...');
+                await pool.request()
+                  .input('phone', require('mssql').NVarChar(15), txn.customer_phone)
+                  .input('gold', require('mssql').Decimal(10, 4), txn.gold_grams || 0)
+                  .input('silver', require('mssql').Decimal(10, 4), txn.silver_grams || 0)
+                  .input('amt', require('mssql').Decimal(12, 2), txn.amount || 0)
+                  .query(`
+                    UPDATE customers 
+                    SET total_gold = ISNULL(total_gold, 0) + @gold,
+                        total_silver = ISNULL(total_silver, 0) + @silver,
+                        total_invested = ISNULL(total_invested, 0) + @amt,
+                        transaction_count = ISNULL(transaction_count, 0) + 1,
+                        last_transaction = GETDATE(),
+                        updated_at = GETDATE()
+                    WHERE phone = @phone
+                  `);
+                console.log('✅ Auto-credit complete for phone:', txn.customer_phone);
+              }
+            } else {
+              console.log('ℹ️ Transaction already marked as SUCCESS. No auto-update needed.');
+            }
+          }
+        } catch (dbError) {
+          console.error('❌ Error during auto-update safety check:', dbError.message);
+          // Don't fail the request, just log the error. The status check itself succeeded.
+        }
+      }
 
       return res.json({
         success: true,
@@ -233,7 +326,12 @@ router.post('/payment-page-url', async (req, res) => {
       customerZipCode,
       returnUrl,
       returnUrlFailure,
-      returnUrlCancel
+      returnUrlCancel,
+      goldGrams,
+      silverGrams,
+      scheme_id,
+      scheme_type,
+      installment_number
     } = req.body;
 
     // Validate required fields
@@ -265,11 +363,10 @@ router.post('/payment-page-url', async (req, res) => {
     }
 
     // Generate unique order ID (max 30 characters for Omniware)
-    // Format: ORD_timestamp_metalInitial_merchantLast3
-    // Example: ORD_1764702570988_G_285 (24 chars) or ORD_1764702570988_S_295 (24 chars)
-    const metalInitial = metalType.charAt(0).toUpperCase(); // G or S
+    // Format: ORD_timestamp_METALTYPE_merchantLast3
+    // Example: ORD_1764702570988_GOLD_285 (25 chars) or ORD_1764702570988_SILVER_295 (27 chars)
     const merchantLast3 = merchant.merchantId.slice(-3); // Last 3 digits of merchant ID
-    const orderId = `ORD_${Date.now()}_${metalInitial}_${merchantLast3}`;
+    const orderId = `ORD_${Date.now()}_${metalType.toUpperCase()}_${merchantLast3}`;
 
     console.log('📝 Payment Details:');
     console.log('   Metal Type:', metalType);
@@ -278,6 +375,53 @@ router.post('/payment-page-url', async (req, res) => {
     console.log('   Amount: ₹' + paymentAmount);
     console.log('   Order ID:', orderId, `(${orderId.length} chars)`);
     console.log('   Customer:', customerName, customerPhone);
+
+    // PRE-CREATE PENDING TRANSACTION (Ensures webhook doesn't 404)
+    try {
+      const sql = require('mssql');
+      const pool = await sql.connect();
+      const request = pool.request();
+
+      // Basic calculation for analytics (will be finalized on success)
+      // This allows the admin portal to see pending volumes
+      request.input('transaction_id', sql.NVarChar(100), orderId);
+      request.input('customer_phone', sql.NVarChar(15), customerPhone);
+      request.input('customer_name', sql.NVarChar(100), customerName || 'Customer');
+      request.input('type', sql.NVarChar(10), 'BUY');
+      request.input('amount', sql.Decimal(12, 2), paymentAmount);
+      request.input('status', sql.NVarChar(20), 'PENDING');
+      request.input('payment_method', sql.NVarChar(50), 'OMNIWARE_UPI');
+      request.input('metal_type', sql.NVarChar(10), metalType.toUpperCase());
+      request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
+
+      request.input('gold_grams', sql.Decimal(10, 4), parseFloat(goldGrams) || 0.0000);
+      request.input('gold_price_per_gram', sql.Decimal(10, 2), paymentAmount / (parseFloat(goldGrams) || 1));
+      request.input('silver_grams', sql.Decimal(10, 4), parseFloat(silverGrams) || 0.0000);
+      request.input('silver_price_per_gram', sql.Decimal(10, 2), paymentAmount / (parseFloat(silverGrams) || 1));
+
+      // Scheme context (IMPORTANT for calculation fixes)
+      request.input('scheme_id', sql.NVarChar(100), scheme_id || null);
+      request.input('scheme_type', sql.NVarChar(20), scheme_type || null);
+      request.input('installment_number', sql.Int, installment_number ? parseInt(installment_number) : null);
+
+      await request.query(`
+        INSERT INTO transactions (
+          transaction_id, customer_phone, customer_name, type, amount, status, 
+          payment_method, metal_type, business_id, gold_grams, gold_price_per_gram,
+          silver_grams, silver_price_per_gram, scheme_id, scheme_type, installment_number,
+          created_at, updated_at
+        ) VALUES (
+          @transaction_id, @customer_phone, @customer_name, @type, @amount, @status, 
+          @payment_method, @metal_type, @business_id, @gold_grams, @gold_price_per_gram,
+          @silver_grams, @silver_price_per_gram, @scheme_id, @scheme_type, @installment_number,
+          GETDATE(), GETDATE()
+        )
+      `);
+      console.log('✅ Pending transaction created in database:', orderId);
+    } catch (dbError) {
+      console.error('⚠️ Failed to pre-create pending transaction:', dbError.message);
+      // Don't fail the whole request, just log it
+    }
 
     // Prepare payment request parameters (as per Omniware Payment Request API documentation)
     const params = {

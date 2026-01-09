@@ -1,7 +1,9 @@
-
+import 'package:flutter/foundation.dart';
+import 'api_config.dart';
+ 
 class ServerConfig {
-  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001';
-  static const String apiVersion = 'v1';
+  static const String baseUrl = ApiConfig.baseUrl; // Source of Truth from ApiConfig
+  static const String apiVersion = ApiConfig.apiVersion;
   static const bool useHttps = true;
-  static const int timeout = 30000; // 30 seconds
+  static const int timeout = ApiConfig.timeout; // 30 seconds
 }

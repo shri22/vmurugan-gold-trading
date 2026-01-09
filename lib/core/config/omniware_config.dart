@@ -1,3 +1,5 @@
+import 'api_config.dart';
+
 /// Omniware Payment Gateway Configuration
 /// 
 /// This file contains the merchant credentials for Omniware payment gateway.
@@ -27,9 +29,9 @@ class OmniwareConfig {
   // Common Configuration
   static const String currency = 'INR';
   static const String country = 'India';
-
-  // API Configuration
-  static const String apiBaseUrl = 'https://api.vmuruganjewellery.co.in:3001';
+  
+  // Master API Configuration from ApiConfig
+  static const String apiBaseUrl = ApiConfig.rawBaseUrl;
   
   // Return URLs (will be handled by the app)
   static const String returnUrl = 'https://vmuruganjewellery.co.in/payment/success';

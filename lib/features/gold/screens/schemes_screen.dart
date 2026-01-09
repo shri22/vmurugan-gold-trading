@@ -7,6 +7,7 @@ import '../models/gold_scheme_model.dart';
 import '../services/gold_scheme_service.dart';
 import '../../schemes/screens/filtered_scheme_selection_screen.dart';
 import '../../../core/services/customer_service.dart';
+import '../../../core/enums/metal_type.dart';
 
 class SchemesScreen extends StatefulWidget {
   const SchemesScreen({super.key});
@@ -507,6 +508,7 @@ class _SchemesScreenState extends State<SchemesScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => FilteredSchemeSelectionScreen(
+            metalType: MetalType.gold, // Required parameter
             customerPhone: customerPhone,
             customerName: customerName,
           ),

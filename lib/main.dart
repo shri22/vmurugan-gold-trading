@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_spacing.dart';
@@ -21,6 +22,7 @@ import 'features/silver/models/silver_price_model.dart';
 
 import 'core/widgets/vmurugan_logo.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/profile/screens/terms_conditions_screen.dart';
 import 'features/notifications/screens/notifications_screen.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/auto_logout_service.dart';
@@ -33,6 +35,9 @@ import 'core/services/customer_service.dart';
 import 'features/payment/services/worldline_payment_service.dart';
 import 'features/notifications/models/notification_model.dart';
 import 'core/services/fcm_service.dart';
+import 'features/payment/services/payment_reconciliation_service.dart';
+import 'core/services/version_check_service.dart';
+import 'core/widgets/force_update_screen.dart';
 
 // Global navigator key for auto-logout navigation
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -144,6 +149,25 @@ class _AppInitializerState extends State<AppInitializer> {
   }
 
   Future<void> _checkInitialRoute() async {
+    // 1. Version Check & Force Update logic
+    try {
+      final versionResult = await VersionCheckService.checkVersion();
+      if (versionResult['needsUpdate'] == true && mounted) {
+        print('🚨 Force Update Required: ${versionResult['currentVersion']} < ${versionResult['minVersion']}');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => ForceUpdateScreen(
+              message: versionResult['message'],
+              updateUrl: versionResult['updateUrl'],
+            ),
+          ),
+        );
+        return; // Stop further execution
+      }
+    } catch (e) {
+      print('⚠️ Version check error - continuing as fallback: $e');
+    }
+
     // Small delay to show splash
     await Future.delayed(const Duration(milliseconds: 500));
 
@@ -153,11 +177,42 @@ class _AppInitializerState extends State<AppInitializer> {
       final isLoggedIn = await AuthService.isLoggedIn();
 
       if (mounted) {
+        // --- 2.5 Persistent Inactivity Check (Bulletproof) ---
+        if (isLoggedIn && savedPhone != null) {
+          final prefs = await SharedPreferences.getInstance();
+          final lastTs = prefs.getInt('last_activity_timestamp');
+          final inPayment = prefs.getBool('is_payment_in_progress') ?? false;
+
+          if (lastTs != null && !inPayment) {
+            final lastActivity = DateTime.fromMillisecondsSinceEpoch(lastTs);
+            final elapsed = DateTime.now().difference(lastActivity);
+            
+            if (elapsed >= const Duration(minutes: 5)) {
+              print('⏰ AppInitializer: Over 5m inactivity - forcing MPIN login');
+              await AuthService.logoutUser(); // Set logged-in to false locally
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const QuickMpinLoginScreen()),
+              );
+              return;
+            }
+          }
+        }
+
         // Smart login flow based on user state
         if (isLoggedIn && savedPhone != null) {
           // Case 2: Subsequent Logins - User is logged in with saved phone
           // Go directly to home page and start auto-logout monitoring
-          print('✅ Smart Login: Returning user - going to home');
+          print('✅ Smart Login: Returning user - checking terms');
+          
+          final hasAcceptedTerms = await CustomerService.hasAcceptedTerms();
+          if (!hasAcceptedTerms) {
+            print('📝 Smart Login: Terms not accepted - redirecting to T&C screen');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const TermsConditionsScreen(showAsUpdate: true)),
+            );
+            return;
+          }
+
           AutoLogoutService().startMonitoring(); // Start monitoring for logged-in user
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomePage()),
@@ -251,7 +306,17 @@ class _HomePageState extends State<HomePage> {
   /// Initialize app services and load user data
   Future<void> _initializeApp() async {
     try {
-      // Load current user data
+      // 1. Check for Terms & Conditions acceptance first (CRITICAL GATE)
+      final hasAcceptedTerms = await CustomerService.hasAcceptedTerms();
+      if (!hasAcceptedTerms && mounted) {
+        print('📝 HomePage: Terms not accepted - redirecting to T&C screen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const TermsConditionsScreen(showAsUpdate: true)),
+        );
+        return;
+      }
+
+      // 2. Load current user data
       final currentUser = await AuthService.getCurrentLoggedInUser();
       setState(() {
         _currentUser = currentUser;
@@ -262,8 +327,43 @@ class _HomePageState extends State<HomePage> {
 
       // Load scheme status
       await _loadSchemeStatus();
+      
+      // PAYMENT SAFETY: Check for pending payments on app startup
+      _checkPendingPayments();
     } catch (e) {
       print('❌ Error initializing app: $e');
+    }
+  }
+  
+  /// Check for pending payments that need reconciliation
+  Future<void> _checkPendingPayments() async {
+    try {
+      print('🔍 Checking for pending payments...');
+      
+      // Small delay to let user see home screen first
+      await Future.delayed(const Duration(seconds: 2));
+      
+      final result = await PaymentReconciliationService.checkPendingPayments();
+      
+      if (result['success'] == true && result['pending_count'] > 0) {
+        final count = result['pending_count'];
+        print('⚠️ Found $count pending payment(s), verifying...');
+        
+        // Show notification to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Verifying $count pending payment(s)...'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: AppColors.primaryGold,
+            ),
+          );
+        }
+      } else {
+        print('✅ No pending payments found');
+      }
+    } catch (e) {
+      print('❌ Error checking pending payments: $e');
     }
   }
 

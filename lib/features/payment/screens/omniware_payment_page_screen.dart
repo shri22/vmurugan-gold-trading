@@ -25,6 +25,9 @@ class OmniwarePaymentPageScreen extends StatefulWidget {
   final Function(PaymentResponse) onPaymentComplete;
   final double? goldGrams;
   final double? silverGrams;
+  final String? schemeId;
+  final String? schemeType;
+  final int? installmentNumber;
 
   const OmniwarePaymentPageScreen({
     Key? key,
@@ -34,6 +37,9 @@ class OmniwarePaymentPageScreen extends StatefulWidget {
     required this.onPaymentComplete,
     this.goldGrams,
     this.silverGrams,
+    this.schemeId,
+    this.schemeType,
+    this.installmentNumber,
   }) : super(key: key);
 
   @override
@@ -72,7 +78,7 @@ class _OmniwarePaymentPageScreenState extends State<OmniwarePaymentPageScreen> {
       final customerInfo = await CustomerService.getCustomerInfo();
 
       final response = await SecureHttpClient.post(
-        '${ApiConfig.baseUrl}/api/omniware/payment-page-url',
+        '${ApiConfig.baseUrl}/omniware/payment-page-url',
         headers: {'Content-Type': 'application/json'},
         body: {
           'metalType': widget.metalType,
@@ -89,6 +95,11 @@ class _OmniwarePaymentPageScreenState extends State<OmniwarePaymentPageScreen> {
           'returnUrl': 'vmurugangold://payment/success',
           'returnUrlFailure': 'vmurugangold://payment/failure',
           'returnUrlCancel': 'vmurugangold://payment/cancel',
+          'goldGrams': widget.goldGrams ?? 0.0,
+          'silverGrams': widget.silverGrams ?? 0.0,
+          'scheme_id': widget.schemeId,
+          'scheme_type': widget.schemeType,
+          'installment_number': widget.installmentNumber,
         },
       );
 
@@ -374,7 +385,7 @@ class _OmniwarePaymentPageScreenState extends State<OmniwarePaymentPageScreen> {
       print('📡 Checking payment status for Order ID: $_orderId');
 
       final response = await SecureHttpClient.post(
-        '${ApiConfig.baseUrl}/api/omniware/check-payment-status',
+        '${ApiConfig.baseUrl}/omniware/check-payment-status',
         headers: {'Content-Type': 'application/json'},
         body: {
           'orderId': _orderId,

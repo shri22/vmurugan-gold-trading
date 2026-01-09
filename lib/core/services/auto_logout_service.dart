@@ -19,6 +19,9 @@ class AutoLogoutService {
   DateTime? _lastActivityTime;
   DateTime? _backgroundTime; // Track when app went to background
   
+  static const String _lastActivityTimestampKey = 'last_activity_timestamp';
+  static const String _isPaymentInProgressKey = 'is_payment_in_progress';
+  
   // Callback for logout
   VoidCallback? _onAutoLogout;
 
@@ -56,37 +59,51 @@ class AutoLogoutService {
     if (!_isLoggedIn) return;
     
     _lastActivityTime = DateTime.now();
+    _saveLastActivityToPrefs(); // Persist the timestamp
     _resetInactivityTimer();
   }
 
+  /// Persist activity timestamp to handle app kills/backgrounding
+  Future<void> _saveLastActivityToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_lastActivityTimestampKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (e) {
+      print('❌ AutoLogout: Error saving timestamp: $e');
+    }
+  }
+
   /// Set payment status to prevent logout during payment
-  void setPaymentInProgress(bool inProgress) {
+  Future<void> setPaymentInProgress(bool inProgress) async {
     _isPaymentInProgress = inProgress;
     print('💳 AutoLogout: Payment in progress: $inProgress');
     
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isPaymentInProgressKey, inProgress);
+    
     if (inProgress) {
-      // Pause the timer during payment
       _stopInactivityTimer();
     } else {
-      // Resume monitoring after payment
       if (_isLoggedIn) {
         _startInactivityTimer();
       }
     }
   }
 
-  /// Start the inactivity timer
-  void _startInactivityTimer() {
+  /// Start the inactivity timer with optional custom timeout
+  void _startInactivityTimer({Duration? customTimeout}) {
     _stopInactivityTimer(); // Clear any existing timer
     
     // Ensure activity time is initialized
     _lastActivityTime ??= DateTime.now();
     
-    _inactivityTimer = Timer(_inactivityTimeout, () {
+    final timeout = customTimeout ?? _inactivityTimeout;
+    
+    _inactivityTimer = Timer(timeout, () {
       _handleInactivityTimeout();
     });
     
-    print('⏰ AutoLogout: Started inactivity timer (${_inactivityTimeout.inMinutes} minutes)');
+    print('⏰ AutoLogout: Started inactivity timer (${timeout.inMinutes}m ${timeout.inSeconds % 60}s)');
   }
 
   /// Stop the inactivity timer
@@ -119,17 +136,26 @@ class AutoLogoutService {
     print('⏰ AutoLogout: Inactivity timeout reached - logging out user');
     
     try {
-      // Perform logout
-      await AuthService.logoutUser();
+      // CLEAR IN-MEMORY STATE FIRST to avoid loops
       _isLoggedIn = false;
       _stopInactivityTimer();
+      _lastActivityTime = null;
+      _backgroundTime = null;
+
+      // Perform persistent logout
+      await AuthService.logoutUser();
       
+      // Clear the persistent timestamp so we don't loop
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_lastActivityTimestampKey);
+      await prefs.setBool(_isPaymentInProgressKey, false);
+      
+      print('✅ AutoLogout: User logged out due to inactivity');
+
       // Notify the app about auto logout
       if (_onAutoLogout != null) {
         _onAutoLogout!();
       }
-      
-      print('✅ AutoLogout: User logged out due to inactivity');
     } catch (e) {
       print('❌ AutoLogout: Error during auto logout: $e');
     }
@@ -159,6 +185,7 @@ class AutoLogoutService {
     
     // Record when app went to background
     _backgroundTime = DateTime.now();
+    _saveLastActivityToPrefs(); // CRITICAL: Save exact time app was left
     
     // Pause the inactivity timer (we'll check elapsed time on resume)
     _stopInactivityTimer();
@@ -168,30 +195,58 @@ class AutoLogoutService {
 
   /// Handle app coming back to foreground
   Future<void> onAppResumed() async {
+    _isLoggedIn = await AuthService.isLoggedIn();
     if (!_isLoggedIn) return;
     
     print('📱 AutoLogout: App resumed from background');
     
-    // Check if user was in background for too long
-    if (_backgroundTime != null) {
-      final backgroundDuration = DateTime.now().difference(_backgroundTime!);
-      print('📱 AutoLogout: Was in background for ${backgroundDuration.inMinutes} minutes');
+    // 1. Check persistent timestamp (Bulletproof)
+    final prefs = await SharedPreferences.getInstance();
+    final lastTs = prefs.getInt(_lastActivityTimestampKey);
+    final inPayment = prefs.getBool(_isPaymentInProgressKey) ?? false;
+
+    if (lastTs != null && !inPayment) {
+      final lastActivity = DateTime.fromMillisecondsSinceEpoch(lastTs);
+      final elapsed = DateTime.now().difference(lastActivity);
       
-      // If user was away for more than the timeout period, logout immediately
-      if (backgroundDuration >= _inactivityTimeout) {
-        print('⏰ AutoLogout: Background time exceeded timeout - logging out');
+      print('📱 AutoLogout: Persistent check - elapsed: ${elapsed.inMinutes} mins');
+      
+      if (elapsed >= _inactivityTimeout) {
+        print('⏰ AutoLogout: Persistent time exceeded - forcing logout');
         await _handleInactivityTimeout();
         return;
       }
-      
-      // Clear background time
-      _backgroundTime = null;
     }
+    
+    // 2. Check in-memory background time as fallback
+    if (_backgroundTime != null && !inPayment) {
+      final backgroundDuration = DateTime.now().difference(_backgroundTime!);
+      if (backgroundDuration >= _inactivityTimeout) {
+        print('⏰ AutoLogout: Memory time exceeded - forcing logout');
+        await _handleInactivityTimeout();
+        return;
+      }
+    }
+    
+    // Clear background time
+    _backgroundTime = null;
     
     // Resume monitoring if not in payment
     if (!_isPaymentInProgress) {
-      _lastActivityTime = DateTime.now(); // Reset activity time
-      _startInactivityTimer();
+      // Use the existing _lastActivityTime if available to preserve remaining time
+      // or set to now if it was null (shouldn't happen for logged-in user)
+      _lastActivityTime ??= DateTime.now();
+      
+      final elapsedSinceLastActivity = DateTime.now().difference(_lastActivityTime!);
+      final remaining = _inactivityTimeout - elapsedSinceLastActivity;
+      
+      if (remaining.isNegative || remaining == Duration.zero) {
+        print('⏰ AutoLogout: No time left on resume - forcing logout');
+        await _handleInactivityTimeout();
+      } else {
+        print('⏰ AutoLogout: Resuming monitoring with ${remaining.inSeconds} seconds remaining');
+        _startInactivityTimer(customTimeout: remaining);
+      }
     }
   }
 
@@ -252,23 +307,16 @@ class _AutoLogoutWrapperState extends State<AutoLogoutWrapper> with WidgetsBindi
         break;
       case AppLifecycleState.inactive:
         // App is transitioning (e.g., incoming call, app switcher)
-        // Don't do anything here, wait for paused or resumed
         break;
-      case AppLifecycleState.detached:
-        // App is being terminated
-        break;
-      case AppLifecycleState.hidden:
-        // App is hidden (iOS specific)
+      default:
         break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _autoLogoutService.recordActivity(),
-      onPanDown: (_) => _autoLogoutService.recordActivity(),
-      onScaleStart: (_) => _autoLogoutService.recordActivity(),
+    return Listener(
+      onPointerDown: (_) => _autoLogoutService.recordActivity(),
       behavior: HitTestBehavior.translucent,
       child: widget.child,
     );

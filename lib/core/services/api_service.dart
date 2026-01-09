@@ -342,7 +342,7 @@ class ApiService {
       // For SQL Server, call the /api/customers/:phone endpoint
       try {
         print('🔍 ApiService: Fetching customer from SQL Server for phone: $phone');
-        final url = '${ServerConfig.baseUrl}/api/customers/$phone';
+        final url = '${ServerConfig.baseUrl}/customers/$phone';
 
         final response = await SecureHttpClient.get(url);
 
@@ -427,6 +427,16 @@ class ApiService {
       return await FirebaseService.getDashboardData(adminToken: adminToken);
     } else {
       return await CustomServerService.getDashboardData(adminToken: adminToken);
+    }
+  }
+  // Smart router: Accept terms and conditions
+  static Future<Map<String, dynamic>> acceptTerms(String phone) async {
+    print('ApiService: Routing to $mode for terms acceptance');
+    
+    if (storageMode == 'sqlserver') {
+      return await SqlServerApiService.acceptTerms(phone);
+    } else {
+      return {'success': true, 'message': 'Terms accepted locally'};
     }
   }
 }

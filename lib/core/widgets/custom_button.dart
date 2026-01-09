@@ -155,7 +155,10 @@ class CustomButton extends StatelessWidget {
       );
     }
 
-    return Text(text, style: textStyle);
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(text, style: textStyle),
+    );
   }
 }
 
@@ -247,6 +250,11 @@ class GradientButton extends StatelessWidget {
       );
     }
 
-    return Center(child: Text(text, style: textStyle));
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(text, style: textStyle),
+      ),
+    );
   }
 }

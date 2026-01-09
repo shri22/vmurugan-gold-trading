@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'secure_http_client.dart';
+import '../config/api_config.dart';
 
 class CustomServerService {
-  static const String baseUrl = 'https://api.vmuruganjewellery.co.in:3001';
+  static const String baseUrl = ApiConfig.rawBaseUrl; // Source of Truth from ApiConfig
 
   static Future<Map<String, dynamic>> saveTransaction(Map<String, dynamic> transaction) async {
     try {

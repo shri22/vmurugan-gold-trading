@@ -10,7 +10,6 @@ const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const crypto = require('crypto'); // ADDED: For MPIN encryption
 const admin = require('firebase-admin'); // ADDED: For Push Notifications
-const axios = require('axios'); // ADDED: For external API calls (Omniware)
 require('dotenv').config();
 
 // Initialize Firebase Admin
@@ -73,14 +72,12 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 
-// CORS configuration - USES ENV VARIABLE OR MASTER DOMAIN
-const MASTER_DOMAIN = process.env.DOMAIN_NAME || 'prodapi.vmuruganjewellery.co.in';
+// CORS configuration - Restrict to specific origins
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
-    `https://${MASTER_DOMAIN}`,
-    `https://${MASTER_DOMAIN}:443`,
-    `https://${MASTER_DOMAIN}:3001`,
+    'https://api.vmuruganjewellery.co.in',
+    'https://api.vmuruganjewellery.co.in:3001',
     'http://localhost:3000',
     'http://localhost:3001'
   ];
@@ -112,11 +109,10 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Rate limiting - Increased for admin portal
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Increased from 100 to handle admin portal data loading
-  message: 'Too many requests from this IP, please try again later.'
+  max: 100
 });
 app.use('/api/', limiter);
 
@@ -273,14 +269,7 @@ function authenticateCustomer(req, res, next) {
     }
 
     // No valid authentication found
-    if (!authHeader) {
-      writeServerLog(`🚫 Unauthorized: Missing Authorization header from IP: ${req.ip}`, 'security');
-    } else if (!authHeader.startsWith('Bearer ')) {
-      writeServerLog(`🚫 Unauthorized: Invalid Authorization format from IP: ${req.ip}`, 'security');
-    } else {
-      writeServerLog(`🚫 Unauthorized: Invalid or expired token from IP: ${req.ip}`, 'security');
-    }
-
+    writeServerLog(`🚫 Unauthorized customer access attempt from IP: ${req.ip}`, 'security');
     return res.status(401).json({
       success: false,
       error: 'Unauthorized',
@@ -1203,13 +1192,9 @@ async function createTablesIfNotExist() {
           nominee_relationship NVARCHAR(50),
           nominee_phone NVARCHAR(15),
           registration_date DATETIME2(3) DEFAULT SYSDATETIME(),
-          terms_accepted BIT DEFAULT 0,
-          terms_accepted_at DATETIME2(3) NULL,
-          terms_accepted_ip NVARCHAR(45) NULL,
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
           total_invested DECIMAL(12,2) DEFAULT 0.00,
           total_gold DECIMAL(10,4) DEFAULT 0.0000,
-          total_silver DECIMAL(10,4) DEFAULT 0.0000,
           transaction_count INT DEFAULT 0,
           last_transaction DATETIME2(3) NULL,
           created_at DATETIME2(3) DEFAULT SYSDATETIME(),
@@ -1219,27 +1204,6 @@ async function createTablesIfNotExist() {
         CREATE INDEX IX_customers_created_at ON customers (created_at)
         CREATE INDEX IX_customers_business_id ON customers (business_id)
         PRINT 'Customers table created with SQL Server 2019 features'
-      END
-    `);
-
-    // Add Terms & Conditions columns if they don't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'terms_accepted')
-      BEGIN
-        ALTER TABLE customers ADD terms_accepted BIT DEFAULT 0
-        PRINT 'Added terms_accepted column'
-      END
-
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'terms_accepted_at')
-      BEGIN
-        ALTER TABLE customers ADD terms_accepted_at DATETIME2(3) NULL
-        PRINT 'Added terms_accepted_at column'
-      END
-
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'terms_accepted_ip')
-      BEGIN
-        ALTER TABLE customers ADD terms_accepted_ip NVARCHAR(45) NULL
-        PRINT 'Added terms_accepted_ip column'
       END
     `);
 
@@ -1264,16 +1228,6 @@ async function createTablesIfNotExist() {
       END
     `);
 
-    // Add is_active column if it doesn't exist (for deactivation feature)
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'is_active')
-      BEGIN
-        ALTER TABLE customers ADD is_active BIT DEFAULT 1
-        PRINT 'Added is_active column to customers table'
-      END
-    `);
-
-
     // Create transactions table - Using SQL Server 2019 features
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='transactions')
@@ -1285,8 +1239,8 @@ async function createTablesIfNotExist() {
           customer_name NVARCHAR(100),
           type NVARCHAR(10) NOT NULL CHECK (type IN ('BUY', 'SELL')),
           amount DECIMAL(12,2) NOT NULL,
-          gold_grams DECIMAL(10,4) NOT NULL DEFAULT 0.0000,
-          gold_price_per_gram DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+          gold_grams DECIMAL(10,4) NOT NULL,
+          gold_price_per_gram DECIMAL(10,2) NOT NULL,
           payment_method NVARCHAR(50) NOT NULL,
           status NVARCHAR(20) NOT NULL CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'CANCELLED')),
           gateway_transaction_id NVARCHAR(100),
@@ -1294,9 +1248,6 @@ async function createTablesIfNotExist() {
           location NVARCHAR(MAX),
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
           additional_data NVARCHAR(MAX),
-          payment_year INT,
-          payment_month INT,
-          metal_type NVARCHAR(10) NULL CHECK (metal_type IN ('GOLD', 'SILVER', NULL)),
           timestamp DATETIME2(3) DEFAULT SYSDATETIME(),
           created_at DATETIME2(3) DEFAULT SYSDATETIME(),
           updated_at DATETIME2(3) DEFAULT SYSDATETIME()
@@ -1364,39 +1315,12 @@ async function createTablesIfNotExist() {
       END
     `);
 
-    // Add default values to gold_grams and gold_price_per_gram if they don't have them
-    await pool.request().query(`
-      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'gold_grams')
-      BEGIN
-        IF NOT EXISTS (SELECT * FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('transactions') AND parent_column_id = COLUMNPROPERTY(OBJECT_ID('transactions'), 'gold_grams', 'ColumnId'))
-        BEGIN
-          ALTER TABLE transactions ADD CONSTRAINT DF_transactions_gold_grams DEFAULT 0.0000 FOR gold_grams
-          PRINT 'Added default value to gold_grams in transactions table'
-        END
-      END
-
-      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'gold_price_per_gram')
-      BEGIN
-        IF NOT EXISTS (SELECT * FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('transactions') AND parent_column_id = COLUMNPROPERTY(OBJECT_ID('transactions'), 'gold_price_per_gram', 'ColumnId'))
-        BEGIN
-          ALTER TABLE transactions ADD CONSTRAINT DF_transactions_gold_price DEFAULT 0.00 FOR gold_price_per_gram
-          PRINT 'Added default value to gold_price_per_gram in transactions table'
-        END
-      END
-    `);
-
     // Add metal_type column to existing transactions table if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'metal_type')
       BEGIN
         ALTER TABLE transactions ADD metal_type NVARCHAR(10) NULL CHECK (metal_type IN ('GOLD', 'SILVER', NULL))
         PRINT 'Added metal_type column to transactions table'
-      END
-
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'gateway_response')
-      BEGIN
-        ALTER TABLE transactions ADD gateway_response NVARCHAR(MAX)
-        PRINT 'Added gateway_response column to transactions table'
       END
     `);
 
@@ -1411,19 +1335,21 @@ async function createTablesIfNotExist() {
       WHERE metal_type IS NULL
     `);
 
-    // Add metal_type column to existing schemes table if it doesn't exist
+    // Add closure_remarks column to existing schemes table if it doesn't exist
     await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'metal_type')
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_remarks')
       BEGIN
-        ALTER TABLE schemes ADD metal_type NVARCHAR(10) NULL
-        PRINT 'Added metal_type column to schemes table'
-        
-        -- Default existing schemes based on their type
-        EXEC('UPDATE schemes SET metal_type = ''GOLD'' WHERE scheme_type LIKE ''%GOLD%''')
-        EXEC('UPDATE schemes SET metal_type = ''SILVER'' WHERE scheme_type LIKE ''%SILVER%''')
-        
-        -- If any still null, default to GOLD
-        EXEC('UPDATE schemes SET metal_type = ''GOLD'' WHERE metal_type IS NULL')
+        ALTER TABLE schemes ADD closure_remarks NVARCHAR(500) NULL
+        PRINT 'Added closure_remarks column to schemes table'
+      END
+    `);
+
+    // Add closure_date column to existing schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_date')
+      BEGIN
+        ALTER TABLE schemes ADD closure_date DATETIME2(3) NULL
+        PRINT 'Added closure_date column to schemes table'
       END
     `);
 
@@ -1434,7 +1360,7 @@ async function createTablesIfNotExist() {
         CREATE TABLE schemes (
           id INT IDENTITY(1,1) PRIMARY KEY,
           scheme_id NVARCHAR(100) UNIQUE NOT NULL,
-          customer_id NVARCHAR(20) NOT NULL,
+          customer_id INT NOT NULL,
           customer_phone NVARCHAR(15) NOT NULL,
           customer_name NVARCHAR(100) NOT NULL,
           scheme_type NVARCHAR(20) NOT NULL CHECK (scheme_type IN ('GOLDPLUS', 'GOLDFLEXI', 'SILVERPLUS', 'SILVERFLEXI')),
@@ -1445,10 +1371,8 @@ async function createTablesIfNotExist() {
           start_date DATETIME2(3) DEFAULT SYSDATETIME(),
           end_date DATETIME2(3) NULL,
           total_invested DECIMAL(12,2) DEFAULT 0.00,
-          total_amount_paid DECIMAL(12,2) DEFAULT 0.00,
           total_metal_accumulated DECIMAL(10,4) DEFAULT 0.0000,
           completed_installments INT DEFAULT 0,
-          transaction_id NVARCHAR(100),
           terms_accepted BIT DEFAULT 0,
           terms_accepted_at DATETIME2(3) NULL,
           business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001',
@@ -1464,164 +1388,7 @@ async function createTablesIfNotExist() {
       END
     `);
 
-    // Add closure_remarks column to schemes table if it doesn't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_remarks')
-      BEGIN
-        ALTER TABLE schemes ADD closure_remarks NVARCHAR(500) NULL
-        PRINT 'Added closure_remarks column to schemes table'
-      END
-    `);
-
-    // Add closure_date column to schemes table if it doesn't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_date')
-      BEGIN
-        ALTER TABLE schemes ADD closure_date DATETIME2(3) NULL
-        PRINT 'Added closure_date column to schemes table'
-      END
-    `);
-
-    // Add payment_year column to existing transactions table if it doesn't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'payment_year')
-      BEGIN
-        ALTER TABLE transactions ADD payment_year INT
-        PRINT 'Added payment_year column to transactions table'
-      END
-    `);
-
-    // Add payment_month column to existing transactions table if it doesn't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'payment_month')
-      BEGIN
-        ALTER TABLE transactions ADD payment_month INT
-        PRINT 'Added payment_month column to transactions table'
-      END
-    `);
-
-    // Database migration: Add summary columns to customers if they don't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'total_invested')
-      BEGIN
-        ALTER TABLE customers ADD total_invested DECIMAL(12,2) DEFAULT 0.00
-        PRINT 'Added total_invested to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'total_gold')
-      BEGIN
-        ALTER TABLE customers ADD total_gold DECIMAL(10,4) DEFAULT 0.0000
-        PRINT 'Added total_gold to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'total_silver')
-      BEGIN
-        ALTER TABLE customers ADD total_silver DECIMAL(10,4) DEFAULT 0.0000
-        PRINT 'Added total_silver to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'transaction_count')
-      BEGIN
-        ALTER TABLE customers ADD transaction_count INT DEFAULT 0
-        PRINT 'Added transaction_count to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'last_transaction')
-      BEGIN
-        ALTER TABLE customers ADD last_transaction DATETIME2(3) NULL
-        PRINT 'Added last_transaction to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'business_id')
-      BEGIN
-        ALTER TABLE customers ADD business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001'
-        PRINT 'Added business_id to customers'
-      END
-    `);
-
-    // Database migration: Add tracking columns to customers if they don't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'created_at')
-      BEGIN
-        ALTER TABLE customers ADD created_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added created_at to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'updated_at')
-      BEGIN
-        ALTER TABLE customers ADD updated_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added updated_at to customers'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'registration_date')
-      BEGIN
-        ALTER TABLE customers ADD registration_date DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added registration_date to customers'
-      END
-    `);
-
-    // Database migration: Add tracking columns to transactions if they don't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'created_at')
-      BEGIN
-        ALTER TABLE transactions ADD created_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added created_at to transactions'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'updated_at')
-      BEGIN
-        ALTER TABLE transactions ADD updated_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added updated_at to transactions'
-      END
-    `);
-
-    // Database migration: Add tracking and summary columns to schemes if they don't exist
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'total_invested')
-      BEGIN
-        ALTER TABLE schemes ADD total_invested DECIMAL(12,2) DEFAULT 0.00
-        PRINT 'Added total_invested to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'total_metal_accumulated')
-      BEGIN
-        ALTER TABLE schemes ADD total_metal_accumulated DECIMAL(10,4) DEFAULT 0.0000
-        PRINT 'Added total_metal_accumulated to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'completed_installments')
-      BEGIN
-        ALTER TABLE schemes ADD completed_installments INT DEFAULT 0
-        PRINT 'Added completed_installments to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'total_amount_paid')
-      BEGIN
-        ALTER TABLE schemes ADD total_amount_paid DECIMAL(12,2) DEFAULT 0.00
-        PRINT 'Added total_amount_paid to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'duration_months')
-      BEGIN
-        ALTER TABLE schemes ADD duration_months INT NULL
-        PRINT 'Added duration_months to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'customer_id')
-      BEGIN
-        ALTER TABLE schemes ADD customer_id NVARCHAR(20) NOT NULL DEFAULT ''
-        PRINT 'Added customer_id to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'transaction_id')
-      BEGIN
-        ALTER TABLE schemes ADD transaction_id NVARCHAR(100)
-        PRINT 'Added transaction_id to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'business_id')
-      BEGIN
-        ALTER TABLE schemes ADD business_id NVARCHAR(50) DEFAULT 'VMURUGAN_001'
-        PRINT 'Added business_id to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'created_at')
-      BEGIN
-        ALTER TABLE schemes ADD created_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added created_at to schemes'
-      END
-      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'updated_at')
-      BEGIN
-        ALTER TABLE schemes ADD updated_at DATETIME2(3) DEFAULT SYSDATETIME()
-        PRINT 'Added updated_at to schemes'
-      END
-    `);
-
-    // Database migration: Add MPIN column to customers if it doesn't exist
+    // Database migration: Add MPIN column if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'mpin')
       BEGIN
@@ -1630,21 +1397,12 @@ async function createTablesIfNotExist() {
       END
     `);
 
-    // Database migration: Add customer_id column to customers if it doesn't exist
+    // Database migration: Add customer_id column if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('customers') AND name = 'customer_id')
       BEGIN
         ALTER TABLE customers ADD customer_id NVARCHAR(20) NULL
         PRINT 'customer_id column added to customers table'
-      END
-    `);
-
-    // Ensure customer_id in schemes is NVARCHAR(20) to match customers table
-    await pool.request().query(`
-      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'customer_id' AND TYPE_NAME(system_type_id) = 'int')
-      BEGIN
-        ALTER TABLE schemes ALTER COLUMN customer_id NVARCHAR(20) NOT NULL
-        PRINT 'Altered schemes.customer_id from INT to NVARCHAR(20)'
       END
     `);
 
@@ -1863,29 +1621,6 @@ app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
 });
 
 // Admin Token Verification Endpoint
-// ========================================
-// APP CONFIGURATION & VERSIONING (Force Update)
-// ========================================
-app.get('/api/app-config', (req, res) => {
-  res.json({
-    success: true,
-    android: {
-      min_version: '1.4.0',
-      latest_version: '1.4.0',
-      update_url: 'https://play.google.com/store/apps/details?id=com.vmurugan.digi_gold',
-      is_force_update: true,
-      message: 'A critical update is available. Please update to continue using the app.'
-    },
-    ios: {
-      min_version: '1.4.0',
-      latest_version: '1.4.0',
-      update_url: 'https://apps.apple.com/app/id6755655102',
-      is_force_update: true,
-      message: 'A critical update is available. Please update to continue using the app.'
-    }
-  });
-});
-
 app.get('/api/admin/verify', authenticateAdmin, (req, res) => {
   res.json({
     success: true,
@@ -2198,7 +1933,7 @@ app.get('/worldline-checkout', (req, res) => {
                         "consumerData": {
                             "deviceId": "ANDROIDSH2", // CRITICAL FIX: Match Flutter app device ID for consistent hash validation
                             "token": "${token}",
-                            "returnUrl": "https://prodapi.vmuruganjewellery.co.in/api/payments/worldline/verify",
+                            "returnUrl": "https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify",
                             "merchantCode": "${merchantCode}",
                             "currency": "INR",
                             "consumerId": "${consumerId || 'GUEST'}",
@@ -2247,7 +1982,7 @@ app.get('/worldline-checkout', (req, res) => {
                         'amount': '${amount}',
                         'currency': 'INR',
                         'token': '${token}',
-                        'returnUrl': 'https://prodapi.vmuruganjewellery.co.in/api/payments/worldline/verify',
+                        'returnUrl': 'https://api.vmuruganjewellery.co.in:3001/api/payments/worldline/verify',
                         'consumerId': '${consumerId || 'GUEST'}',
                         'consumerMobileNo': '${consumerMobileNo || '9876543210'}',
                         'consumerEmailId': '${consumerEmailId || 'test@vmuruganjewellery.co.in'}'
@@ -2367,13 +2102,9 @@ app.post('/api/customers', [
     request.input('device_id', sql.NVarChar(100), device_id);
     request.input('business_id', sql.NVarChar(50), business_id);
     request.input('mpin', sql.NVarChar(255), hashedMPIN);
-    request.input('ip_address', sql.NVarChar(45), req.ip || req.connection.remoteAddress);
-
-    const normalizedPhone = normalizePhone(phone);
-    request.input('normalized_phone', sql.NVarChar(15), normalizedPhone);
 
     await request.query(`
-      IF NOT EXISTS (SELECT 1 FROM customers WHERE phone = @phone OR RIGHT(phone, 10) = @normalized_phone)
+      IF NOT EXISTS (SELECT 1 FROM customers WHERE phone = @phone)
       BEGIN
         -- Generate sequential customer ID
         DECLARE @nextId INT
@@ -2386,17 +2117,16 @@ app.post('/api/customers', [
 
         SET @customerId = 'VM' + CAST(@nextId AS NVARCHAR(10))
 
-        INSERT INTO customers (customer_id, phone, name, email, address, pan_card, device_id, business_id, mpin, terms_accepted, terms_accepted_at, terms_accepted_ip)
-        VALUES (@customerId, @phone, @name, @email, @address, @pan_card, @device_id, @business_id, @mpin, 1, SYSDATETIME(), @ip_address)
+        INSERT INTO customers (customer_id, phone, name, email, address, pan_card, device_id, business_id, mpin)
+        VALUES (@customerId, @phone, @name, @email, @address, @pan_card, @device_id, @business_id, @mpin)
       END
       ELSE
       BEGIN
         UPDATE customers
         SET name = @name, email = @email, address = @address,
             pan_card = @pan_card, device_id = @device_id,
-            terms_accepted = 1, terms_accepted_at = SYSDATETIME(), terms_accepted_ip = @ip_address,
             ${hashedMPIN ? 'mpin = @mpin,' : ''} updated_at = SYSDATETIME()
-        WHERE phone = @phone OR RIGHT(phone, 10) = @normalized_phone
+        WHERE phone = @phone
       END
     `);
 
@@ -2405,7 +2135,6 @@ app.post('/api/customers', [
     getUserRequest.input('phone', sql.NVarChar(15), phone);
     const userResult = await getUserRequest.query(`
       SELECT id, customer_id, phone, name, email, address, pan_card, registration_date,
-             terms_accepted, terms_accepted_at, terms_accepted_ip,
              business_id, total_invested, total_gold, transaction_count,
              last_transaction, created_at, updated_at
       FROM customers
@@ -2662,7 +2391,6 @@ app.get('/api/customers/:phone', optionalCustomerAuth, async (req, res) => {
 
     const result = await request.query(`
       SELECT id, customer_id, phone, name, email, address, pan_card, registration_date,
-             terms_accepted, terms_accepted_at,
              business_id, total_invested, total_gold, transaction_count,
              last_transaction, created_at, updated_at
       FROM customers
@@ -2689,8 +2417,6 @@ app.get('/api/customers/:phone', optionalCustomerAuth, async (req, res) => {
         address: customer.address,
         pan_card: customer.pan_card,
         registration_date: customer.registration_date,
-        terms_accepted: customer.terms_accepted === true || customer.terms_accepted === 1,
-        terms_accepted_at: customer.terms_accepted_at,
         business_id: customer.business_id,
         total_invested: customer.total_invested,
         total_gold: customer.total_gold,
@@ -2899,39 +2625,6 @@ app.post('/api/customers/:phone/set-mpin', authenticateCustomer, verifyPhoneOwne
   }
 });
 
-// Accept Terms & Conditions endpoint
-app.post('/api/customers/:phone/accept-terms', authenticateCustomer, verifyPhoneOwnership, auditLog('ACCEPT_TERMS'), async (req, res) => {
-  try {
-    const { phone } = req.params;
-    const clientIP = req.ip || req.connection.remoteAddress;
-
-    const normalizedPhone = normalizePhone(phone);
-    const request = pool.request();
-    request.input('phone', sql.NVarChar(15), phone);
-    request.input('normalized_phone', sql.NVarChar(15), normalizedPhone);
-    request.input('ip', sql.NVarChar(45), clientIP);
-
-    await request.query(`
-      UPDATE customers 
-      SET terms_accepted = 1, 
-          terms_accepted_at = SYSDATETIME(), 
-          terms_accepted_ip = @ip,
-          updated_at = SYSDATETIME() 
-      WHERE phone = @phone OR RIGHT(phone, 10) = @normalized_phone
-    `);
-
-    console.log('✅ Terms accepted successfully:', phone);
-    res.json({
-      success: true,
-      message: 'Terms & Conditions accepted successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Error accepting terms:', error.message);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
-
 // Save transaction
 // Save transaction - Flexible auth (JWT OR admin token)
 // Payment gateway already verified payment, so we accept admin token as fallback
@@ -3036,79 +2729,19 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
     // Use the metal_type determined earlier
     request.input('metal_type', sql.NVarChar(10), metal_type);
 
-    // Use MERGE to handle case where transaction was pre-created by /payment-page-url
-    // or if the app calls this multiple times (e.g. retry)
     await request.query(`
-      MERGE transactions AS target
-      USING (SELECT @transaction_id AS transaction_id) AS source
-      ON target.transaction_id = source.transaction_id
-      WHEN MATCHED AND target.status != 'SUCCESS' THEN
-        UPDATE SET 
-          customer_phone = @customer_phone,
-          customer_name = @customer_name,
-          type = @type,
-          amount = @amount,
-          gold_grams = @gold_grams,
-          gold_price_per_gram = @gold_price_per_gram,
-          silver_grams = @silver_grams,
-          silver_price_per_gram = @silver_price_per_gram,
-          payment_method = @payment_method,
-          status = @status,
-          gateway_transaction_id = @gateway_transaction_id,
-          device_info = @device_info,
-          location = @location,
-          additional_data = @additional_data,
-          scheme_type = @scheme_type,
-          scheme_id = @scheme_id,
-          installment_number = @installment_number,
-          metal_type = @metal_type,
-          payment_year = @payment_year,
-          payment_month = @payment_month,
-          updated_at = SYSDATETIME()
-      WHEN NOT MATCHED THEN
-        INSERT (
-          transaction_id, customer_phone, customer_name, type, amount, gold_grams,
-          gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, gateway_transaction_id,
-          device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number, 
-          metal_type, payment_year, payment_month
-        ) VALUES (
-          @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
-          @gold_price_per_gram, @silver_grams, @silver_price_per_gram, @payment_method, @status, @gateway_transaction_id,
-          @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number, 
-          @metal_type, @payment_year, @payment_month
-        );
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, type, amount, gold_grams,
+        gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, gateway_transaction_id,
+        device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number, 
+        metal_type, payment_year, payment_month
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
+        @gold_price_per_gram, @silver_grams, @silver_price_per_gram, @payment_method, @status, @gateway_transaction_id,
+        @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number, 
+        @metal_type, @payment_year, @payment_month
+      )
     `);
-
-    // ========================================
-    // INSTANT CREDIT SYSTEM (If Success)
-    // ========================================
-    if (status === 'SUCCESS') {
-      try {
-        // Double-check if already credited by checking original status before this request
-        // (If it was already SUCCESS, we don't credit again)
-        // Note: For simplicity, we credit if the phone exists
-        console.log(`💰 Crediting customer ${customer_phone} for transaction ${transaction_id}...`);
-
-        await pool.request()
-          .input('phone', sql.NVarChar(15), customer_phone)
-          .input('gold_grams', sql.Decimal(10, 4), final_gold_grams)
-          .input('silver_grams', sql.Decimal(10, 4), final_silver_grams)
-          .input('amount', sql.Decimal(12, 2), amount)
-          .query(`
-            UPDATE customers 
-            SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
-                total_silver = ISNULL(total_silver, 0) + @silver_grams,
-                total_invested = ISNULL(total_invested, 0) + @amount,
-                transaction_count = ISNULL(transaction_count, 0) + 1,
-                last_transaction = SYSDATETIME(),
-                updated_at = SYSDATETIME()
-            WHERE phone = @phone
-          `);
-        console.log(`✅ Customer balance updated successfully.`);
-      } catch (creditError) {
-        console.error('⚠️ Failed to update customer balance (might be handled by webhook):', creditError.message);
-      }
-    }
 
     console.log('✅ Transaction saved successfully to database:', transaction_id);
     console.log('✅ Database insert completed with additional_data included');
@@ -3164,317 +2797,6 @@ app.get('/api/transaction-history', async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
-
-// ============================================================================
-// PAYMENT SAFETY MECHANISMS
-// Handles payments when users don't return to app after paying
-// ============================================================================
-
-// Payment Gateway Webhook - Called by gateway when payment succeeds/fails
-app.post('/api/payment-webhook', async (req, res) => {
-  try {
-    console.log('🔔 Payment webhook received:', req.body);
-
-    const { transaction_id, status, gateway_transaction_id, amount } = req.body;
-
-    if (!transaction_id || !status) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
-    }
-
-    console.log(`📝 Updating transaction ${transaction_id} to status: ${status}`);
-
-    const txnResult = await pool.request()
-      .input('transaction_id', sql.NVarChar, transaction_id)
-      .query(`SELECT * FROM transactions WHERE transaction_id = @transaction_id`);
-
-    if (txnResult.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
-
-    const transaction = txnResult.recordset[0];
-    const alreadySuccess = transaction.status === 'SUCCESS';
-
-    await pool.request()
-      .input('transaction_id', sql.NVarChar, transaction_id)
-      .input('status', sql.NVarChar, status)
-      .input('gateway_txn_id', sql.NVarChar, gateway_transaction_id || null)
-      .query(`
-        UPDATE transactions 
-        SET status = @status, gateway_transaction_id = @gateway_txn_id, updated_at = SYSDATETIME()
-        WHERE transaction_id = @transaction_id
-      `);
-
-    if (status === 'SUCCESS' && !alreadySuccess) {
-      const phone = transaction.customer_phone;
-      const goldGrams = transaction.gold_grams || 0;
-      const silverGrams = transaction.silver_grams || 0;
-
-      await pool.request()
-        .input('phone', sql.NVarChar, phone)
-        .input('gold_grams', sql.Decimal(10, 4), goldGrams)
-        .input('silver_grams', sql.Decimal(10, 4), silverGrams)
-        .input('amount', sql.Decimal(12, 2), transaction.amount)
-        .query(`
-          UPDATE customers 
-          SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
-              total_silver = ISNULL(total_silver, 0) + @silver_grams,
-              total_invested = ISNULL(total_invested, 0) + @amount,
-              transaction_count = ISNULL(transaction_count, 0) + 1,
-              last_transaction = SYSDATETIME(),
-              updated_at = SYSDATETIME()
-          WHERE phone = @phone
-        `);
-
-      console.log(`✅ Customer ${phone} credited via webhook: ${goldGrams}g gold, ${silverGrams}g silver`);
-    } else if (alreadySuccess) {
-      console.log(`⚠️ Transaction ${transaction_id} was already SUCCESS. Skipping double credit.`);
-    }
-
-    writeServerLog(`Payment webhook: ${transaction_id} → ${status}`, 'payments');
-    res.json({ success: true, message: 'Webhook processed', transaction_id });
-
-  } catch (error) {
-    console.error('❌ Payment webhook error:', error);
-    writeServerLog(`Payment webhook error: ${error.message}`, 'errors');
-    res.status(500).json({ success: false, message: 'Webhook processing failed' });
-  }
-});
-
-// ============================================================================
-// OMNIWARE GATEWAY CONFIGURATION & SYNC
-// ============================================================================
-const OMNIWARE_VERIFY_CONFIG = {
-  GOLD: {
-    merchantId: '779285',
-    apiKey: 'e2b108a7-1ea4-4cc7-89d9-3ba008dfc334',
-    salt: '47cdd26963f53e3181f93adcf3af487ec28d7643',
-  },
-  SILVER: {
-    merchantId: '779295',
-    apiKey: 'f1f7f413-3826-4980-ad4d-c22f64ad54d3',
-    salt: '5ea7c9cb63d933192ac362722d6346e1efa67f7f',
-  }
-};
-
-/**
- * Generate SHA-512 hash for Omniware status check
- */
-function generateOmniwareHash(params, salt) {
-  const sortedKeys = Object.keys(params).sort();
-  let hashString = salt;
-  sortedKeys.forEach(key => {
-    const value = params[key];
-    if (value !== null && value !== undefined && value !== '') {
-      hashString += '|' + String(value).trim();
-    }
-  });
-  return crypto.createHash('sha512').update(hashString).digest('hex').toUpperCase();
-}
-
-/**
- * Robustly sync transaction status with Omniware Gateway
- * Checks the gateway for the actual truth of the payment
- */
-async function syncTransactionWithOmniware(orderId) {
-  try {
-    console.log(`🔄 [OMNIWARE-SYNC] Syncing order: ${orderId}`);
-
-    // 1. Determine metal type from Order ID
-    let metalType = 'GOLD';
-    if (orderId.includes('_SILVER_')) metalType = 'SILVER';
-
-    const config = OMNIWARE_VERIFY_CONFIG[metalType];
-
-    // 2. Prepare API parameters
-    const params = {
-      api_key: config.apiKey,
-      order_id: orderId
-    };
-    params.hash = generateOmniwareHash(params, config.salt);
-
-    // 3. Call Omniware Payment Status API
-    const response = await axios.post(
-      'https://pgbiz.omniware.in/v2/paymentstatus',
-      new URLSearchParams(params).toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    if (!response.data || !response.data.data) {
-      console.log(`⚠️ [OMNIWARE-SYNC] Invalid response for ${orderId}`);
-      return null;
-    }
-
-    const paymentData = Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
-    const responseCode = parseInt(paymentData.response_code);
-    const hasValidTime = paymentData.payment_datetime &&
-      paymentData.payment_datetime !== '' &&
-      paymentData.payment_datetime !== '0000-00-00 00:00:00';
-
-    // SUCCESS criteria (Same as in omniware_upi.js)
-    const isSuccess = responseCode === 0 || (responseCode === 1030 && hasValidTime);
-    const finalStatus = isSuccess ? 'SUCCESS' : (responseCode === 1030 ? 'PENDING' : 'FAILED');
-
-    console.log(`✅ [OMNIWARE-SYNC] Gateway status for ${orderId}: ${finalStatus}`);
-
-    // 4. Update local database if successful and not already success
-    if (isSuccess) {
-      const dbResult = await pool.request()
-        .input('order_id', sql.NVarChar, orderId)
-        .query('SELECT status, customer_phone, gold_grams, silver_grams, amount, scheme_id FROM transactions WHERE transaction_id = @order_id');
-
-      if (dbResult.recordset.length > 0) {
-        const txn = dbResult.recordset[0];
-        if (txn.status !== 'SUCCESS') {
-          console.log(`💰 [OMNIWARE-SYNC] Auto-recovering transaction ${orderId} as SUCCESS`);
-
-          const transaction = pool.transaction();
-          await transaction.begin();
-
-          try {
-            // Update transaction
-            await transaction.request()
-              .input('order_id', sql.NVarChar, orderId)
-              .input('gateway_id', sql.NVarChar, paymentData.transaction_id)
-              .input('response_raw', sql.NVarChar(sql.MAX), JSON.stringify(paymentData))
-              .query(`
-                UPDATE transactions 
-                SET status = 'SUCCESS', 
-                    gateway_transaction_id = @gateway_id,
-                    gateway_response = @response_raw,
-                    updated_at = GETDATE()
-                WHERE transaction_id = @order_id
-              `);
-
-            // Credit customer balance
-            if (txn.customer_phone) {
-              await transaction.request()
-                .input('phone', sql.NVarChar(15), txn.customer_phone)
-                .input('gold', sql.Decimal(10, 4), txn.gold_grams || 0)
-                .input('silver', sql.Decimal(10, 4), txn.silver_grams || 0)
-                .input('amt', sql.Decimal(12, 2), txn.amount || 0)
-                .query(`
-                  UPDATE customers 
-                  SET total_gold = ISNULL(total_gold, 0) + @gold,
-                      total_silver = ISNULL(total_silver, 0) + @silver,
-                      total_invested = ISNULL(total_invested, 0) + @amt,
-                      transaction_count = ISNULL(transaction_count, 0) + 1,
-                      last_transaction = GETDATE(),
-                      updated_at = GETDATE()
-                  WHERE phone = @phone
-                `);
-            }
-
-            // Update scheme progress if applicable
-            if (txn.scheme_id) {
-              console.log(`📈 [OMNIWARE-SYNC] Updating scheme progress for ${txn.scheme_id}`);
-              await transaction.request()
-                .input('scheme_id', sql.NVarChar(100), txn.scheme_id)
-                .input('amount', sql.Decimal(12, 2), txn.amount || 0)
-                .input('metal_grams', sql.Decimal(10, 4), (txn.gold_grams || 0) + (txn.silver_grams || 0))
-                .query(`
-                  UPDATE schemes
-                  SET total_invested = ISNULL(total_invested, 0) + @amount,
-                      total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @metal_grams,
-                      completed_installments = ISNULL(completed_installments, 0) + 1,
-                      updated_at = GETDATE()
-                  WHERE scheme_id = @scheme_id
-                `);
-            }
-
-            await transaction.commit();
-            console.log(`✅ [OMNIWARE-SYNC] Transaction ${orderId} fully recovered and credited.`);
-            return 'SUCCESS';
-          } catch (err) {
-            await transaction.rollback();
-            console.error('❌ [OMNIWARE-SYNC] Recovery rollback:', err.message);
-          }
-        }
-      }
-    }
-
-    return finalStatus;
-  } catch (error) {
-    console.error(`❌ [OMNIWARE-SYNC] Error syncing ${orderId}:`, error.message);
-    return null;
-  }
-}
-
-// Consolidated Verification Endpoint (Gateway-Aware)
-app.post('/api/payment/verify/:transaction_id', flexibleAuth, async (req, res) => {
-  try {
-    const { transaction_id } = req.params;
-    console.log(`🔍 Verifying payment: ${transaction_id}`);
-
-    const txnResult = await pool.request()
-      .input('transaction_id', sql.NVarChar, transaction_id)
-      .query(`SELECT * FROM transactions WHERE transaction_id = @transaction_id`);
-
-    if (txnResult.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
-
-    let transaction = txnResult.recordset[0];
-    let currentStatus = transaction.status;
-
-    // 🚀 IMPROVED LOGIC: If it's NOT success, ALWAYS double-check with Omniware Gateway
-    if (currentStatus !== 'SUCCESS') {
-      console.log(`📡 Status is ${currentStatus}. Double-checking with Omniware Gateway...`);
-      const gatewayStatus = await syncTransactionWithOmniware(transaction_id);
-
-      if (gatewayStatus) {
-        currentStatus = gatewayStatus;
-        console.log(`🏢 Gateway says final status is: ${currentStatus}`);
-      }
-    }
-
-    const createdTime = new Date(transaction.created_at).getTime();
-    const minutesPending = (Date.now() - createdTime) / (1000 * 60);
-
-    res.json({
-      success: true,
-      transaction_id,
-      status: currentStatus,
-      needs_update: currentStatus !== transaction.status,
-      minutes_pending: minutesPending
-    });
-
-  } catch (error) {
-    console.error('❌ Payment verification error:', error);
-    res.status(500).json({ success: false, message: 'Verification failed' });
-  }
-});
-
-// Consolidated Pending Payments Endpoint (Auto-Syncing)
-app.get('/api/payment/pending/:phone', flexibleAuth, async (req, res) => {
-  try {
-    const { phone } = req.params;
-    console.log(`📋 Fetching pending payments for: ${phone}`);
-
-    const result = await pool.request()
-      .input('phone', sql.NVarChar, phone)
-      .query(`SELECT * FROM transactions WHERE customer_phone = @phone AND (status = 'PENDING' OR (status = 'FAILED' AND created_at > DATEADD(hour, -2, GETDATE()))) ORDER BY created_at DESC`);
-
-    const verified = [];
-    for (const txn of result.recordset) {
-      let status = txn.status;
-
-      // If it's an Omniware transaction and not success, sync it
-      if (status !== 'SUCCESS' && (txn.transaction_id.startsWith('ORD_') || txn.payment_method === 'OMNIWARE_UPI')) {
-        const gatewayStatus = await syncTransactionWithOmniware(txn.transaction_id);
-        if (gatewayStatus) status = gatewayStatus;
-      }
-
-      verified.push({ ...txn, status });
-    }
-
-    res.json({ success: true, pending_count: verified.filter(t => t.status === 'PENDING').length, transactions: verified });
-
-  } catch (error) {
-    console.error('❌ Error fetching pending payments:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch pending payments' });
-  }
-});
-
 
 // Get customer portfolio
 // Price caching to improve performance (5 minute cache)
@@ -4192,7 +3514,7 @@ app.get('/api/schemes/:customer_phone', optionalCustomerAuth, async (req, res) =
     // Get schemes with calculated values from transactions table
     const schemes = await schemesRequest.query(`
       SELECT
-        s.id, s.scheme_id, c.customer_id, s.customer_phone,
+        s.id, s.scheme_id, s.customer_id, s.customer_phone, s.customer_name,
         s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
         s.status, s.start_date, s.end_date, s.total_invested,
         s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
@@ -4205,12 +3527,12 @@ app.get('/api/schemes/:customer_phone', optionalCustomerAuth, async (req, res) =
         COUNT(t.id) as payment_count,
         ISNULL(SUM(CASE WHEN t.status = 'SUCCESS' AND YEAR(t.created_at) = YEAR(GETDATE()) AND MONTH(t.created_at) = MONTH(GETDATE()) THEN 1 ELSE 0 END), 0) as current_month_payments
       FROM schemes s
-      INNER JOIN customers c ON s.customer_phone = c.phone
+      INNER JOIN customers c ON s.customer_id = c.id
       LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
       WHERE (s.customer_phone = @customer_phone 
              OR RIGHT(s.customer_phone, 10) = @normalized_phone)
         AND s.business_id = @business_id
-      GROUP BY s.id, s.scheme_id, c.customer_id, s.customer_phone,
+      GROUP BY s.id, s.scheme_id, s.customer_id, s.customer_phone, s.customer_name,
                s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
                s.status, s.start_date, s.end_date, s.total_invested,
                s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
@@ -4722,46 +4044,20 @@ app.post('/api/schemes/:scheme_id/flexi-payment', flexibleAuth, paymentLimiter, 
     transactionRequest.input('payment_year', sql.Int, currentYear);
     transactionRequest.input('payment_month', sql.Int, currentMonth);
 
-    // Create or update transaction record
-    // We use a logic that checks if the transaction already exists (pre-created by Omniware flow)
-    // and updates it, or inserts it if it's new.
     await transactionRequest.query(`
-      IF EXISTS (SELECT 1 FROM transactions WHERE transaction_id = @transaction_id)
-      BEGIN
-        UPDATE transactions 
-        SET 
-          status = @status,
-          amount = @amount,
-          gold_grams = @gold_grams,
-          gold_price_per_gram = @gold_price_per_gram,
-          silver_grams = @silver_grams,
-          silver_price_per_gram = @silver_price_per_gram,
-          payment_method = @payment_method,
-          gateway_transaction_id = @gateway_transaction_id,
-          scheme_type = @scheme_type,
-          scheme_id = @scheme_id,
-          metal_type = @metal_type,
-          updated_at = GETDATE(),
-          payment_year = @payment_year,
-          payment_month = @payment_month
-        WHERE transaction_id = @transaction_id
-      END
-      ELSE
-      BEGIN
-        INSERT INTO transactions (
-          transaction_id, customer_phone, customer_name, type, amount,
-          gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
-          status, payment_method, gateway_transaction_id, business_id,
-          scheme_type, scheme_id, metal_type,
-          device_info, location, payment_year, payment_month, created_at, updated_at
-        ) VALUES (
-          @transaction_id, @customer_phone, @customer_name, @type, @amount,
-          @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
-          @status, @payment_method, @gateway_transaction_id, @business_id,
-          @scheme_type, @scheme_id, @metal_type,
-          @device_info, @location, @payment_year, @payment_month, GETDATE(), GETDATE()
-        )
-      END
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, type, amount,
+        gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
+        status, payment_method, gateway_transaction_id, business_id,
+        scheme_type, scheme_id, metal_type,
+        device_info, location, payment_year, payment_month
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, @type, @amount,
+        @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
+        @status, @payment_method, @gateway_transaction_id, @business_id,
+        @scheme_type, @scheme_id, @metal_type,
+        @device_info, @location, @payment_year, @payment_month
+      )
     `);
 
     console.log('✅ Flexi payment added successfully:', scheme_id);
@@ -4801,7 +4097,7 @@ app.get('/api/schemes/details/:scheme_id', optionalCustomerAuth, async (req, res
     const schemeResult = await schemeRequest.query(`
       SELECT
         s.id, s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, 
-        s.duration_months, s.status, s.start_date, s.end_date, c.customer_id,
+        s.duration_months, s.status, s.start_date, s.end_date, s.customer_id,
         s.customer_phone, s.business_id, s.created_at, s.updated_at,
         s.terms_accepted, s.terms_accepted_at, s.closure_date, s.closure_remarks,
         c.name as customer_name,
@@ -6154,12 +5450,10 @@ app.get('/api/customers', async (req, res) => {
   try {
     console.log('👥 Admin: Getting all customers...');
     const result = await pool.request().query(`
-      SELECT id, customer_id, phone, name, email, address, pan_card, business_id,
-             terms_accepted, terms_accepted_at, terms_accepted_ip, is_active,
+      SELECT id, phone, name, email, address, pan_card, business_id,
              registration_date, total_invested, total_gold, transaction_count,
-             last_transaction, created_at, updated_at,
-             (SELECT COUNT(*) FROM schemes s WHERE s.customer_phone = c.phone AND s.status = 'ACTIVE') as total_schemes
-      FROM customers c
+             last_transaction, created_at, updated_at
+      FROM customers
       ORDER BY created_at DESC
     `);
 
@@ -6173,114 +5467,6 @@ app.get('/api/customers', async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
-
-// Deactivate/Activate customer (soft delete)
-app.patch('/api/customers/:phone/toggle-active', async (req, res) => {
-  try {
-    const { phone } = req.params;
-    console.log('🔄 Admin: Toggling active status for customer:', phone);
-
-    const request = pool.request();
-    request.input('phone', sql.NVarChar(15), phone);
-
-    // Get current status
-    const currentStatus = await request.query(`
-      SELECT is_active FROM customers WHERE phone = @phone
-    `);
-
-    if (currentStatus.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Customer not found' });
-    }
-
-    const newStatus = !currentStatus.recordset[0].is_active;
-
-    // Toggle status
-    const updateRequest = pool.request();
-    updateRequest.input('phone', sql.NVarChar(15), phone);
-    updateRequest.input('is_active', sql.Bit, newStatus);
-
-    await updateRequest.query(`
-      UPDATE customers 
-      SET is_active = @is_active, updated_at = SYSDATETIME()
-      WHERE phone = @phone
-    `);
-
-    console.log(`✅ Customer ${phone} ${newStatus ? 'activated' : 'deactivated'}`);
-    res.json({
-      success: true,
-      message: `Customer ${newStatus ? 'activated' : 'deactivated'} successfully`,
-      is_active: newStatus
-    });
-
-  } catch (error) {
-    console.error('❌ Error toggling customer status:', error.message);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
-
-// Permanently delete customer and all associated data
-app.delete('/api/customers/:phone', async (req, res) => {
-  try {
-    const { phone } = req.params;
-    console.log('🗑️ Admin: Permanently deleting customer:', phone);
-
-    const transaction = pool.transaction();
-    await transaction.begin();
-
-    try {
-      // Delete in order to respect foreign key constraints
-
-      // 1. Delete all transactions
-      const deleteTransactionsRequest = new sql.Request(transaction);
-      deleteTransactionsRequest.input('phone', sql.NVarChar(15), phone);
-      const transactionsResult = await deleteTransactionsRequest.query(`
-        DELETE FROM transactions WHERE customer_phone = @phone
-      `);
-      console.log(`   Deleted ${transactionsResult.rowsAffected[0]} transactions`);
-
-      // 2. Delete all schemes
-      const deleteSchemesRequest = new sql.Request(transaction);
-      deleteSchemesRequest.input('phone', sql.NVarChar(15), phone);
-      const schemesResult = await deleteSchemesRequest.query(`
-        DELETE FROM schemes WHERE customer_phone = @phone
-      `);
-      console.log(`   Deleted ${schemesResult.rowsAffected[0]} schemes`);
-
-      // 3. Delete customer record
-      const deleteCustomerRequest = new sql.Request(transaction);
-      deleteCustomerRequest.input('phone', sql.NVarChar(15), phone);
-      const customerResult = await deleteCustomerRequest.query(`
-        DELETE FROM customers WHERE phone = @phone
-      `);
-
-      if (customerResult.rowsAffected[0] === 0) {
-        await transaction.rollback();
-        return res.status(404).json({ success: false, message: 'Customer not found' });
-      }
-
-      await transaction.commit();
-      console.log(`✅ Customer ${phone} and all associated data permanently deleted`);
-
-      res.json({
-        success: true,
-        message: 'Customer and all associated data deleted successfully',
-        deleted: {
-          transactions: transactionsResult.rowsAffected[0],
-          schemes: schemesResult.rowsAffected[0]
-        }
-      });
-
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
-
-  } catch (error) {
-    console.error('❌ Error deleting customer:', error.message);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
-
 
 // Get comprehensive customer details (for admin portal)
 app.get('/api/admin/customers/:phone', async (req, res) => {
@@ -6447,11 +5633,7 @@ app.get('/api/transactions/:transaction_id', async (req, res) => {
       .input('transaction_id', sql.NVarChar(100), transaction_id)
       .query(`
         SELECT 
-          t.id, t.transaction_id, t.customer_phone, t.amount, t.status, 
-          t.payment_method, t.created_at, t.updated_at,
-          t.business_id, t.scheme_id, t.gold_grams, t.silver_grams,
-          t.gold_price_per_gram, t.silver_price_per_gram,
-          t.gateway_transaction_id, t.gateway_response,
+          t.*,
           c.customer_id,
           c.name as customer_name,
           c.email as customer_email
@@ -6486,10 +5668,8 @@ app.get('/api/transactions', async (req, res) => {
   try {
     console.log('💳 Admin: Getting all transactions...');
     const result = await pool.request().query(`
-      SELECT t.*, c.customer_id 
-      FROM transactions t
-      LEFT JOIN customers c ON t.customer_phone = c.phone
-      ORDER BY t.created_at DESC
+      SELECT * FROM transactions
+      ORDER BY timestamp DESC
     `);
 
     res.json({
@@ -6504,6 +5684,31 @@ app.get('/api/transactions', async (req, res) => {
 });
 
 // Get schemes for a customer (for admin portal)
+app.get('/api/schemes/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    console.log('📊 Admin: Getting schemes for customer:', customerId);
+
+    const request = pool.request();
+    request.input('customerId', sql.NVarChar(100), customerId);
+
+    const result = await request.query(`
+      SELECT * FROM schemes
+      WHERE customer_id = @customerId OR customer_phone = @customerId
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      schemes: result.recordset
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting schemes:', error.message);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // ============================================
 // NOTIFICATION MANAGEMENT ENDPOINTS
 // ============================================
@@ -7017,14 +6222,14 @@ async function startServer() {
       } else if (error.message.includes('EADDRINUSE')) {
         console.error('');
         console.error('🔧 Port Already In Use:');
-        console.error(`1. Stop any existing server on port ${PORT}`);
-        console.error(`2. Check: sudo netstat -tuln | grep ${PORT}`);
+        console.error('1. Stop any existing server on port 3001');
+        console.error('2. Check: netstat -an | findstr 3001');
         console.error('3. Restart server');
       } else {
         console.error('');
         console.error('🔧 Common fixes:');
         console.error('1. Check SSL certificates are valid');
-        console.error(`2. Ensure port ${PORT} is not in use`);
+        console.error('2. Ensure port 3001 is not in use');
         console.error('3. Run as administrator if needed');
       }
       process.exit(1);
@@ -7036,20 +6241,20 @@ async function startServer() {
       console.log('🔒 HTTPS PRODUCTION SERVER STARTED!');
       console.log('========================================');
       console.log(`🔒 VMurugan HTTPS Server running on port ${httpsPort}`);
-      console.log(`🏥 Health Check: https://${MASTER_DOMAIN}/health`);
-      console.log(`🔗 API Base URL: https://${MASTER_DOMAIN}/api`);
+      console.log(`🏥 Health Check: https://api.vmuruganjewellery.co.in:${httpsPort}/health`);
+      console.log(`🔗 API Base URL: https://api.vmuruganjewellery.co.in:${httpsPort}/api`);
       console.log(`💾 Database: ${sqlConfig.database} on ${sqlConfig.server}`);
       console.log(`🔒 Privacy & Legal URLs:`);
-      console.log(`   Privacy:  https://${MASTER_DOMAIN}/privacy-policy`);
-      console.log(`   Terms:    https://${MASTER_DOMAIN}/terms-of-service`);
-      console.log(`   Account Deletion: https://${MASTER_DOMAIN}/account-deletion`);
+      console.log(`   Privacy:  https://api.vmuruganjewellery.co.in:${httpsPort}/privacy-policy`);
+      console.log(`   Terms:    https://api.vmuruganjewellery.co.in:${httpsPort}/terms-of-service`);
+      console.log(`   Account Deletion: https://api.vmuruganjewellery.co.in:${httpsPort}/account-deletion`);
       console.log(`💳 Worldline Payment Integration (Clean Slate Rebuild):`);
-      console.log(`   Token:    https://${MASTER_DOMAIN}/api/payments/worldline/token`);
-      console.log(`   Verify:   https://${MASTER_DOMAIN}/api/payments/worldline/verify`);
+      console.log(`   Token:    https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/token`);
+      console.log(`   Verify:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/payments/worldline/verify`);
       console.log(`💳 Omniware UPI Payment Integration (UPI Mode):`);
-      console.log(`   Payment Page URL: https://${MASTER_DOMAIN}/api/omniware/payment-page-url`);
-      console.log(`   Payment Status:   https://${MASTER_DOMAIN}/api/omniware/check-payment-status`);
-      console.log(`   Webhook:          https://${MASTER_DOMAIN}/api/omniware/webhook/payment`);
+      console.log(`   Payment Page URL: https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/payment-page-url`);
+      console.log(`   Payment Status:   https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/check-payment-status`);
+      console.log(`   Webhook:          https://api.vmuruganjewellery.co.in:${httpsPort}/api/omniware/webhook/payment`);
       console.log('');
       console.log('✅ HTTPS-only production mode');
       console.log('🔒 All connections encrypted');
@@ -7065,33 +6270,6 @@ async function startServer() {
     process.exit(1);
   }
 }
-
-// Get all schemes (for admin portal)
-app.get('/api/admin/schemes', authenticateAdmin, async (req, res) => {
-  try {
-    console.log('🎯 Admin: Getting all schemes...');
-    const result = await pool.request().query(`
-      SELECT 
-        s.id, s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, 
-        s.duration_months, s.status, s.start_date, s.end_date, s.customer_id,
-        s.customer_phone, s.business_id, s.created_at, s.updated_at,
-        s.terms_accepted, s.terms_accepted_at, s.closure_date, s.closure_remarks,
-        c.customer_id as customer_uid, c.name as customer_name, c.phone as customer_phone
-      FROM schemes s
-      LEFT JOIN customers c ON s.customer_phone = c.phone
-      ORDER BY s.created_at DESC
-    `);
-
-    res.json({
-      success: true,
-      schemes: result.recordset
-    });
-
-  } catch (error) {
-    console.error('❌ Error getting schemes:', error.message);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
 
 // ==================== ADMIN REPORTING ENDPOINTS ====================
 
@@ -7114,19 +6292,13 @@ app.get('/api/admin/analytics/dashboard', authenticateAdmin, async (req, res) =>
 
     // Get transaction analytics
     const transactionsResult = await pool.request().query(`
-      SELECT 
+      SELECT
         COUNT(*) as total_transactions,
         SUM(amount) as total_revenue,
         SUM(gold_grams) as total_gold_sold,
         SUM(silver_grams) as total_silver_sold,
-        SUM(CASE WHEN CAST(created_at AS DATE) = CAST(GETDATE() AS DATE) THEN gold_grams ELSE 0 END) as gold_sold_today,
-        SUM(CASE WHEN CAST(created_at AS DATE) = CAST(GETDATE() AS DATE) THEN silver_grams ELSE 0 END) as silver_sold_today,
-        SUM(CASE WHEN metal_type = 'GOLD' OR (metal_type IS NULL AND gold_grams > 0) THEN amount ELSE 0 END) as total_gold_revenue,
-        SUM(CASE WHEN metal_type = 'SILVER' OR (metal_type IS NULL AND silver_grams > 0) THEN amount ELSE 0 END) as total_silver_revenue,
         COUNT(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN 1 END) as transactions_this_month,
-        SUM(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN amount ELSE 0 END) as revenue_this_month,
-        SUM(CASE WHEN (CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE())) AND (metal_type = 'GOLD' OR (metal_type IS NULL AND gold_grams > 0)) THEN amount ELSE 0 END) as gold_revenue_this_month,
-        SUM(CASE WHEN (CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE())) AND (metal_type = 'SILVER' OR (metal_type IS NULL AND silver_grams > 0)) THEN amount ELSE 0 END) as silver_revenue_this_month
+        SUM(CASE WHEN CAST(created_at AS DATE) >= DATEADD(MONTH, -1, GETDATE()) THEN amount ELSE 0 END) as revenue_this_month
       FROM transactions
       WHERE status = 'SUCCESS'
     `);
@@ -7199,48 +6371,30 @@ app.get('/api/admin/reports/scheme-wise', authenticateAdmin, async (req, res) =>
 
     let dateFilter = '';
     if (start_date && end_date) {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      // Set end date to end of day if it's just a date string
-      if (end_date.length <= 10) end.setHours(23, 59, 59, 999);
-
-      request.input('start_date', sql.DateTime, start);
-      request.input('end_date', sql.DateTime, end);
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
       dateFilter = 'AND created_at >= @start_date AND created_at <= @end_date';
     }
 
-    // If dates are provided, we look for schemes with transaction activity during that period
-    // Otherwise, we show all schemes
     const query = `
       SELECT
-        s.scheme_type,
-        s.metal_type,
-        COUNT(DISTINCT s.scheme_id) as total_schemes,
-        COUNT(DISTINCT CASE WHEN s.status = 'ACTIVE' THEN s.scheme_id END) as active_count,
-        COUNT(DISTINCT CASE WHEN s.status = 'COMPLETED' THEN s.scheme_id END) as completed_count,
-        COUNT(DISTINCT CASE WHEN s.status = 'CANCELLED' THEN s.scheme_id END) as cancelled_count,
-        COUNT(DISTINCT CASE WHEN s.status = 'PAUSED' THEN s.scheme_id END) as paused_count,
-        SUM(ISNULL(t_stats.period_investment, 0)) as total_investment,
-        SUM(ISNULL(t_stats.period_gold, 0)) as total_gold_accumulated,
-        SUM(ISNULL(t_stats.period_silver, 0)) as total_silver_accumulated,
-        AVG(s.monthly_amount) as avg_monthly_amount,
-        AVG(CAST(s.completed_installments AS DECIMAL(10,2))) as avg_completed_installments,
-        MIN(s.monthly_amount) as min_monthly_amount,
-        MAX(s.monthly_amount) as max_monthly_amount
-      FROM schemes s
-      LEFT JOIN (
-        SELECT 
-          scheme_id, 
-          SUM(amount) as period_investment,
-          SUM(gold_grams) as period_gold,
-          SUM(silver_grams) as period_silver
-        FROM transactions
-        WHERE status = 'SUCCESS' ${start_date && end_date ? 'AND created_at >= @start_date AND created_at <= @end_date' : ''}
-        GROUP BY scheme_id
-      ) t_stats ON s.scheme_id = t_stats.scheme_id
-      WHERE 1=1 ${start_date && end_date ? 'AND t_stats.period_investment IS NOT NULL' : ''}
-      GROUP BY s.scheme_type, s.metal_type
-      ORDER BY s.scheme_type
+        scheme_type,
+        metal_type,
+        COUNT(*) as total_schemes,
+        COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as active_count,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_count,
+        COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) as cancelled_count,
+        COUNT(CASE WHEN status = 'PAUSED' THEN 1 END) as paused_count,
+        SUM(total_invested) as total_investment,
+        SUM(total_metal_accumulated) as total_metal_accumulated,
+        AVG(monthly_amount) as avg_monthly_amount,
+        AVG(completed_installments) as avg_completed_installments,
+        MIN(monthly_amount) as min_monthly_amount,
+        MAX(monthly_amount) as max_monthly_amount
+      FROM schemes
+      WHERE 1=1 ${dateFilter}
+      GROUP BY scheme_type, metal_type
+      ORDER BY scheme_type
     `;
 
     const result = await request.query(query);
@@ -7366,12 +6520,8 @@ app.get('/api/admin/reports/customer-wise', authenticateAdmin, async (req, res) 
 
     let dateFilter = '';
     if (start_date && end_date) {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      if (end_date.length <= 10) end.setHours(23, 59, 59, 999);
-
-      transactionsRequest.input('start_date', sql.DateTime, start);
-      transactionsRequest.input('end_date', sql.DateTime, end);
+      transactionsRequest.input('start_date', sql.DateTime, new Date(start_date));
+      transactionsRequest.input('end_date', sql.DateTime, new Date(end_date));
       dateFilter = 'AND created_at >= @start_date AND created_at <= @end_date';
     }
 
@@ -7419,12 +6569,8 @@ app.get('/api/admin/reports/transaction-wise', authenticateAdmin, async (req, re
     let filters = [];
 
     if (start_date && end_date) {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      if (end_date.length <= 10) end.setHours(23, 59, 59, 999);
-
-      request.input('start_date', sql.DateTime, start);
-      request.input('end_date', sql.DateTime, end);
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
       filters.push('t.created_at >= @start_date AND t.created_at <= @end_date');
     }
 
@@ -7524,12 +6670,8 @@ app.get('/api/admin/reports/date-wise', authenticateAdmin, async (req, res) => {
       dateFilter = 'CAST(created_at AS DATE) = @target_date';
     } else if (start_date && end_date) {
       // Date range
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      if (end_date.length <= 10) end.setHours(23, 59, 59, 999);
-
-      request.input('start_date', sql.DateTime, start);
-      request.input('end_date', sql.DateTime, end);
+      request.input('start_date', sql.DateTime, new Date(start_date));
+      request.input('end_date', sql.DateTime, new Date(end_date));
       dateFilter = 'created_at >= @start_date AND created_at <= @end_date';
     } else {
       return res.status(400).json({
@@ -8312,116 +7454,6 @@ app.get('/api/reports/consolidated', async (req, res) => {
   }
 });
 
-
-/**
- * Settlement Date Calculation Helper
- * Based on T+1 logic with 11:59 PM cut-off
- * Skips Sundays, 2nd & 4th Saturdays, and Bank Holidays
- */
-function calculateSettlementDate(txnDate) {
-  if (!txnDate) return 'N/A';
-  let date = new Date(txnDate);
-
-  // T+1 Settlement (Cut-off is midnight 11:59PM)
-  date.setDate(date.getDate() + 1);
-
-  // Check if it's a non-settlement day
-  while (isNonSettlementDay(date)) {
-    date.setDate(date.getDate() + 1);
-  }
-
-  return date.toISOString().split('T')[0];
-}
-
-function isNonSettlementDay(date) {
-  const day = date.getDay(); // 0 = Sunday, 6 = Saturday
-  const dateNum = date.getDate();
-
-  // Sunday - No Settlement
-  if (day === 0) return true;
-
-  // 2nd and 4th Saturday - No Settlement
-  if (day === 6) {
-    const weekNum = Math.ceil(dateNum / 7);
-    if (weekNum === 2 || weekNum === 4) return true;
-  }
-
-  // Common Indian Bank Holidays 2025/2026
-  const holidays = [
-    '2025-01-26', '2025-08-15', '2025-10-02', '2025-12-25',
-    '2026-01-26', '2026-08-15', '2026-10-02', '2026-12-25'
-  ];
-  if (holidays.includes(date.toISOString().split('T')[0])) return true;
-
-  return false;
-}
-
-// Bank Settlement Report API
-app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => {
-  const { start_date, end_date } = req.query;
-  try {
-    const pool = await sql.connect(sqlConfig);
-    const request = pool.request();
-
-    request.input('start', sql.DateTime, new Date(start_date));
-    request.input('end', sql.DateTime, new Date(end_date + 'T23:59:59'));
-
-    const result = await request.query(`
-        SELECT * FROM transactions 
-        WHERE status = 'SUCCESS' 
-        AND created_at BETWEEN @start AND @end
-        ORDER BY created_at ASC
-    `);
-
-    const transactions = result.recordset;
-    const batches = {};
-
-    transactions.forEach(t => {
-      const settlementDate = calculateSettlementDate(t.created_at);
-      // Determine metal type for batching (default to GOLD if NULL)
-      const metalType = t.metal_type || 'GOLD';
-
-      const batchKey = `${settlementDate}_${metalType}`;
-
-      if (!batches[batchKey]) {
-        batches[batchKey] = {
-          batch_key: batchKey,
-          settlement_date: settlementDate,
-          metal_type: metalType,
-          total_amount: 0,
-          transaction_count: 0,
-          orders: []
-        };
-      }
-      batches[batchKey].total_amount += parseFloat(t.amount);
-      batches[batchKey].transaction_count++;
-      batches[batchKey].orders.push({
-        id: t.transaction_id,
-        amount: t.amount,
-        time: t.created_at,
-        customer: t.customer_name,
-        metal_type: metalType
-      });
-    });
-
-    // Provide a sorted list of batches (Latest date first, Gold before Silver on same date)
-    const sortedBatches = Object.values(batches).sort((a, b) => {
-      if (a.settlement_date !== b.settlement_date) {
-        return b.settlement_date.localeCompare(a.settlement_date);
-      }
-      return a.metal_type.localeCompare(b.metal_type);
-    });
-
-    res.json({
-      success: true,
-      batches: sortedBatches
-    });
-  } catch (error) {
-    console.error('❌ Settlement report error:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
 // 404 handler
 app.use('*', (req, res) => {
   console.log('❌ 404 - Endpoint not found:', req.originalUrl);
@@ -8442,12 +7474,10 @@ app.use('*', (req, res) => {
       '/api/admin/reports/transaction-wise',
       '/api/admin/reports/date-wise',
       '/api/admin/reports/month-wise',
-      '/api/admin/reports/year-wise',
-      '/api/admin/reports/settlement'
+      '/api/admin/reports/year-wise'
     ]
   });
 });
-
 
 // Error handler
 app.use((error, req, res, next) => {
