@@ -291,6 +291,74 @@
             color: #856404;
         }
 
+        /* Reconciliation Tool Styles */
+        .reconcile-result {
+            margin-top: 25px;
+            padding: 25px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            display: none;
+            border: 1px solid #e0e0e0;
+        }
+
+        .reconcile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .reconcile-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .reconcile-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .reconcile-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            font-weight: 600;
+        }
+
+        .reconcile-value {
+            font-size: 15px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .sync-badge {
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        .sync-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .sync-failed {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .sync-pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
         .logout-btn {
             background: #dc3545;
             color: white;
@@ -1041,23 +1109,43 @@
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h3>Customer Management</h3>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label style="font-size: 14px; color: #666;">
-                                <input type="checkbox" id="showTestData" onchange="toggleTestData()"
-                                    style="margin-right: 5px;">
-                                Show Test/Mock Data
+                        <div
+                            style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; width: 100%; justify-content: flex-end;">
+                            <!-- Search Box -->
+                            <div style="position: relative; flex-grow: 1; max-width: 300px;">
+                                <input type="text" id="customerSearch" placeholder="🔍 Search by name..."
+                                    oninput="applyCustomerFilters()"
+                                    style="padding: 10px 15px 10px 40px; border-radius: 25px; border: 1px solid #ddd; width: 100%; font-size: 14px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+                                <span
+                                    style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #888;"></span>
+                            </div>
+
+                            <!-- Show Not Joined Toggle -->
+                            <label
+                                style="font-size: 14px; color: #2E7D32; font-weight: 600; display: flex; align-items: center; cursor: pointer; background: #E8F5E9; padding: 8px 16px; border-radius: 25px; border: 1px solid #C8E6C9; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                <input type="checkbox" id="showNotJoined" onchange="applyCustomerFilters()"
+                                    style="margin-right: 10px; transform: scale(1.2);">
+                                Show Not Joined Customers
                             </label>
-                            <label style="font-size: 14px; color: #666;">
-                                <input type="checkbox" id="showInactiveCustomers" onchange="refreshCustomers()" checked
-                                    style="margin-right: 5px;">
-                                Show Inactive Customers
+
+                            <label style="font-size: 14px; color: #666; display: flex; align-items: center;">
+                                <input type="checkbox" id="showInactiveCustomers" onchange="applyCustomerFilters()"
+                                    checked style="margin-right: 5px;">
+                                Show Inactive
                             </label>
+
+                            <label style="font-size: 14px; color: #666; display: flex; align-items: center;">
+                                <input type="checkbox" id="showTestData" onchange="applyCustomerFilters()"
+                                    style="margin-right: 5px;">
+                                Show Test Data
+                            </label>
+
                             <button onclick="refreshCustomers()"
-                                style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 500;">
                                 🔄 Refresh
                             </button>
                             <button onclick="forceLoadData()"
-                                style="padding: 8px 16px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                                style="padding: 8px 16px; background: #FF9800; color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: 500;">
                                 🔧 Force Load
                             </button>
                         </div>
@@ -1360,6 +1448,9 @@
                         <button class="report-tab" onclick="showReportTab('month-wise')">📆 Month-wise</button>
                         <button class="report-tab" onclick="showReportTab('year-wise')">📈 Year-wise</button>
                         <button class="report-tab" onclick="showReportTab('settlement')">🏦 Settlement Batch</button>
+                        <button class="report-tab" onclick="showReportTab('reconciliation')"
+                            style="background: #E3F2FD; color: #1976D2; border-radius: 8px;">🔑 Gateway
+                            Reconciliation</button>
                     </div>
 
                     <!-- Dashboard Analytics Report -->
@@ -1493,6 +1584,34 @@
 
                         <div id="settlementReportContent">
                             <div class="no-data">Select date range and click "Generate Report"</div>
+                        </div>
+                    </div>
+
+                    <!-- Gateway Reconciliation Tool -->
+                    <div id="reconciliation-report" class="report-content">
+                        <h3>🔑 Payment Gateway Reconciliation</h3>
+                        <p style="color: #666; margin-bottom: 20px;">Directly verify transaction status with Omniware
+                            and recover missing success data.</p>
+
+                        <div class="filter-section">
+                            <div class="filter-row">
+                                <div class="filter-group" style="grid-column: span 2;">
+                                    <label>Order ID / Transaction ID</label>
+                                    <input type="text" id="reconOrderId"
+                                        placeholder="Paste Order ID (e.g., ORD_173...) or Gateway ID here">
+                                </div>
+                            </div>
+                            <div class="filter-actions">
+                                <button class="btn-primary" onclick="syncGatewayStatus()">🔍 Sync from Bank
+                                    Gateway</button>
+                            </div>
+                        </div>
+
+                        <div id="reconLoading" class="loading-spinner" style="display: none;">Connecting to Omniware
+                            Gateway...</div>
+
+                        <div id="reconResult" class="reconcile-result">
+                            <!-- Results will be injected here -->
                         </div>
                     </div>
 
@@ -2428,124 +2547,80 @@
             }
         }
 
-        function displayCustomers(customers) {
-            console.log('🎨 displayCustomers called with:', customers);
-            const tbody = document.getElementById('customersTableBody');
-
-            // Store data for filter toggle
-            window.lastCustomersData = customers;
-
-            if (!customers || customers.length === 0) {
-                console.log('❌ No customers to display');
-                displayNoCustomersMessage();
+        function applyCustomerFilters() {
+            console.log('🔍 Applying customer filters');
+            if (!window.lastCustomersData) {
+                console.log('⚠️ No customer data to filter');
                 return;
             }
 
-            console.log('📊 Processing', customers.length, 'customers');
+            const customers = window.lastCustomersData;
+            const searchName = document.getElementById('customerSearch')?.value.toLowerCase() || '';
+            const showNotJoined = document.getElementById('showNotJoined')?.checked || false;
+            const showInactive = document.getElementById('showInactiveCustomers')?.checked ?? true;
+            const showTestData = document.getElementById('showTestData')?.checked || false;
 
-            // Filter out test/mock data - only show real user registrations
-            const realCustomers = customers.filter(customer => {
-                // SQL Server format - direct object properties
-                const phone = customer.phone || '';
-                const name = customer.name || '';
-                const email = customer.email || '';
+            console.log('📋 Filter State:', { searchName, showNotJoined, showInactive, showTestData });
 
-                console.log('🔍 Checking customer:', { phone, name, email });
-
-                // Filter out test data
-                const isTestData = phone.includes('TEST_') ||
-                    name.toLowerCase().includes('test') ||
-                    email.includes('test');
-
-                console.log('🧪 Is test data:', isTestData);
-
-                // Apply filter based on toggle
-                if (showTestDataFlag) {
-                    // Show all data when toggle is on
-                    return true;
-                } else {
-                    // Only show real user data (filter out test data)
-                    return !isTestData;
+            const filtered = customers.filter(customer => {
+                // 1. Search Filter (by Name or Phone)
+                const name = (customer.name || '').toLowerCase();
+                const phone = (customer.phone || '').toLowerCase();
+                if (searchName && !name.includes(searchName) && !phone.includes(searchName)) {
+                    return false;
                 }
+
+                // 2. Test Data Filter
+                const email = (customer.email || '').toLowerCase();
+                const isTestData = phone.includes('test') || name.includes('test') || email.includes('test');
+                if (!showTestData && isTestData) return false;
+
+                // 3. Inactive Filter
+                const isActive = customer.is_active === undefined || customer.is_active === true || customer.is_active === 1;
+                if (!showInactive && !isActive) return false;
+
+                // 4. Scheme Join Filter
+                // total_schemes is the count of ACTIVE schemes from the API
+                const hasJoined = (parseInt(customer.total_schemes) || 0) > 0;
+                if (showNotJoined) {
+                    // "Show Not Joined" is checked -> Show only customers with 0 schemes
+                    if (hasJoined) return false;
+                } else {
+                    // Default behavior (unchecked) -> Show only customers who have joined (total_schemes > 0)
+                    if (!hasJoined) return false;
+                }
+
+                return true;
             });
 
-            console.log('✅ Real customers after filtering:', realCustomers.length);
+            console.log('✅ Filtered to', filtered.length, 'of', customers.length, 'customers');
+            renderCustomersTable(filtered);
+            updateCustomerStats(filtered.length);
+        }
 
-            if (realCustomers.length === 0) {
-                console.log('⚠️ No real customers after filtering, showing all customers');
-                // Show all customers if filtering removes everything
-                const showInactive = document.getElementById('showInactiveCustomers')?.checked ?? true;
+        function renderCustomersTable(customers) {
+            const tbody = document.getElementById('customersTableBody');
 
-                tbody.innerHTML = customers.filter(customer => {
-                    const isActive = customer.is_active === undefined || customer.is_active === true || customer.is_active === 1;
-                    return showInactive || isActive;
-                }).map(customer => {
-                    const customerId = customer.customer_id || customer.id || 'N/A';
-                    const name = customer.name || 'N/A';
-                    const phone = customer.phone || 'N/A';
-                    const email = customer.email || 'N/A';
-                    const address = customer.address || 'N/A';
-                    const panCard = customer.pan_card || 'N/A';
-                    const registrationDate = customer.created_at || customer.registration_date || new Date().toISOString();
-                    const formattedDate = new Date(registrationDate).toLocaleDateString('en-IN');
-                    const isActive = customer.is_active === undefined || customer.is_active === true || customer.is_active === 1;
-                    const termsAccepted = customer.terms_accepted === true || customer.terms_accepted === 1;
-                    const termsAcceptedAt = customer.terms_accepted_at ? new Date(customer.terms_accepted_at).toLocaleString('en-IN') : 'N/A';
-                    const termsAcceptedIp = customer.terms_accepted_ip || 'N/A';
-
-                    const statusHtml = isActive
-                        ? `<span class="badge" style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-size: 11px;">✅ Active</span>`
-                        : `<span class="badge" style="background: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; font-size: 11px;">🚫 Inactive</span>`;
-
-                    const termsStatusHtml = termsAccepted
-                        ? `<span class="badge" style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-size: 11px;" title="Accepted on ${termsAcceptedAt} from ${termsAcceptedIp}">✅ Accepted</span>`
-                        : `<span class="badge" style="background: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; font-size: 11px;">❌ Pending</span>`;
-
-                    const rowStyle = !isActive ? 'opacity: 0.6; background: #f5f5f5;' : '';
-                    const deleteButtonEnabled = localStorage.getItem('deleteButtonEnabled') === 'true';
-
-                    return `
-                        <tr style="${rowStyle}">
-                            <td><strong style="color: #2E7D32;">${customerId}</strong></td>
-                            <td><strong>${name}</strong></td>
-                            <td>${phone}</td>
-                            <td>${email}</td>
-                            <td>${panCard}</td>
-                            <td>${formattedDate}</td>
-                            <td>${statusHtml}</td>
-                            <td>${termsStatusHtml}</td>
-                            <td>
-                                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                    <button class="btn-info" onclick="viewCustomerDetails('${phone}')" style="font-size: 11px; padding: 4px 8px;">
-                                        👁️ View
-                                    </button>
-                                    <button class="btn-warning" onclick="toggleCustomerStatus('${phone}', ${isActive})" style="font-size: 11px; padding: 4px 8px; background: ${isActive ? '#ff9800' : '#4caf50'};">
-                                        ${isActive ? '🔴 Deactivate' : '✅ Activate'}
-                                    </button>
-                                    <button class="btn-danger" onclick="deleteCustomer('${phone}', '${name}')" style="font-size: 11px; padding: 4px 8px; background: #f44336; display: ${deleteButtonEnabled ? 'inline-block' : 'none'};">
-                                        🗑️ Delete
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-                updateCustomerStats(customers.length);
+            if (!customers || customers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px;">
+                            <div style="color: #666;">
+                                <div style="font-size: 24px; margin-bottom: 10px;">🔍</div>
+                                <h3>No matching customers found</h3>
+                                <p>Try adjusting your search or filters</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
                 return;
             }
 
-            const showInactive = document.getElementById('showInactiveCustomers')?.checked ?? true;
-
-            tbody.innerHTML = realCustomers.filter(customer => {
-                const isActive = customer.is_active === undefined || customer.is_active === true || customer.is_active === 1;
-                return showInactive || isActive;
-            }).map(customer => {
-                // Handle SQL Server data structure
+            tbody.innerHTML = customers.map(customer => {
                 const customerId = customer.customer_id || customer.id || 'N/A';
                 const name = customer.name || 'N/A';
                 const phone = customer.phone || 'N/A';
                 const email = customer.email || 'N/A';
-                const address = customer.address || 'N/A';
                 const panCard = customer.pan_card || 'N/A';
                 const registrationDate = customer.created_at || customer.registration_date || new Date().toISOString();
                 const formattedDate = new Date(registrationDate).toLocaleDateString('en-IN');
@@ -2553,6 +2628,7 @@
                 const termsAccepted = customer.terms_accepted === true || customer.terms_accepted === 1;
                 const termsAcceptedAt = customer.terms_accepted_at ? new Date(customer.terms_accepted_at).toLocaleString('en-IN') : 'N/A';
                 const termsAcceptedIp = customer.terms_accepted_ip || 'N/A';
+                const totalSchemes = parseInt(customer.total_schemes) || 0;
 
                 const statusHtml = isActive
                     ? `<span class="badge" style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-size: 11px;">✅ Active</span>`
@@ -2562,13 +2638,17 @@
                     ? `<span class="badge" style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-size: 11px;" title="Accepted on ${termsAcceptedAt} from ${termsAcceptedIp}">✅ Accepted</span>`
                     : `<span class="badge" style="background: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; font-size: 11px;">❌ Pending</span>`;
 
+                const schemeBadge = totalSchemes > 0
+                    ? `<span style="background: #E3F2FD; color: #1976D2; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 5px;">${totalSchemes} Schemes</span>`
+                    : `<span style="background: #F5F5F5; color: #9E9E9E; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: normal; margin-left: 5px;">No Schemes</span>`;
+
                 const rowStyle = !isActive ? 'opacity: 0.6; background: #f5f5f5;' : '';
                 const deleteButtonEnabled = localStorage.getItem('deleteButtonEnabled') === 'true';
 
                 return `
                     <tr style="${rowStyle}">
                         <td><strong style="color: #2E7D32;">${customerId}</strong></td>
-                        <td><strong>${name}</strong></td>
+                        <td><strong>${name}</strong>${schemeBadge}</td>
                         <td>${phone}</td>
                         <td>${email}</td>
                         <td>${panCard}</td>
@@ -2591,9 +2671,18 @@
                     </tr>
                 `;
             }).join('');
+        }
 
-            // Update stats with real customer count
-            updateCustomerStats(realCustomers.length);
+        function displayCustomers(customers) {
+            console.log('🎨 displayCustomers called with:', customers?.length, 'customers');
+            window.lastCustomersData = customers;
+
+            if (!customers || customers.length === 0) {
+                displayNoCustomersMessage();
+                return;
+            }
+
+            applyCustomerFilters();
         }
 
         function updateCustomerStats(customerCount) {
@@ -2761,13 +2850,8 @@
         }
 
         function toggleTestData() {
-            showTestDataFlag = document.getElementById('showTestData').checked;
-            console.log('🔄 Test data filter toggled:', showTestDataFlag ? 'SHOW' : 'HIDE');
-
-            // Re-display customers with new filter
-            if (window.lastCustomersData) {
-                displayCustomers(window.lastCustomersData);
-            }
+            // Updated to use applyCustomerFilters
+            applyCustomerFilters();
         }
 
         // Load real transaction data from SQL Server (HTTPS-only)
@@ -4632,7 +4716,7 @@
 
                 if (data.success && data.batches.length > 0) {
                     let html = '<div class="report-table-container"><table class="report-table"><thead><tr>';
-                    html += '<th>Settlement Date</th><th>Merchant</th><th>Transactions</th><th>Bank Credit (Est.)</th><th>Details</th></tr></thead><tbody>';
+                    html += '<th>Settlement Date</th><th>Metal</th><th>Successful Payments</th><th>Amount Credited</th><th>Mapping Details</th></tr></thead><tbody>';
 
                     data.batches.forEach((batch, index) => {
                         const batchId = `batch-${index}`;
@@ -4640,41 +4724,43 @@
                         html += `<tr>
                                     <td><strong style="color: #1976D2;">${formatDisplayDate(batch.settlement_date)}</strong></td>
                                     <td><span class="metal-badge ${metalClass}">${batch.metal_type}</span></td>
-                                    <td>${batch.transaction_count} successful payments</td>
+                                    <td>${batch.transaction_count} payments</td>
                                     <td style="color: #2E7D32; font-weight: bold; background: #E8F5E9; padding: 10px;">₹${formatCurrency(batch.total_amount)}</td>
                                     <td><button class="btn-sm" onclick="toggleBatchDetails('${batchId}')">🔍 View Breakdown</button></td>
                                 </tr>
                                 <tr id="${batchId}" style="display: none; background: #fdfdfd;">
                                     <td colspan="5" style="padding: 20px; border: 1px solid #ddd;">
                                         <div style="background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 15px;">
-                                            <h4 style="margin-top:0;">Individual Payments in this Batch:</h4>
+                                            <h4 style="margin-top:0;">Settlement Mapping (Txn -> Credit):</h4>
                                             <table style="width: 100%; border-collapse: collapse;">
                                                 <thead>
                                                     <tr style="border-bottom: 2px solid #eee; text-align: left; font-size: 13px; color: #666;">
-                                                        <th style="padding: 8px;">Time</th>
+                                                        <th style="padding: 8px;">Transaction Date & Time</th>
                                                         <th style="padding: 8px;">Customer</th>
                                                         <th style="padding: 8px;">Transaction ID</th>
                                                         <th style="padding: 8px; text-align: right;">Gross Amount</th>
+                                                        <th style="padding: 8px; text-align: right;">Amount Credited</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     ${batch.orders.map(o => `
                                                         <tr style="border-bottom: 1px solid #f0f0f0;">
-                                                            <td style="padding: 8px; font-size: 13px;">${new Date(o.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                                            <td style="padding: 8px; font-size: 13px;">${new Date(o.time).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                                                             <td style="padding: 8px; font-size: 13px; font-weight: 500;">${o.customer}</td>
                                                             <td style="padding: 8px; font-family: monospace; font-size: 11px; color: #888;">${o.id}</td>
                                                             <td style="padding: 8px; text-align: right; font-weight: 600;">₹${formatCurrency(o.amount)}</td>
+                                                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #2E7D32;">₹${formatCurrency(o.amount)}</td>
                                                         </tr>
                                                     `).join('')}
                                                 </tbody>
                                                 <tfoot>
                                                     <tr style="background: #f9f9f9; font-weight: bold;">
-                                                        <td colspan="3" style="padding: 10px; text-align: right;">Total Expected Credit:</td>
+                                                        <td colspan="4" style="padding: 10px; text-align: right;">Total Amount Credited:</td>
                                                         <td style="padding: 10px; text-align: right; color: #2E7D32;">₹${formatCurrency(batch.total_amount)}</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
-                                            <p style="font-size: 11px; color: #999; margin-top: 10px;">* Actual credit may vary slightly if MDR fees are deducted at source by Omniware.</p>
+                                            <p style="font-size: 11px; color: #999; margin-top: 10px;">* Mapping follows T+1 logic with 05:30 AM IST (UTC Midnight) cut-off. No MDR fees applied for UPI Mode.</p>
                                         </div>
                                     </td>
                                 </tr>`;
@@ -5162,6 +5248,81 @@
                 'maintenance': '⚠️ Maintenance'
             };
             return typeMap[type] || type;
+        }
+        // Gateway Reconciliation Function
+        async function syncGatewayStatus() {
+            const orderId = document.getElementById('reconOrderId').value.trim();
+            const resultDiv = document.getElementById('reconResult');
+            const loader = document.getElementById('reconLoading');
+            const btn = document.querySelector('#reconciliation-report .btn-primary');
+
+            if (!orderId) {
+                alert('Please enter an Order ID or Transaction ID');
+                return;
+            }
+
+            // UI Feedback
+            resultDiv.style.display = 'none';
+            loader.style.display = 'block';
+            if (btn) btn.disabled = true;
+
+            try {
+                // Use the standard apiFetch helper to handle auth tokens and headers correctly
+                const data = await apiFetch(`/payment/verify/${orderId}`, {
+                    method: 'POST'
+                });
+
+                if (data.success) {
+                    const statusClass = data.status === 'SUCCESS' ? 'sync-success' : (data.status === 'FAILED' ? 'sync-failed' : 'sync-pending');
+
+                    let html = `
+                        <div class="reconcile-header">
+                            <h4 style="margin: 0;">Reconciliation Result</h4>
+                            <span class="sync-badge ${statusClass}">${data.status}</span>
+                        </div>
+                        <div class="reconcile-details">
+                            <div class="reconcile-item">
+                                <span class="reconcile-label">Order ID</span>
+                                <span class="reconcile-value">${data.transaction_id}</span>
+                            </div>
+                            <div class="reconcile-item">
+                                <span class="reconcile-label">Live Gateway Status</span>
+                                <span class="reconcile-value" style="color: ${data.status === 'SUCCESS' ? '#2E7D32' : '#C62828'}; font-weight: bold;">
+                                    ${data.status}
+                                </span>
+                            </div>
+                            <div class="reconcile-item">
+                                <span class="reconcile-label">Sync Result</span>
+                                <span class="reconcile-value">
+                                    ${data.needs_update ? '🔄 Database was outdated - Automatically Syncing...' : '✅ Database is already up to date.'}
+                                </span>
+                            </div>
+                            <div class="reconcile-item">
+                                <span class="reconcile-label">Minutes since attempt</span>
+                                <span class="reconcile-value">${data.minutes_pending ? Math.floor(data.minutes_pending) : 'N/A'} mins</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 25px; padding: 15px; background: #f1f8e9; border-radius: 8px; border-left: 5px solid #4caf50;">
+                            <p style="font-size: 13px; color: #33691e;">
+                                <strong>💡 Action Taken:</strong> The system has verified this with Omniware API. 
+                                ${data.status === 'SUCCESS' ? 'Gold/Silver grams have been credited to the customer\'s wallet.' : 'This session is marked as failed/abandoned and no credit was given.'}
+                            </p>
+                        </div>
+                    `;
+
+                    resultDiv.innerHTML = html;
+                    resultDiv.style.display = 'block';
+                } else {
+                    alert('Error: ' + (data.message || 'Verification failed'));
+                }
+            } catch (error) {
+                console.error('Reconciliation error:', error);
+                alert('Verification failed: ' + error.message);
+            } finally {
+                loader.style.display = 'none';
+                if (btn) btn.disabled = false;
+            }
         }
     </script>
 </body>

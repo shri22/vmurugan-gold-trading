@@ -184,7 +184,7 @@ router.post('/check-payment-status', async (req, res) => {
           // 1. Get transaction details to find gold/silver grams
           const existingTxn = await pool.request()
             .input('order_id', require('mssql').VarChar(50), transaction.order_id)
-            .query(`SELECT status, customer_phone, gold_grams, silver_grams, amount FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
+            .query(`SELECT status, customer_phone, gold_grams, silver_grams, amount, scheme_id, scheme_type FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
 
           if (existingTxn.recordset.length > 0) {
             const txn = existingTxn.recordset[0];
@@ -207,13 +207,41 @@ router.post('/check-payment-status', async (req, res) => {
                   WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id
                 `);
 
+              // --- SCHEME AUTO-DISCOVERY FALLBACK (Triple-Layer Protection) ---
+              let schemeId = txn.scheme_id;
+              let schemeType = txn.scheme_type;
+
+              if (!schemeId && txn.customer_phone) {
+                const metalTypeCurrent = transaction.order_id.includes('_SILVER_') ? 'SILVER' : 'GOLD';
+                console.log(`🔍 [STATUS-CHECK] Transaction ${transaction.order_id} missing scheme_id. Searching for active ${metalTypeCurrent} scheme...`);
+
+                const schemeDiscovery = await pool.request()
+                  .input('phone', require('mssql').NVarChar(15), txn.customer_phone)
+                  .input('metal', require('mssql').NVarChar(10), metalTypeCurrent)
+                  .query("SELECT scheme_id, scheme_type FROM schemes WHERE customer_phone = @phone AND metal_type = @metal AND status = 'ACTIVE'");
+
+                if (schemeDiscovery.recordset.length === 1) {
+                  const autoScheme = schemeDiscovery.recordset[0];
+                  schemeId = autoScheme.scheme_id;
+                  schemeType = autoScheme.scheme_type;
+                  console.log(`✨ [STATUS-CHECK] Auto-discovered scheme ${schemeId} for user.`);
+
+                  // Update transaction record with the discovered scheme details
+                  await pool.request()
+                    .input('order_id', require('mssql').VarChar(50), transaction.order_id)
+                    .input('sid', require('mssql').NVarChar(100), schemeId)
+                    .input('stype', require('mssql').NVarChar(20), schemeType)
+                    .query("UPDATE transactions SET scheme_id = @sid, scheme_type = @stype WHERE transaction_id = @order_id");
+                }
+              }
+
               // 3. Update scheme if linked (CRITICAL FOR CALCULATION ACCURACY)
-              if (txn.scheme_id) {
-                console.log('📈 Updating linked scheme:', txn.scheme_id);
+              if (schemeId) {
+                console.log('📈 Updating linked scheme:', schemeId);
                 try {
                   const metalGrams = (txn.gold_grams || 0) + (txn.silver_grams || 0);
                   await pool.request()
-                    .input('scheme_id', require('mssql').NVarChar(100), txn.scheme_id)
+                    .input('scheme_id', require('mssql').NVarChar(100), schemeId)
                     .input('amount', require('mssql').Decimal(12, 2), txn.amount)
                     .input('metal_grams', require('mssql').Decimal(10, 4), metalGrams)
                     .query(`

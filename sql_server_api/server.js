@@ -3299,8 +3299,26 @@ async function syncTransactionWithOmniware(orderId) {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-    if (!response.data || !response.data.data) {
-      console.log(`⚠️ [OMNIWARE-SYNC] Invalid response for ${orderId}`);
+    if (!response.data || (!response.data.data && !response.data.error)) {
+      console.log(`⚠️ [OMNIWARE-SYNC] Invalid or empty response for ${orderId}`);
+      return null;
+    }
+
+    // Handle case where gateway has no record of the transaction (e.g. user closed app before arriving at PG)
+    if (response.data.error && response.data.error.code === 1028) {
+      console.log(`🚫 [OMNIWARE-SYNC] Gateway has no record of ${orderId}. Marking as FAILED.`);
+      try {
+        await pool.request()
+          .input('order_id', sql.NVarChar, orderId)
+          .query("UPDATE transactions SET status = 'FAILED', updated_at = GETDATE() WHERE transaction_id = @order_id AND status = 'PENDING'");
+      } catch (err) {
+        console.error('❌ [OMNIWARE-SYNC] Error marking non-existent txn as failed:', err.message);
+      }
+      return 'FAILED';
+    }
+
+    if (!response.data.data) {
+      console.log(`⚠️ [OMNIWARE-SYNC] No data field in response for ${orderId}`);
       return null;
     }
 
@@ -3324,13 +3342,45 @@ async function syncTransactionWithOmniware(orderId) {
 
       if (dbResult.recordset.length > 0) {
         const txn = dbResult.recordset[0];
-        if (txn.status !== 'SUCCESS') {
-          console.log(`💰 [OMNIWARE-SYNC] Auto-recovering transaction ${orderId} as SUCCESS`);
+
+        // --- CASE 1: FULL RECOVERY (NON-SUCCESS) OR CASE 2: SCHEME REPAIR (SUCCESS but NO SCHEME) ---
+        if (txn.status !== 'SUCCESS' || (!txn.scheme_id && txn.customer_phone)) {
+          const isRepair = txn.status === 'SUCCESS';
+          if (isRepair) console.log(`🛠️ [OMNIWARE-SYNC] Repairing SUCCESS transaction ${orderId} with missing scheme_id`);
+          else console.log(`💰 [OMNIWARE-SYNC] Auto-recovering transaction ${orderId} as SUCCESS`);
 
           const transaction = pool.transaction();
           await transaction.begin();
 
           try {
+            // --- SCHEME AUTO-DISCOVERY FALLBACK ---
+            let effectiveSchemeId = txn.scheme_id;
+            if (!effectiveSchemeId && txn.customer_phone) {
+              console.log(`🔍 [OMNIWARE-SYNC] Transaction ${orderId} missing scheme_id. Searching for active ${metalType} scheme for ${txn.customer_phone}...`);
+
+              const schemeDiscovery = await pool.request()
+                .input('phone', sql.NVarChar(15), txn.customer_phone)
+                .input('metal', sql.NVarChar(10), metalType)
+                .query("SELECT scheme_id, scheme_type FROM schemes WHERE customer_phone = @phone AND metal_type = @metal AND status = 'ACTIVE'");
+
+              if (schemeDiscovery.recordset.length === 1) {
+                const autoScheme = schemeDiscovery.recordset[0];
+                effectiveSchemeId = autoScheme.scheme_id;
+                console.log(`✨ [OMNIWARE-SYNC] Auto-discovered scheme ${effectiveSchemeId} (${autoScheme.scheme_type}) for user.`);
+
+                // Update transaction record with the discovered scheme details
+                await transaction.request()
+                  .input('order_id', sql.NVarChar, orderId)
+                  .input('sid', sql.NVarChar(100), effectiveSchemeId)
+                  .input('stype', sql.NVarChar(20), autoScheme.scheme_type)
+                  .query("UPDATE transactions SET scheme_id = @sid, scheme_type = @stype WHERE transaction_id = @order_id");
+              } else if (schemeDiscovery.recordset.length > 1) {
+                console.log(`⚠️ [OMNIWARE-SYNC] Multiple active ${metalType} schemes found for ${txn.customer_phone}. Cannot auto-link.`);
+              } else {
+                console.log(`ℹ️ [OMNIWARE-SYNC] No active ${metalType} schemes found for user. Treating as wallet purchase.`);
+              }
+            }
+
             // Update transaction
             await transaction.request()
               .input('order_id', sql.NVarChar, orderId)
@@ -3345,8 +3395,8 @@ async function syncTransactionWithOmniware(orderId) {
                 WHERE transaction_id = @order_id
               `);
 
-            // Credit customer balance
-            if (txn.customer_phone) {
+            // B. Credit customer balance (ONLY if not already SUCCESS)
+            if (txn.customer_phone && !isRepair) {
               await transaction.request()
                 .input('phone', sql.NVarChar(15), txn.customer_phone)
                 .input('gold', sql.Decimal(10, 4), txn.gold_grams || 0)
@@ -3364,11 +3414,11 @@ async function syncTransactionWithOmniware(orderId) {
                 `);
             }
 
-            // Update scheme progress if applicable
-            if (txn.scheme_id) {
-              console.log(`📈 [OMNIWARE-SYNC] Updating scheme progress for ${txn.scheme_id}`);
+            // C. Update scheme progress (if discovered AND either it's a repair OR it was missing before)
+            if (effectiveSchemeId && (isRepair || !txn.scheme_id)) {
+              console.log(`📈 [OMNIWARE-SYNC] Updating scheme progress for ${effectiveSchemeId}`);
               await transaction.request()
-                .input('scheme_id', sql.NVarChar(100), txn.scheme_id)
+                .input('scheme_id', sql.NVarChar(100), effectiveSchemeId)
                 .input('amount', sql.Decimal(12, 2), txn.amount || 0)
                 .input('metal_grams', sql.Decimal(10, 4), (txn.gold_grams || 0) + (txn.silver_grams || 0))
                 .query(`
@@ -3382,13 +3432,32 @@ async function syncTransactionWithOmniware(orderId) {
             }
 
             await transaction.commit();
-            console.log(`✅ [OMNIWARE-SYNC] Transaction ${orderId} fully recovered and credited.`);
+            console.log(`✅ [OMNIWARE-SYNC] Transaction ${orderId} ${isRepair ? 'repaired' : 'recovered'} successfully.`);
             return 'SUCCESS';
           } catch (err) {
             await transaction.rollback();
-            console.error('❌ [OMNIWARE-SYNC] Recovery rollback:', err.message);
+            console.error(`❌ [OMNIWARE-SYNC] ${isRepair ? 'Repair' : 'Recovery'} rollback:`, err.message);
           }
         }
+      }
+    } else if (finalStatus === 'FAILED') {
+      // NEW: If gateway says FAILED, update our database so it's no longer 'PENDING'
+      try {
+        await pool.request()
+          .input('order_id', sql.NVarChar, orderId)
+          .input('gateway_id', sql.NVarChar, paymentData.transaction_id)
+          .input('response_raw', sql.NVarChar(sql.MAX), JSON.stringify(paymentData))
+          .query(`
+            UPDATE transactions 
+            SET status = 'FAILED', 
+                gateway_transaction_id = @gateway_id,
+                gateway_response = @response_raw,
+                updated_at = GETDATE()
+            WHERE transaction_id = @order_id AND status = 'PENDING'
+          `);
+        console.log(`❌ [OMNIWARE-SYNC] Marked ${orderId} as FAILED in database`);
+      } catch (err) {
+        console.error('❌ [OMNIWARE-SYNC] Error marking failure in DB:', err.message);
       }
     }
 
@@ -3416,9 +3485,9 @@ app.post('/api/payment/verify/:transaction_id', flexibleAuth, async (req, res) =
     let transaction = txnResult.recordset[0];
     let currentStatus = transaction.status;
 
-    // 🚀 IMPROVED LOGIC: If it's NOT success, ALWAYS double-check with Omniware Gateway
-    if (currentStatus !== 'SUCCESS') {
-      console.log(`📡 Status is ${currentStatus}. Double-checking with Omniware Gateway...`);
+    // 🚀 IMPROVED LOGIC: If it's NOT success OR missing a scheme link, sync with Omniware Gateway
+    if (currentStatus !== 'SUCCESS' || (!transaction.scheme_id && transaction.customer_phone)) {
+      console.log(`📡 Status is ${currentStatus} (Scheme ID: ${transaction.scheme_id || 'NULL'}). Syncing with Omniware Gateway...`);
       const gatewayStatus = await syncTransactionWithOmniware(transaction_id);
 
       if (gatewayStatus) {
@@ -8320,38 +8389,60 @@ app.get('/api/reports/consolidated', async (req, res) => {
  */
 function calculateSettlementDate(txnDate) {
   if (!txnDate) return 'N/A';
-  let date = new Date(txnDate);
 
-  // T+1 Settlement (Cut-off is midnight 11:59PM)
-  date.setDate(date.getDate() + 1);
+  // 1. Transaction time from DB (stored in UTC)
+  const date = new Date(txnDate);
 
-  // Check if it's a non-settlement day
-  while (isNonSettlementDay(date)) {
-    date.setDate(date.getDate() + 1);
+  // 2. Identify the UTC Business Day (The Bank's Midnight)
+  // This groups IST 05:30 AM to 05:29 AM (Next Day) into one cycle.
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const d = date.getUTCDate();
+
+  // 3. Settlement is T+1 working day (UTC Day + 1)
+  let settle = new Date(Date.UTC(y, m, d + 1));
+
+  // 4. Skip Sundays, 2nd/4th Saturdays, and Bank Holidays
+  while (isNonSettlementDay(settle)) {
+    settle.setUTCDate(settle.getUTCDate() + 1);
   }
 
-  return date.toISOString().split('T')[0];
+  // 5. Return as YYYY-MM-DD string
+  const sy = settle.getUTCFullYear();
+  const sm = String(settle.getUTCMonth() + 1).padStart(2, '0');
+  const sd = String(settle.getUTCDate()).padStart(2, '0');
+  return `${sy}-${sm}-${sd}`;
 }
 
 function isNonSettlementDay(date) {
-  const day = date.getDay(); // 0 = Sunday, 6 = Saturday
-  const dateNum = date.getDate();
+  const day = date.getUTCDay(); // 0 = Sunday, 6 = Saturday
+  const dateNum = date.getUTCDate();
 
-  // Sunday - No Settlement
+  // 1. Sundays - No Settlement
   if (day === 0) return true;
 
-  // 2nd and 4th Saturday - No Settlement
+  // 2. 2nd and 4th Saturday - No Settlement
   if (day === 6) {
     const weekNum = Math.ceil(dateNum / 7);
     if (weekNum === 2 || weekNum === 4) return true;
   }
 
-  // Common Indian Bank Holidays 2025/2026
+  // 3. Indian Bank Holidays 2026
   const holidays = [
-    '2025-01-26', '2025-08-15', '2025-10-02', '2025-12-25',
-    '2026-01-26', '2026-08-15', '2026-10-02', '2026-12-25'
+    '2026-01-14', // Pongal
+    '2026-01-15', // Thiruvalluvar Day
+    '2026-01-26', // Republic Day
+    '2026-08-15', // Independence Day
+    '2026-10-02', // Gandhi Jayanti
+    '2026-12-25'  // Christmas
   ];
-  if (holidays.includes(date.toISOString().split('T')[0])) return true;
+
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const dateString = `${y}-${m}-${d}`;
+
+  if (holidays.includes(dateString)) return true;
 
   return false;
 }
@@ -8363,8 +8454,13 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
     const pool = await sql.connect(sqlConfig);
     const request = pool.request();
 
-    request.input('start', sql.DateTime, new Date(start_date));
-    request.input('end', sql.DateTime, new Date(end_date + 'T23:59:59'));
+    // For an accurate T+1 report based on Settlement Date, we must load 
+    // transactions starting 5 days before the range to catch Fri/Sat/Sun txns.
+    const searchStart = new Date(new Date(start_date).getTime() - (5 * 24 * 60 * 60 * 1000));
+    const searchEnd = new Date(new Date(end_date).getTime() + (2 * 24 * 60 * 60 * 1000));
+
+    request.input('start', sql.DateTime, searchStart);
+    request.input('end', sql.DateTime, searchEnd);
 
     const result = await request.query(`
         SELECT * FROM transactions 
@@ -8377,10 +8473,17 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
     const batches = {};
 
     transactions.forEach(t => {
+      // CRITICAL: We use 'created_at' for the Settlement Cycle calculation 
+      // because that represents the primary UTC window the transaction falls into.
       const settlementDate = calculateSettlementDate(t.created_at);
+
+      // Only include if the SETTLEMENT date falls within the requested range
+      if (settlementDate < start_date || settlementDate > end_date) {
+        return;
+      }
+
       // Determine metal type for batching (default to GOLD if NULL)
       const metalType = t.metal_type || 'GOLD';
-
       const batchKey = `${settlementDate}_${metalType}`;
 
       if (!batches[batchKey]) {
@@ -8398,7 +8501,7 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
       batches[batchKey].orders.push({
         id: t.transaction_id,
         amount: t.amount,
-        time: t.created_at,
+        time: t.timestamp || t.created_at, // Use timestamp for order detail view
         customer: t.customer_name,
         metal_type: metalType
       });

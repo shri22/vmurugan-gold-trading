@@ -142,10 +142,46 @@ async function saveTransactionToDatabase(webhookData) {
         // Find if this transaction was linked to a scheme (IMPORTANT for calculation fixes)
         const txnWithScheme = await pool.request()
           .input('order_id', sql.VarChar(50), orderId)
-          .query(`SELECT scheme_id, installment_number FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
+          .query(`SELECT scheme_id, scheme_type, installment_number, metal_type, gold_grams, silver_grams FROM transactions WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id`);
 
-        if (txnWithScheme.recordset.length > 0 && txnWithScheme.recordset[0].scheme_id) {
-          const schemeId = txnWithScheme.recordset[0].scheme_id;
+        let schemeId = null;
+        let schemeType = null;
+
+        if (txnWithScheme.recordset.length > 0) {
+          schemeId = txnWithScheme.recordset[0].scheme_id;
+          schemeType = txnWithScheme.recordset[0].scheme_type;
+        }
+
+        // --- SCHEME AUTO-DISCOVERY FALLBACK ---
+        if (!schemeId && customerPhone) {
+          const metalTypeCurrent = getMetalTypeFromOrderId(orderId);
+          console.log(`🔍 [WEBHOOK] Transaction ${orderId} missing scheme_id. Searching for active ${metalTypeCurrent} scheme...`);
+
+          const schemeDiscovery = await pool.request()
+            .input('phone', sql.NVarChar(15), customerPhone)
+            .input('metal', sql.NVarChar(10), metalTypeCurrent)
+            .query("SELECT scheme_id, scheme_type FROM schemes WHERE customer_phone = @phone AND metal_type = @metal AND status = 'ACTIVE'");
+
+          if (schemeDiscovery.recordset.length === 1) {
+            const autoScheme = schemeDiscovery.recordset[0];
+            schemeId = autoScheme.scheme_id;
+            schemeType = autoScheme.scheme_type;
+            console.log(`✨ [WEBHOOK] Auto-discovered scheme ${schemeId} (${schemeType}) for user.`);
+
+            // Update transaction record with the discovered scheme details
+            await pool.request()
+              .input('order_id', sql.NVarChar, orderId)
+              .input('sid', sql.NVarChar(100), schemeId)
+              .input('stype', sql.NVarChar(20), schemeType)
+              .query("UPDATE transactions SET scheme_id = @sid, scheme_type = @stype WHERE transaction_id = @order_id");
+          } else if (schemeDiscovery.recordset.length > 1) {
+            console.log(`⚠️ [WEBHOOK] Multiple active ${metalTypeCurrent} schemes found. Cannot auto-link.`);
+          } else {
+            console.log(`ℹ [WEBHOOK] No active ${metalTypeCurrent} schemes found. Treating as wallet purchase.`);
+          }
+        }
+
+        if (schemeId) {
           console.log('📈 Updating linked scheme via webhook:', schemeId);
 
           await pool.request()
