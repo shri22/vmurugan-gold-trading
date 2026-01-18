@@ -65,18 +65,11 @@ class SilverPriceService {
         final silverPrice = await _mjdtaService.fetchSilverPrice();
         if (silverPrice != null) {
           print('🥈 SilverPriceService: ✅ Successfully loaded price from MJDTA: ${silverPrice.formattedPrice}');
-          print('🥈 SilverPriceService: Raw price value: ${silverPrice.pricePerGram}');
-
-          // Validate price is reasonable
-          if (silverPrice.pricePerGram >= 30.0 && silverPrice.pricePerGram <= 300.0) {
-            _currentPrice = silverPrice;
-            _isMjdtaAvailable = true;
-            _lastMjdtaCheck = DateTime.now();
-            _priceController.add(_currentPrice);
-            return; // Success, exit retry loop
-          } else {
-            print('🥈 SilverPriceService: ⚠️ Price validation failed: ${silverPrice.pricePerGram} is outside reasonable range');
-          }
+          _currentPrice = silverPrice;
+          _isMjdtaAvailable = true;
+          _lastMjdtaCheck = DateTime.now();
+          _priceController.add(_currentPrice);
+          return;
         } else {
           print('🥈 SilverPriceService: ❌ MJDTA returned null price (attempt ${retryCount + 1})');
         }

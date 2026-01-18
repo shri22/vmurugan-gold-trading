@@ -65,17 +65,11 @@ class GoldPriceService {
         final mjdtaPrice = await _mjdtaService.fetchGoldPrice();
         if (mjdtaPrice != null) {
           print('GoldPriceService: Successfully loaded price from MJDTA: ${mjdtaPrice.formattedPrice}');
-
-          // Validate price is reasonable
-          if (mjdtaPrice.pricePerGram >= 3000.0 && mjdtaPrice.pricePerGram <= 15000.0) {
-            _currentPrice = mjdtaPrice;
-            _isMjdtaAvailable = true;
-            _lastMjdtaCheck = DateTime.now();
-            _priceController.add(_currentPrice);
-            return; // Success, exit retry loop
-          } else {
-            print('GoldPriceService: ⚠️ Price validation failed: ${mjdtaPrice.pricePerGram} is outside reasonable range');
-          }
+          _currentPrice = mjdtaPrice;
+          _isMjdtaAvailable = true;
+          _lastMjdtaCheck = DateTime.now();
+          _priceController.add(_currentPrice);
+          return;
         } else {
           print('GoldPriceService: ❌ MJDTA returned null price (attempt ${retryCount + 1})');
         }

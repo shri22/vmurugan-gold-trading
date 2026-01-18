@@ -793,19 +793,24 @@ async function getCurrentMetalRate(metal_type, clientRate = null) {
         }
       } else if (metal_type === 'SILVER') {
         // Try multiple patterns for Silver
+        // Improved: Looking for visible rate by class or anchored to text
         const silverPatterns = [
+          /1\s*Gm\s*Silver.*?class="silver_rate"[^>]*>([\d,]+\.?[\d]*)/si, // Anchored to text and class
           /class="silver_rate"[^>]*>([\d,]+\.?[\d]*)/i,
-          /id="silverrate_22ct"[^>]*>([\d,]+\.?[\d]*)/i,
           /silver_rate.*?\.html\(['"]([\d,]+\.?[\d]*)['"]\)/i,
-          /1\s*Gm\s*Silver.*?([\d,]+\.?[\d]*)/i
+          /1\s*Gm\s*Silver.*?([\d,]+\.?[\d]*)/si
         ];
 
         for (const pattern of silverPatterns) {
           const match = html.match(pattern);
           if (match) {
-            rate = parseFloat(match[1].replace(/,/g, ''));
-            console.log(`✅ Found silver rate with pattern ${pattern}`);
-            break;
+            const val = parseFloat(match[1].replace(/,/g, ''));
+            // Filter out the hidden "9" value if it's found
+            if (val > 20) {
+              rate = val;
+              console.log(`✅ Found silver rate with pattern ${pattern}`);
+              break;
+            }
           }
         }
       }
@@ -8387,27 +8392,37 @@ app.get('/api/reports/consolidated', async (req, res) => {
  * Based on T+1 logic with 11:59 PM cut-off
  * Skips Sundays, 2nd & 4th Saturdays, and Bank Holidays
  */
+/**
+ * Settlement Date Calculation Helper
+ * RULE: Strict 11:59 PM IST (GMT+5:30) Cut-off.
+ * Logic:
+ * 1. Convert completion time to India Standard Time.
+ * 2. Any time between 12:00:00 AM and 11:59:59 PM IST belongs to that calendar day cycle.
+ * 3. Settlement is T+1 working day (skipping holidays/weekends).
+ */
 function calculateSettlementDate(txnDate) {
   if (!txnDate) return 'N/A';
 
-  // 1. Transaction time from DB (stored in UTC)
+  // 1. Convert UTC time to IST (UTC + 5.5 hours)
   const date = new Date(txnDate);
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
 
-  // 2. Identify the UTC Business Day (The Bank's Midnight)
-  // This groups IST 05:30 AM to 05:29 AM (Next Day) into one cycle.
-  const y = date.getUTCFullYear();
-  const m = date.getUTCMonth();
-  const d = date.getUTCDate();
+  // 2. Identify the IST Calendar Day
+  const y = istTime.getUTCFullYear();
+  const m = istTime.getUTCMonth();
+  const d = istTime.getUTCDate();
 
-  // 3. Settlement is T+1 working day (UTC Day + 1)
+  // 3. Settlement is T+1 Working day (Next calendar day)
+  // We use UTC for the 'settle' object to avoid server-local timezone drift during math
   let settle = new Date(Date.UTC(y, m, d + 1));
 
-  // 4. Skip Sundays, 2nd/4th Saturdays, and Bank Holidays
+  // 4. Skip Sundays, 2nd & 4th Saturdays, and Bank Holidays
   while (isNonSettlementDay(settle)) {
     settle.setUTCDate(settle.getUTCDate() + 1);
   }
 
-  // 5. Return as YYYY-MM-DD string
+  // 5. Return as YYYY-MM-DD
   const sy = settle.getUTCFullYear();
   const sm = String(settle.getUTCMonth() + 1).padStart(2, '0');
   const sd = String(settle.getUTCDate()).padStart(2, '0');
@@ -8427,14 +8442,11 @@ function isNonSettlementDay(date) {
     if (weekNum === 2 || weekNum === 4) return true;
   }
 
-  // 3. Indian Bank Holidays 2026
+  // 3. Indian/Tamil Nadu Bank Holidays 2026
   const holidays = [
-    '2026-01-14', // Pongal
-    '2026-01-15', // Thiruvalluvar Day
-    '2026-01-26', // Republic Day
-    '2026-08-15', // Independence Day
-    '2026-10-02', // Gandhi Jayanti
-    '2026-12-25'  // Christmas
+    '2026-01-01', '2026-01-14', '2026-01-15', '2026-01-16',
+    '2026-01-26', '2026-04-14', '2026-05-01', '2026-08-15',
+    '2026-10-02', '2026-12-25'
   ];
 
   const y = date.getUTCFullYear();
@@ -8443,7 +8455,6 @@ function isNonSettlementDay(date) {
   const dateString = `${y}-${m}-${d}`;
 
   if (holidays.includes(dateString)) return true;
-
   return false;
 }
 
@@ -8454,8 +8465,7 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
     const pool = await sql.connect(sqlConfig);
     const request = pool.request();
 
-    // For an accurate T+1 report based on Settlement Date, we must load 
-    // transactions starting 5 days before the range to catch Fri/Sat/Sun txns.
+    // Catch wide range of transactions to ensure settlement mapping is correct
     const searchStart = new Date(new Date(start_date).getTime() - (5 * 24 * 60 * 60 * 1000));
     const searchEnd = new Date(new Date(end_date).getTime() + (2 * 24 * 60 * 60 * 1000));
 
@@ -8473,17 +8483,16 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
     const batches = {};
 
     transactions.forEach(t => {
-      // CRITICAL: We use 'created_at' for the Settlement Cycle calculation 
-      // because that represents the primary UTC window the transaction falls into.
-      const settlementDate = calculateSettlementDate(t.created_at);
-
-      // Only include if the SETTLEMENT date falls within the requested range
-      if (settlementDate < start_date || settlementDate > end_date) {
-        return;
-      }
-
-      // Determine metal type for batching (default to GOLD if NULL)
+      // 1. Separate by Merchant (Gold vs Silver)
       const metalType = t.metal_type || 'GOLD';
+
+      // 2. Settlement Cycle by completion 'timestamp'
+      const completionTime = t.timestamp || t.created_at;
+      const settlementDate = calculateSettlementDate(completionTime);
+
+      // 3. Filter for requested range
+      if (settlementDate < start_date || settlementDate > end_date) return;
+
       const batchKey = `${settlementDate}_${metalType}`;
 
       if (!batches[batchKey]) {
@@ -8501,13 +8510,12 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
       batches[batchKey].orders.push({
         id: t.transaction_id,
         amount: t.amount,
-        time: t.timestamp || t.created_at, // Use timestamp for order detail view
+        time: completionTime,
         customer: t.customer_name,
         metal_type: metalType
       });
     });
 
-    // Provide a sorted list of batches (Latest date first, Gold before Silver on same date)
     const sortedBatches = Object.values(batches).sort((a, b) => {
       if (a.settlement_date !== b.settlement_date) {
         return b.settlement_date.localeCompare(a.settlement_date);
@@ -8522,6 +8530,39 @@ app.get('/api/admin/reports/settlement', authenticateAdmin, async (req, res) => 
   } catch (error) {
     console.error('❌ Settlement report error:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Endpoints to serve rates to the mobile app
+app.get('/api/gold-price', async (req, res) => {
+  try {
+    const rate = await getCurrentMetalRate('GOLD');
+    res.json({
+      success: true,
+      metal_type: 'GOLD',
+      rate: rate,
+      unit: 'gram',
+      currency: 'INR',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Could not fetch gold price', error: error.message });
+  }
+});
+
+app.get('/api/silver-price', async (req, res) => {
+  try {
+    const rate = await getCurrentMetalRate('SILVER');
+    res.json({
+      success: true,
+      metal_type: 'SILVER',
+      rate: rate,
+      unit: 'gram',
+      currency: 'INR',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Could not fetch silver price', error: error.message });
   }
 });
 
