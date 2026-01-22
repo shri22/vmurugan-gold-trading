@@ -145,31 +145,49 @@ router.post('/check-payment-status', async (req, res) => {
       const amountMatches = transaction.amount && parseFloat(transaction.amount) > 0;
 
       if (transaction.response_code === 0) {
-        // Explicit success code from Omniware
-        console.log('✅ Payment successful - response_code: 0');
         status = 'success';
       } else if (transaction.response_code === 1030 && hasValidPaymentTime && amountMatches) {
-        // Payment processed by bank but Omniware hasn't updated response_code yet
-        // This is a KNOWN ISSUE with Omniware UPI Intent payments
-        console.log('⚠️ ========== OMNIWARE UPI INTENT KNOWN ISSUE ========== ⚠️');
-        console.log('   Response Code: 1030 (TRANSACTION-INCOMPLETE)');
-        console.log('   Payment DateTime: ' + transaction.payment_datetime + ' (VALID)');
-        console.log('   Amount: ₹' + transaction.amount + ' (VALID)');
-        console.log('   ');
-        console.log('   CONCLUSION: Payment was SUCCESSFUL at bank level');
-        console.log('   Omniware gateway status update is delayed (normal for UPI Intent)');
-        console.log('   Treating as SUCCESS based on valid payment_datetime');
-        console.log('========================================================');
         status = 'success';
       } else if (transaction.response_code === 1006 || transaction.response_code === 1030) {
-        // 1006 = Waiting for response
-        // 1030 = Transaction incomplete (no payment_datetime yet - truly pending)
-        console.log('⏳ Payment still pending - no payment_datetime yet');
         status = 'pending';
       } else {
-        // Any other response code = failed
-        console.log('❌ Payment failed - response_code:', transaction.response_code);
         status = 'failed';
+      }
+
+      // --- FETCH SCHEMES FOR FRONTEND SELECTION ---
+      let activeSchemes = [];
+      let customerName = transaction.customer_name || 'Customer';
+
+      if (status === 'success') {
+        try {
+          const pool = await require('mssql').connect();
+          const phone = transaction.customer_phone;
+
+          if (phone) {
+            const metalTypeResolved = (transaction.order_id.includes('_SILVER_') || transaction.order_id.includes('_S_')) ? 'SILVER' : 'GOLD';
+            const schemeRes = await pool.request()
+              .input('p', require('mssql').NVarChar(15), phone)
+              .input('m', require('mssql').NVarChar(10), metalTypeResolved)
+              .query("SELECT scheme_id, scheme_type, metal_type, monthly_amount, completed_installments FROM schemes WHERE customer_phone = @p AND metal_type = @m AND status = 'ACTIVE'");
+            activeSchemes = schemeRes.recordset;
+
+            const custRes = await pool.request().input('p', require('mssql').NVarChar(15), phone).query("SELECT name FROM customers WHERE phone = @p");
+            if (custRes.recordset.length > 0) customerName = custRes.recordset[0].name;
+          }
+        } catch (e) { console.error('Scheme Fetch Error:', e.message); }
+      }
+
+      // If dry run, just return info and stop
+      if (req.body.dryRun && status === 'success') {
+        return res.json({
+          success: true,
+          data: {
+            ...transaction,
+            status: 'success',
+            active_schemes: activeSchemes,
+            customer_name: customerName
+          }
+        });
       }
 
       console.log('Determined Status:', status);
@@ -207,37 +225,30 @@ router.post('/check-payment-status', async (req, res) => {
                   WHERE transaction_id = @order_id OR gateway_transaction_id = @order_id
                 `);
 
-              // --- SCHEME AUTO-DISCOVERY FALLBACK (Triple-Layer Protection) ---
-              let schemeId = txn.scheme_id;
-              let schemeType = txn.scheme_type;
+              // --- SCHEME LINKING ---
+              let schemeId = req.body.schemeId || txn.scheme_id;
 
               if (!schemeId && txn.customer_phone) {
-                const metalTypeCurrent = transaction.order_id.includes('_SILVER_') ? 'SILVER' : 'GOLD';
-                console.log(`🔍 [STATUS-CHECK] Transaction ${transaction.order_id} missing scheme_id. Searching for active ${metalTypeCurrent} scheme...`);
-
+                const metalTypeCurrent = (transaction.order_id.includes('_SILVER_') || transaction.order_id.includes('_S_')) ? 'SILVER' : 'GOLD';
                 const schemeDiscovery = await pool.request()
                   .input('phone', require('mssql').NVarChar(15), txn.customer_phone)
                   .input('metal', require('mssql').NVarChar(10), metalTypeCurrent)
                   .query("SELECT scheme_id, scheme_type FROM schemes WHERE customer_phone = @phone AND metal_type = @metal AND status = 'ACTIVE'");
 
                 if (schemeDiscovery.recordset.length === 1) {
-                  const autoScheme = schemeDiscovery.recordset[0];
-                  schemeId = autoScheme.scheme_id;
-                  schemeType = autoScheme.scheme_type;
-                  console.log(`✨ [STATUS-CHECK] Auto-discovered scheme ${schemeId} for user.`);
-
-                  // Update transaction record with the discovered scheme details
-                  await pool.request()
-                    .input('order_id', require('mssql').VarChar(50), transaction.order_id)
-                    .input('sid', require('mssql').NVarChar(100), schemeId)
-                    .input('stype', require('mssql').NVarChar(20), schemeType)
-                    .query("UPDATE transactions SET scheme_id = @sid, scheme_type = @stype WHERE transaction_id = @order_id");
+                  schemeId = schemeDiscovery.recordset[0].scheme_id;
                 }
               }
 
-              // 3. Update scheme if linked (CRITICAL FOR CALCULATION ACCURACY)
               if (schemeId) {
-                console.log('📈 Updating linked scheme:', schemeId);
+                await pool.request()
+                  .input('order_id', require('mssql').VarChar(50), transaction.order_id)
+                  .input('sid', require('mssql').NVarChar(100), schemeId)
+                  .query("UPDATE transactions SET scheme_id = @sid WHERE transaction_id = @order_id");
+              }
+
+              // 3. Update scheme if linked
+              if (schemeId) {
                 try {
                   const metalGrams = (txn.gold_grams || 0) + (txn.silver_grams || 0);
                   await pool.request()
@@ -253,15 +264,13 @@ router.post('/check-payment-status', async (req, res) => {
                           updated_at = GETDATE()
                       WHERE scheme_id = @scheme_id
                     `);
-                  console.log('✅ Scheme updated successfully');
                 } catch (schemeError) {
-                  console.error('❌ Error updating scheme in safety net:', schemeError.message);
+                  console.error('❌ Error updating scheme:', schemeError.message);
                 }
               }
 
               // 4. Credit customer balance
               if (txn.customer_phone) {
-                console.log('💰 Auto-crediting customer balance...');
                 await pool.request()
                   .input('phone', require('mssql').NVarChar(15), txn.customer_phone)
                   .input('gold', require('mssql').Decimal(10, 4), txn.gold_grams || 0)
@@ -277,15 +286,168 @@ router.post('/check-payment-status', async (req, res) => {
                         updated_at = GETDATE()
                     WHERE phone = @phone
                   `);
-                console.log('✅ Auto-credit complete for phone:', txn.customer_phone);
               }
-            } else {
-              console.log('ℹ️ Transaction already marked as SUCCESS. No auto-update needed.');
             }
+          } else {
+            // TRANSACTION MISSING ENTIRELY FROM DB
+            console.log('🚨 Transaction missing. Running Smart Match & Recovery...');
+
+            const metalTypeResolved = (transaction.order_id.includes('_SILVER_') || transaction.order_id.includes('_S_')) ? 'SILVER' : 'GOLD';
+            const amt = parseFloat(transaction.amount);
+            const txnPhone = transaction.customer_phone;
+            const payTime = transaction.payment_datetime || new Date().toISOString();
+
+            // 🛑 STEP 1: SMART MATCH FOR MANUAL RECORDS (UPI_...)
+            // Search for any manual SUCCESS record with same phone and amount on the same day
+            const smartMatch = await pool.request()
+              .input('p', require('mssql').NVarChar(15), txnPhone)
+              .input('a', require('mssql').Decimal(12, 2), amt)
+              .input('m', require('mssql').NVarChar(10), metalTypeResolved)
+              .input('pay_time', require('mssql').DateTime, payTime)
+              .query(`
+                    SELECT transaction_id FROM transactions 
+                    WHERE customer_phone = @p 
+                    AND status = 'SUCCESS' 
+                    AND amount = @a 
+                    AND metal_type = @m
+                    AND gateway_transaction_id IS NULL -- Only match manual records without a bank ref
+                    AND DATEDIFF(hour, created_at, @pay_time) BETWEEN -24 AND 24 -- Tight window: +/- 24 hours from payment time
+                `);
+
+            if (smartMatch.recordset.length > 0) {
+              const existingId = smartMatch.recordset[0].transaction_id;
+              console.log(`✨ Smart Match Found! Updating manual record ${existingId} with Bank Ref.`);
+
+              await pool.request()
+                .input('eid', require('mssql').VarChar(50), existingId)
+                .input('gtid', require('mssql').VarChar(100), transaction.transaction_id)
+                .input('resp', require('mssql').NVarChar(require('mssql').MAX), JSON.stringify(transaction))
+                .query(`
+                        UPDATE transactions 
+                        SET gateway_transaction_id = @gtid,
+                            gateway_response = @resp,
+                            updated_at = GETDATE()
+                        WHERE transaction_id = @eid
+                    `);
+
+              // Add determined status to the returned object for frontend consistency
+              const responseData = { ...transaction, status: status };
+              return res.json({ success: true, message: 'Updated existing record with bank verification.', data: responseData });
+            }
+
+            // 🛑 STEP 2: HISTORICAL RATE RECOVERY
+            // Try to find the rate used on the actual payment date
+            let recoveryRate = 0;
+
+            const historicalRes = await pool.request()
+              .input('pt', require('mssql').DateTime, payTime)
+              .input('m', require('mssql').NVarChar(10), metalTypeResolved)
+              .query(`
+                    SELECT TOP 1 
+                        CASE WHEN @m = 'GOLD' THEN gold_price_per_gram ELSE silver_price_per_gram END as rate
+                    FROM transactions 
+                    WHERE status = 'SUCCESS' 
+                    AND metal_type = @m
+                    AND DATEDIFF(day, created_at, @pt) = 0
+                    ORDER BY created_at DESC
+                `);
+
+            if (historicalRes.recordset.length > 0) {
+              recoveryRate = parseFloat(historicalRes.recordset[0].rate);
+              console.log(`📅 Found historical ${metalTypeResolved} rate for ${payTime}: ₹${recoveryRate}`);
+            } else {
+              // Fallback to latest known rate if no historical match
+              const rateRes = await pool.request()
+                .input('m', require('mssql').NVarChar(10), metalTypeResolved)
+                .query(`SELECT TOP 1 ${metalTypeResolved === 'GOLD' ? 'gold_price_per_gram' : 'silver_price_per_gram'} as rate FROM transactions WHERE status = 'SUCCESS' AND metal_type = @m ORDER BY created_at DESC`);
+              if (rateRes.recordset.length > 0) recoveryRate = rateRes.recordset[0].rate;
+            }
+
+            // Default fallback if all rate discovery fails
+            if (!recoveryRate || recoveryRate < 10) recoveryRate = metalTypeResolved === 'GOLD' ? 6500 : 100;
+
+            const goldG = metalTypeResolved === 'GOLD' ? (amt / recoveryRate) : 0;
+            const silverG = metalTypeResolved === 'SILVER' ? (amt / recoveryRate) : 0;
+
+            // Find Customer Name
+            let customerName = 'Recovered Customer';
+            if (txnPhone) {
+              const custRes = await pool.request()
+                .input('p', require('mssql').NVarChar(15), txnPhone)
+                .query("SELECT name FROM customers WHERE phone = @p");
+              if (custRes.recordset.length > 0) customerName = custRes.recordset[0].name;
+            }
+
+            // 🛑 STEP 3: CREATE VERIFIED RECORD
+            await pool.request()
+              .input('oid', require('mssql').VarChar(50), transaction.order_id)
+              .input('gtid', require('mssql').VarChar(100), transaction.transaction_id)
+              .input('phone', require('mssql').NVarChar(15), txnPhone)
+              .input('name', require('mssql').NVarChar(100), customerName)
+              .input('amt', require('mssql').Decimal(12, 2), amt)
+              .input('gold', require('mssql').Decimal(10, 4), goldG)
+              .input('silver', require('mssql').Decimal(10, 4), silverG)
+              .input('metal', require('mssql').NVarChar(10), metalTypeResolved)
+              .input('grate', require('mssql').Decimal(10, 2), metalTypeResolved === 'GOLD' ? recoveryRate : 0)
+              .input('srate', require('mssql').Decimal(10, 2), metalTypeResolved === 'SILVER' ? recoveryRate : 0)
+              .input('pay_time', require('mssql').DateTime, payTime)
+              .input('resp', require('mssql').NVarChar(require('mssql').MAX), JSON.stringify(transaction))
+              .query(`
+                INSERT INTO transactions (
+                  transaction_id, gateway_transaction_id, customer_phone, customer_name, 
+                  type, amount, status, payment_method, metal_type, business_id,
+                  gold_grams, silver_grams, gold_price_per_gram, silver_price_per_gram,
+                  gateway_response, created_at, updated_at
+                ) VALUES (
+                  @oid, @gtid, @phone, @name, 
+                  'BUY', @amt, 'SUCCESS', 'OMNIWARE_RECOVERY', @metal, 'VMURUGAN_001',
+                  @gold, @silver, @grate, @srate,
+                  @resp, @pay_time, GETDATE()
+                )
+              `);
+
+            // 🛑 STEP 4: CREDIT CUSTOMER & SCHEME
+            if (txnPhone) {
+              // Update Customer
+              await pool.request()
+                .input('phone', require('mssql').NVarChar(15), txnPhone)
+                .input('gold', require('mssql').Decimal(10, 4), goldG)
+                .input('silver', require('mssql').Decimal(10, 4), silverG)
+                .input('amt', require('mssql').Decimal(12, 2), amt)
+                .query(`UPDATE customers SET total_gold = ISNULL(total_gold, 0) + @gold, total_silver = ISNULL(total_silver, 0) + @silver, total_invested = ISNULL(total_invested, 0) + @amt, updated_at = GETDATE() WHERE phone = @phone`);
+
+              // Update Scheme Selection
+              let sidSelected = req.body.schemeId;
+
+              if (!sidSelected) {
+                const schemeMatch = await pool.request()
+                  .input('phone', require('mssql').NVarChar(15), txnPhone)
+                  .input('metal', require('mssql').NVarChar(10), metalTypeResolved)
+                  .query("SELECT scheme_id FROM schemes WHERE customer_phone = @phone AND metal_type = @metal AND status = 'ACTIVE'");
+
+                if (schemeMatch.recordset.length === 1) {
+                  sidSelected = schemeMatch.recordset[0].scheme_id;
+                }
+              }
+
+              if (sidSelected) {
+                await pool.request()
+                  .input('sid', require('mssql').NVarChar(100), sidSelected)
+                  .input('amt', require('mssql').Decimal(12, 2), amt)
+                  .input('grams', require('mssql').Decimal(10, 4), goldG + silverG)
+                  .query(`UPDATE schemes SET total_invested = ISNULL(total_invested, 0) + @amt, total_amount_paid = ISNULL(total_amount_paid, 0) + @amt, total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @grams, completed_installments = completed_installments + 1, updated_at = GETDATE() WHERE scheme_id = @sid`);
+
+                // Link transaction to this scheme
+                await pool.request()
+                  .input('oid', require('mssql').VarChar(50), transaction.order_id)
+                  .input('sid', require('mssql').NVarChar(100), sidSelected)
+                  .query("UPDATE transactions SET scheme_id = @sid WHERE transaction_id = @oid");
+              }
+            }
+            console.log('✅ Missing transaction recovered and credited successfully.');
           }
         } catch (dbError) {
-          console.error('❌ Error during auto-update safety check:', dbError.message);
-          // Don't fail the request, just log the error. The status check itself succeeded.
+          console.error('❌ Database update error:', dbError.message);
         }
       }
 
@@ -422,15 +584,38 @@ router.post('/payment-page-url', async (req, res) => {
       request.input('metal_type', sql.NVarChar(10), metalType.toUpperCase());
       request.input('business_id', sql.NVarChar(50), 'VMURUGAN_001');
 
-      request.input('gold_grams', sql.Decimal(10, 4), parseFloat(goldGrams) || 0.0000);
-      request.input('gold_price_per_gram', sql.Decimal(10, 2), paymentAmount / (parseFloat(goldGrams) || 1));
-      request.input('silver_grams', sql.Decimal(10, 4), parseFloat(silverGrams) || 0.0000);
-      request.input('silver_price_per_gram', sql.Decimal(10, 2), paymentAmount / (parseFloat(silverGrams) || 1));
-
       // Scheme context (IMPORTANT for calculation fixes)
       request.input('scheme_id', sql.NVarChar(100), scheme_id || null);
       request.input('scheme_type', sql.NVarChar(20), scheme_type || null);
       request.input('installment_number', sql.Int, installment_number ? parseInt(installment_number) : null);
+
+      // DEFENSIVE FIX: Ensure grams go to correct column based on metal_type
+      // Bug: Flutter app sometimes sends goldGrams for SILVER transactions
+      let finalGoldGrams = 0;
+      let finalSilverGrams = 0;
+      let finalGoldPrice = 0;
+      let finalSilverPrice = 0;
+
+      if (metalType.toUpperCase() === 'GOLD') {
+        // For GOLD transactions, use goldGrams (or fallback to silverGrams if app sent wrong param)
+        finalGoldGrams = parseFloat(goldGrams) || parseFloat(silverGrams) || 0;
+        finalGoldPrice = finalGoldGrams > 0 ? paymentAmount / finalGoldGrams : 0;
+        finalSilverGrams = 0;
+        finalSilverPrice = 0;
+        console.log(`   🟡 GOLD Transaction: ${finalGoldGrams}g @ ₹${finalGoldPrice.toFixed(2)}/g`);
+      } else if (metalType.toUpperCase() === 'SILVER') {
+        // For SILVER transactions, use silverGrams (or fallback to goldGrams if app sent wrong param)
+        finalSilverGrams = parseFloat(silverGrams) || parseFloat(goldGrams) || 0;
+        finalSilverPrice = finalSilverGrams > 0 ? paymentAmount / finalSilverGrams : 0;
+        finalGoldGrams = 0;
+        finalGoldPrice = 0;
+        console.log(`   ⚪ SILVER Transaction: ${finalSilverGrams}g @ ₹${finalSilverPrice.toFixed(2)}/g`);
+      }
+
+      request.input('gold_grams', sql.Decimal(10, 4), finalGoldGrams);
+      request.input('gold_price_per_gram', sql.Decimal(10, 2), finalGoldPrice);
+      request.input('silver_grams', sql.Decimal(10, 4), finalSilverGrams);
+      request.input('silver_price_per_gram', sql.Decimal(10, 2), finalSilverPrice);
 
       await request.query(`
         INSERT INTO transactions (
@@ -509,6 +694,160 @@ router.post('/payment-page-url', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error generating payment page URL:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Cleanup Abandoned PENDING Transactions
+ * Checks PENDING transactions with Omniware and marks as FAILED if not found
+ */
+router.post('/cleanup-abandoned', async (req, res) => {
+  try {
+    console.log('\n🧹 Starting cleanup of abandoned PENDING transactions...');
+
+    const { hoursOld = 1 } = req.body; // Default: 1 hour old
+    const pool = await require('mssql').connect();
+
+    // Find PENDING transactions older than specified hours
+    const cutoffTime = new Date();
+    cutoffTime.setHours(cutoffTime.getHours() - hoursOld);
+
+    const result = await pool.request()
+      .input('cutoff', require('mssql').DateTime, cutoffTime)
+      .query(`
+        SELECT transaction_id, metal_type, amount, customer_name, customer_phone, created_at
+        FROM transactions
+        WHERE status = 'PENDING'
+        AND created_at < @cutoff
+        AND payment_method LIKE 'OMNIWARE%'
+        ORDER BY created_at DESC
+      `);
+
+    const pendingTransactions = result.recordset;
+    console.log(`📊 Found ${pendingTransactions.length} PENDING transactions older than ${hoursOld} hour(s)`);
+
+    if (pendingTransactions.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No abandoned transactions found',
+        summary: {
+          total: 0,
+          failed: 0,
+          stillPending: 0,
+          needsReconciliation: 0
+        }
+      });
+    }
+
+    let failedCount = 0;
+    let stillPendingCount = 0;
+    let successCount = 0;
+    const details = [];
+
+    for (const txn of pendingTransactions) {
+      console.log(`\n🔍 Checking: ${txn.transaction_id}`);
+
+      const metalType = txn.metal_type.toLowerCase();
+      const merchant = MERCHANTS[metalType];
+
+      if (!merchant) {
+        console.log(`⚠️ Unknown metal type: ${txn.metal_type}`);
+        continue;
+      }
+
+      // Check with Omniware
+      const params = {
+        api_key: merchant.apiKey,
+        order_id: txn.transaction_id
+      };
+      params.hash = generateHash(params, merchant.salt);
+
+      try {
+        const response = await axios.post(
+          `${OMNIWARE_API_URL}/v2/paymentstatus`,
+          new URLSearchParams(params).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
+
+        if (response.data && response.data.error && response.data.error.code === 1028) {
+          // Transaction not found in gateway - mark as FAILED
+          await pool.request()
+            .input('txn_id', require('mssql').VarChar(100), txn.transaction_id)
+            .query(`
+              UPDATE transactions
+              SET status = 'FAILED',
+                  updated_at = GETDATE()
+              WHERE transaction_id = @txn_id
+            `);
+
+          console.log(`   ❌ FAILED - Not found in gateway (abandoned)`);
+          failedCount++;
+          details.push({
+            transaction_id: txn.transaction_id,
+            customer_name: txn.customer_name,
+            amount: txn.amount,
+            action: 'FAILED',
+            reason: 'Not found in gateway'
+          });
+        } else if (response.data && response.data.data) {
+          const transaction = Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
+
+          if (transaction.response_code === 0 || (transaction.payment_datetime && transaction.payment_datetime !== '0000-00-00 00:00:00')) {
+            console.log(`   ✅ SUCCESS - Found in gateway (needs manual reconciliation)`);
+            successCount++;
+            details.push({
+              transaction_id: txn.transaction_id,
+              customer_name: txn.customer_name,
+              amount: txn.amount,
+              action: 'NEEDS_RECONCILIATION',
+              reason: 'Successful in gateway but PENDING in database'
+            });
+          } else {
+            console.log(`   ⏳ Still PENDING in gateway`);
+            stillPendingCount++;
+            details.push({
+              transaction_id: txn.transaction_id,
+              customer_name: txn.customer_name,
+              amount: txn.amount,
+              action: 'STILL_PENDING',
+              reason: 'Still processing in gateway'
+            });
+          }
+        }
+      } catch (error) {
+        console.log(`   ⚠️ Error checking gateway: ${error.message}`);
+      }
+
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    console.log('\n' + '='.repeat(60));
+    console.log('📈 CLEANUP SUMMARY');
+    console.log('='.repeat(60));
+    console.log(`❌ Marked as FAILED: ${failedCount}`);
+    console.log(`⏳ Still PENDING: ${stillPendingCount}`);
+    console.log(`🔔 Needs Reconciliation: ${successCount}`);
+    console.log('='.repeat(60));
+
+    res.json({
+      success: true,
+      message: `Cleanup completed: ${failedCount} marked as FAILED, ${stillPendingCount} still pending, ${successCount} need reconciliation`,
+      summary: {
+        total: pendingTransactions.length,
+        failed: failedCount,
+        stillPending: stillPendingCount,
+        needsReconciliation: successCount
+      },
+      details: details
+    });
+
+  } catch (error) {
+    console.error('❌ Cleanup failed:', error.message);
     res.status(500).json({
       success: false,
       error: error.message

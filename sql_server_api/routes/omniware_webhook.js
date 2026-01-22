@@ -49,8 +49,8 @@ function verifyWebhookHash(data, receivedHash, salt) {
  * Order ID format: ORD_timestamp_GOLD or ORD_timestamp_SILVER
  */
 function getMetalTypeFromOrderId(orderId) {
-  if (orderId.includes('_GOLD_')) return 'GOLD';
-  if (orderId.includes('_SILVER_')) return 'SILVER';
+  if (orderId.includes('_GOLD_') || orderId.includes('_G_')) return 'GOLD';
+  if (orderId.includes('_SILVER_') || orderId.includes('_S_')) return 'SILVER';
   return null;
 }
 
@@ -121,9 +121,9 @@ async function saveTransactionToDatabase(webhookData) {
             updated_at = GETDATE()
         WHEN NOT MATCHED THEN
           INSERT (transaction_id, customer_phone, customer_email, customer_name, amount, 
-                  payment_method, status, gateway_transaction_id, gateway_response, created_at)
+                  payment_method, status, gateway_transaction_id, gateway_response, created_at, is_credited)
           VALUES (@transaction_id, @customer_phone, @customer_email, @customer_name, @amount,
-                  @payment_method, @status, @gateway_transaction_id, @gateway_response, GETDATE());
+                  @payment_method, @status, @gateway_transaction_id, @gateway_response, GETDATE(), 0);
       `);
 
     console.log('✅ Transaction saved successfully via webhook');
@@ -181,52 +181,67 @@ async function saveTransactionToDatabase(webhookData) {
           }
         }
 
-        if (schemeId) {
-          console.log('📈 Updating linked scheme via webhook:', schemeId);
-
-          await pool.request()
-            .input('scheme_id', sql.NVarChar(100), schemeId)
-            .input('amount', sql.Decimal(12, 2), amount)
-            .input('metal_grams', sql.Decimal(10, 4), goldGrams + silverGrams)
-            .query(`
-              UPDATE schemes 
-              SET total_invested = ISNULL(total_invested, 0) + @amount,
-                  total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
-                  total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @metal_grams,
-                  completed_installments = completed_installments + 1,
-                  updated_at = GETDATE()
-              WHERE scheme_id = @scheme_id
-            `);
-          console.log('✅ Scheme updated successfully via webhook');
-        }
-
-        await pool.request()
+        // --- ATOMIC CREDIT SYSTEM ---
+        const creditResult = await pool.request()
+          .input('transaction_id', sql.VarChar(100), transactionId)
+          .input('order_id', sql.VarChar(50), orderId)
           .input('phone', sql.NVarChar(15), customerPhone)
           .input('gold_grams', sql.Decimal(10, 4), goldGrams)
           .input('silver_grams', sql.Decimal(10, 4), silverGrams)
           .input('amount', sql.Decimal(12, 2), amount)
+          .input('scheme_id', sql.NVarChar(100), schemeId)
           .query(`
-            UPDATE customers 
-            SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
-                total_silver = ISNULL(total_silver, 0) + @silver_grams,
-                total_invested = ISNULL(total_invested, 0) + @amount,
-                transaction_count = ISNULL(transaction_count, 0) + 1,
-                last_transaction = GETDATE(),
-                updated_at = GETDATE()
-            WHERE phone = @phone
+            DECLARE @already_credited BIT;
+            -- Check by both transaction_id (gateway) and order_id (internal)
+            SELECT TOP 1 @already_credited = ISNULL(is_credited, 0) 
+            FROM transactions 
+            WHERE gateway_transaction_id = @transaction_id OR transaction_id = @order_id;
+
+            IF @already_credited = 0
+            BEGIN
+                -- 1. Update Schemes (if applicable)
+                IF @scheme_id IS NOT NULL
+                BEGIN
+                    UPDATE schemes 
+                    SET total_invested = ISNULL(total_invested, 0) + @amount,
+                        total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+                        total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + (@gold_grams + @silver_grams),
+                        completed_installments = completed_installments + 1,
+                        updated_at = GETDATE()
+                    WHERE scheme_id = @scheme_id;
+                END
+
+                -- 2. Update Customer
+                UPDATE customers 
+                SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+                    total_silver = ISNULL(total_silver, 0) + @silver_grams,
+                    total_invested = ISNULL(total_invested, 0) + @amount,
+                    transaction_count = ISNULL(transaction_count, 0) + 1,
+                    last_transaction = GETDATE(),
+                    updated_at = GETDATE()
+                WHERE phone = @phone;
+
+                -- 3. Mark as credited
+                UPDATE transactions SET is_credited = 1 
+                WHERE gateway_transaction_id = @transaction_id OR transaction_id = @order_id;
+                
+                SELECT 1 as success_credit;
+            END
+            ELSE
+            BEGIN
+                SELECT 0 as success_credit;
+            END
           `);
 
-        console.log(`✅ Customer ${customerPhone} credited via webhook:`);
-        console.log(`   Gold: +${goldGrams}g`);
-        console.log(`   Silver: +${silverGrams}g`);
-        console.log(`   Amount: +₹${amount}`);
-
-        // TODO: Send push notification to customer
-        // notifyCustomer(customerPhone, 'Payment successful! Gold/Silver credited.');
+        if (creditResult.recordset[0].success_credit === 1) {
+          console.log(`✅ Webhook: Customer ${customerPhone} and schemes credited successfully.`);
+          console.log(`   Gold: +${goldGrams}g, Silver: +${silverGrams}g, Amount: +₹${amount}`);
+        } else {
+          console.log(`⚠️ Webhook: Transaction already credited by app path. Skipping.`);
+        }
 
       } catch (creditError) {
-        console.error('❌ Error crediting customer:', creditError);
-        // Transaction saved but credit failed - will be picked up by reconciliation
+        console.error('❌ Error crediting customer via webhook:', creditError);
       }
     }
 

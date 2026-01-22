@@ -3075,12 +3075,12 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
           transaction_id, customer_phone, customer_name, type, amount, gold_grams,
           gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, gateway_transaction_id,
           device_info, location, business_id, additional_data, scheme_type, scheme_id, installment_number, 
-          metal_type, payment_year, payment_month
+          metal_type, payment_year, payment_month, is_credited
         ) VALUES (
           @transaction_id, @customer_phone, @customer_name, @type, @amount, @gold_grams,
           @gold_price_per_gram, @silver_grams, @silver_price_per_gram, @payment_method, @status, @gateway_transaction_id,
           @device_info, @location, @business_id, @additional_data, @scheme_type, @scheme_id, @installment_number, 
-          @metal_type, @payment_year, @payment_month
+          @metal_type, @payment_year, @payment_month, 0
         );
     `);
 
@@ -3089,27 +3089,58 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
     // ========================================
     if (status === 'SUCCESS') {
       try {
-        // Double-check if already credited by checking original status before this request
-        // (If it was already SUCCESS, we don't credit again)
-        // Note: For simplicity, we credit if the phone exists
-        console.log(`💰 Crediting customer ${customer_phone} for transaction ${transaction_id}...`);
-
-        await pool.request()
+        // Atomic check and update to prevent double crediting
+        const creditResult = await pool.request()
+          .input('transaction_id', sql.NVarChar(100), transaction_id)
           .input('phone', sql.NVarChar(15), customer_phone)
           .input('gold_grams', sql.Decimal(10, 4), final_gold_grams)
           .input('silver_grams', sql.Decimal(10, 4), final_silver_grams)
           .input('amount', sql.Decimal(12, 2), amount)
+          .input('scheme_id', sql.NVarChar(100), scheme_id || null)
           .query(`
-            UPDATE customers 
-            SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
-                total_silver = ISNULL(total_silver, 0) + @silver_grams,
-                total_invested = ISNULL(total_invested, 0) + @amount,
-                transaction_count = ISNULL(transaction_count, 0) + 1,
-                last_transaction = SYSDATETIME(),
-                updated_at = SYSDATETIME()
-            WHERE phone = @phone
+            DECLARE @already_credited BIT;
+            SELECT @already_credited = ISNULL(is_credited, 0) FROM transactions WHERE transaction_id = @transaction_id;
+
+            IF @already_credited = 0
+            BEGIN
+                -- 1. Update Schemes (if applicable)
+                IF @scheme_id IS NOT NULL
+                BEGIN
+                    UPDATE schemes 
+                    SET total_invested = ISNULL(total_invested, 0) + @amount,
+                        total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+                        total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + (@gold_grams + @silver_grams),
+                        completed_installments = ISNULL(completed_installments, 0) + 1,
+                        updated_at = SYSDATETIME()
+                    WHERE scheme_id = @scheme_id;
+                END
+
+                -- 2. Credit the customer
+                UPDATE customers 
+                SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+                    total_silver = ISNULL(total_silver, 0) + @silver_grams,
+                    total_invested = ISNULL(total_invested, 0) + @amount,
+                    transaction_count = ISNULL(transaction_count, 0) + 1,
+                    last_transaction = SYSDATETIME(),
+                    updated_at = SYSDATETIME()
+                WHERE phone = @phone;
+
+                -- 3. Mark as credited
+                UPDATE transactions SET is_credited = 1 WHERE transaction_id = @transaction_id;
+                
+                SELECT 1 as success_credit;
+            END
+            ELSE
+            BEGIN
+                SELECT 0 as success_credit;
+            END
           `);
-        console.log(`✅ Customer balance updated successfully.`);
+
+        if (creditResult.recordset[0].success_credit === 1) {
+          console.log(`✅ Customer balance updated successfully.`);
+        } else {
+          console.log(`⚠️ Transaction ${transaction_id} was already credited. Skipping.`);
+        }
       } catch (creditError) {
         console.error('⚠️ Failed to update customer balance (might be handled by webhook):', creditError.message);
       }
@@ -6980,6 +7011,10 @@ app.use('/api/omniware', omniwareUpiRoutes);
 // Import Omniware Webhook routes
 const omniwareWebhookRoutes = require('./routes/omniware_webhook');
 app.use('/api/omniware/webhook', omniwareWebhookRoutes);
+
+// Reconciliation Routes
+const reconciliationRoutes = require('./routes/reconciliation');
+app.use('/api/admin/reconcile', reconciliationRoutes);
 
 
 // Start server with HTTPS support

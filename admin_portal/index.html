@@ -828,7 +828,8 @@
                 grid-template-columns: 1fr;
             }
 
-            .filter-row {
+            .filter-row,
+            .recon-summary-cards {
                 grid-template-columns: 1fr !important;
             }
 
@@ -989,6 +990,190 @@
         body.sidebar-open {
             overflow: hidden;
         }
+
+        /* Reconciliation Styles */
+        .reconciliation-batch-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .reconciliation-batch-card:hover {
+            border-color: #2E7D32;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .batch-info h4 {
+            margin: 0;
+            color: #2E7D32;
+            font-size: 18px;
+        }
+
+        .batch-info p {
+            margin: 5px 0 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .batch-stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .batch-stat-item {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .reconciled-status {
+            font-weight: bold;
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .reconciled-status.success {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+
+        .reconciled-status.warning {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+
+        .reconciled-status.error {
+            background: #FFEBEE;
+            color: #C62828;
+        }
+
+        .recon-table th {
+            background: #f5f5f5 !important;
+            color: #333 !important;
+        }
+
+        .discrepancy-row {
+            border-left: 5px solid #f44336 !important;
+        }
+
+        .match-row {
+            border-left: 5px solid #4CAF50 !important;
+        }
+
+        /* Premium Reconciliation Styles */
+        .metal-badge {
+            font-size: 11px;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+
+        .metal-badge.gold {
+            background: #FFF9C4;
+            color: #F57F17;
+            border: 1px solid #FBC02D;
+        }
+
+        .metal-badge.silver {
+            background: #F5F5F5;
+            color: #616161;
+            border: 1px solid #BDBDBD;
+        }
+
+        .recon-filter-tabs {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            background: #f8f9fa;
+            padding: 5px;
+            border-radius: 10px;
+            width: fit-content;
+        }
+
+        .recon-filter-tab {
+            padding: 10px 25px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .recon-filter-tab:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .recon-filter-tab.active {
+            background: #1B5E20;
+            color: white;
+            box-shadow: 0 4px 10px rgba(27, 94, 32, 0.2);
+        }
+
+        .metal-select-card {
+            padding: 20px 15px;
+            text-align: center;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+            cursor: pointer;
+            background: white;
+        }
+
+        .metal-select-card.gold:hover {
+            background: #FFFDE7;
+        }
+
+        .metal-select-card.silver:hover {
+            background: #FAFAFA;
+        }
+
+        .metal-select-card.selected.gold {
+            border-color: #FBC02D;
+            background: #FFF9C4;
+            transform: scale(1.02);
+        }
+
+        .scheme-option-card {
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+            margin-bottom: 10px;
+        }
+
+        .scheme-option-card:hover {
+            border-color: #4CAF50;
+            background: #f1f8e9;
+        }
+
+        .scheme-option-card.selected {
+            border-color: #2E7D32;
+            background: #e8f5e9;
+            box-shadow: 0 4px 10px rgba(46, 125, 50, 0.15);
+            transform: scale(1.01);
+        }
+
+        #repairSchemeModal {
+            z-index: 15000;
+        }
+
+        /* Responsive adjustments */
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
@@ -1543,47 +1728,78 @@
                         </div>
                     </div>
 
-                    <!-- Settlement Report -->
+                    <!-- Settlement Report (Reconciliation Dashboard) -->
                     <div id="settlement-report" class="report-content">
-                        <h3>🏦 Bank Settlement Matching Report</h3>
-                        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
-                            This report groups transactions based on the actual bank credit cycle (T+1, 11:59PM
-                            Cut-off).
-                        </p>
-
-                        <div class="filter-section">
-                            <div class="date-preset-buttons">
-                                <button class="date-preset-btn"
-                                    onclick="setDatePreset('settlement', 'today')">Today</button>
-                                <button class="date-preset-btn" onclick="setDatePreset('settlement', 'week')">Last 7
-                                    Days</button>
-                                <button class="date-preset-btn" onclick="setDatePreset('settlement', 'month')">This
-                                    Month</button>
-                                <button class="date-preset-btn" onclick="setDatePreset('settlement', 'year')">This
-                                    Year</button>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                            <div>
+                                <h3>🏦 Bank Reconciliation Dashboard</h3>
+                                <p style="color: #666; font-size: 14px;">
+                                    Verify actual bank settlements against internal transactions to ensure 100%
+                                    financial accuracy.
+                                </p>
                             </div>
-
-                            <div class="filter-row" style="margin-top: 15px;">
-                                <div class="filter-group">
-                                    <label>Start Date</label>
-                                    <input type="date" id="settlementStartDate">
-                                </div>
-                                <div class="filter-group">
-                                    <label>End Date</label>
-                                    <input type="date" id="settlementEndDate">
-                                </div>
-                            </div>
-
-                            <div class="filter-actions" style="margin-top: 20px;">
-                                <button class="btn-primary" onclick="loadSettlementReport()">Generate Report</button>
-                                <button class="btn-export" onclick="exportSettlementReport()">📥 Export CSV</button>
-                                <button class="btn-export" style="background: #E53935;"
-                                    onclick="exportSettlementPDF()">📄 Export PDF</button>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-primary" onclick="showFetchSettlementsModal()"
+                                    style="background: #1B5E20;">
+                                    🔄 Fetch from Gateway
+                                </button>
+                                <button class="btn-export" onclick="loadSettlementBatches()">
+                                    🔃 Refresh List
+                                </button>
                             </div>
                         </div>
 
+                        <!-- Aggregate Summary for Reconciliation -->
+                        <div class="recon-summary-cards"
+                            style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
+                            <div
+                                style="background: #E3F2FD; border: 1px solid #BBDEFB; padding: 15px; border-radius: 12px; border-left: 5px solid #2196F3;">
+                                <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total Revenue
+                                    (Till Date)</div>
+                                <div id="reconTotalAmt" style="font-size: 1.5rem; font-weight: bold; color: #1976D2;">₹0
+                                </div>
+                                <div style="font-size: 10px; color: #1976D2; opacity: 0.8;">Settled + Waiting</div>
+                            </div>
+                            <div
+                                style="background: #FFF9C4; border: 1px solid #FFF176; padding: 15px; border-radius: 12px; border-left: 5px solid #FBC02D;">
+                                <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total Gold (Till
+                                    Date)</div>
+                                <div id="reconGoldAmt" style="font-size: 1.5rem; font-weight: bold; color: #F57F17;">₹0
+                                </div>
+                                <div style="font-size: 10px; color: #F57F17; opacity: 0.8;">Settled + Waiting</div>
+                            </div>
+                            <div
+                                style="background: #F5F5F5; border: 1px solid #E0E0E0; padding: 15px; border-radius: 12px; border-left: 5px solid #757575;">
+                                <div style="font-size: 11px; color: #666; text-transform: uppercase;">Total Silver (Till
+                                    Date)</div>
+                                <div id="reconSilverAmt" style="font-size: 1.5rem; font-weight: bold; color: #424242;">
+                                    ₹0</div>
+                                <div style="font-size: 10px; color: #424242; opacity: 0.8;">Settled + Waiting</div>
+                            </div>
+                            <div style="background: #FFF3E0; border: 1px solid #FFE0B2; padding: 15px; border-radius: 12px; border-left: 5px solid #FF9800; cursor: pointer;"
+                                onclick="filterReconBatches('PENDING', null)">
+                                <div
+                                    style="font-size: 12px; color: #E65100; font-weight: bold; text-transform: uppercase;">
+                                    ⏳ Waiting for Settlement</div>
+                                <div id="unsettledCount" style="font-size: 1.5rem; font-weight: bold; color: #EF6C00;">0
+                                </div>
+                                <div style="font-size: 10px; color: #888;">Payments not yet in bank batches</div>
+                            </div>
+                        </div>
+
+                        <div class="recon-filter-tabs">
+                            <div class="recon-filter-tab active" onclick="filterReconBatches('ALL', this)">All
+                                Settlements</div>
+                            <div class="recon-filter-tab" onclick="filterReconBatches('GOLD', this)">🟡 Gold Only</div>
+                            <div class="recon-filter-tab" onclick="filterReconBatches('SILVER', this)">⚪ Silver Only
+                            </div>
+                            <div class="recon-filter-tab" onclick="filterReconBatches('PENDING', this)"
+                                style="color: #E65100; font-weight: bold;">⏳ Waiting for Settlement</div>
+                        </div>
+
                         <div id="settlementReportContent">
-                            <div class="no-data">Select date range and click "Generate Report"</div>
+                            <div class="loading-spinner">Loading settlement batches...</div>
                         </div>
                     </div>
 
@@ -1604,7 +1820,19 @@
                             <div class="filter-actions">
                                 <button class="btn-primary" onclick="syncGatewayStatus()">🔍 Sync from Bank
                                     Gateway</button>
+                                <button class="btn-warning" onclick="cleanupAbandonedPayments()"
+                                    style="background: #FF6B6B; margin-left: 10px;">
+                                    🧹 Cleanup Abandoned Payments
+                                </button>
                             </div>
+                        </div>
+
+                        <!-- Cleanup Status Section -->
+                        <div id="cleanupStatus"
+                            style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #FF6B6B;">
+                            <h4 style="margin: 0 0 10px 0; color: #FF6B6B;">🧹 Cleanup Results</h4>
+                            <div id="cleanupSummary"></div>
+                            <div id="cleanupDetails" style="margin-top: 15px;"></div>
                         </div>
 
                         <div id="reconLoading" class="loading-spinner" style="display: none;">Connecting to Omniware
@@ -1982,6 +2210,93 @@
                         Close Scheme
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fetch Settlements Modal -->
+    <div id="fetchSettlementsModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                <h3 style="margin: 0; color: #1B5E20; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">🔄</span> Fetch Bank Settlements
+                </h3>
+                <button class="close-btn"
+                    onclick="document.getElementById('fetchSettlementsModal').style.display='none'">&times;</button>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 25px;">
+                <label style="font-weight: 600; color: #333; margin-bottom: 12px; display: block;">Select Metal
+                    Type</label>
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;" onclick="selectFetchMetal('GOLD')">
+                        <div id="fetchCardGold" class="metal-select-card gold selected">
+                            <div style="font-size: 20px; margin-bottom: 5px;">🟡</div>
+                            GOLD
+                        </div>
+                    </div>
+                    <div style="flex: 1;" onclick="selectFetchMetal('SILVER')">
+                        <div id="fetchCardSilver" class="metal-select-card silver">
+                            <div style="font-size: 20px; margin-bottom: 5px;">⚪</div>
+                            SILVER
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                <div class="form-group">
+                    <label style="font-weight: 600;">Since Date</label>
+                    <input type="date" id="fetchStartDate"
+                        style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-weight: 600;">Until Date</label>
+                    <input type="date" id="fetchEndDate"
+                        style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-secondary"
+                    onclick="document.getElementById('fetchSettlementsModal').style.display='none'"
+                    style="flex: 1; padding: 12px;">Cancel</button>
+                <button class="btn-primary" id="startFetchBtn" onclick="executeSettlementFetch()"
+                    style="flex: 2; background: #1B5E20; padding: 12px; font-weight: bold;">
+                    🚀 Start Gateway Sync
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheme Selection Modal for Repair -->
+    <div id="repairSchemeModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                <h3 style="margin: 0; color: #1B5E20; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">🎯</span> Select Scheme for Credit
+                </h3>
+                <button class="close"
+                    onclick="document.getElementById('repairSchemeModal').style.display='none'">&times;</button>
+            </div>
+
+            <div id="repairCustomerInfo"
+                style="background: #f1f8e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #4CAF50;">
+                <!-- Customer info will be here -->
+            </div>
+
+            <div id="repairSchemeList" style="display: grid; gap: 12px; max-height: 400px; overflow-y: auto;">
+                <div class="loading-spinner">Loading customer schemes...</div>
+            </div>
+
+            <div style="margin-top: 25px; display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn-secondary"
+                    onclick="document.getElementById('repairSchemeModal').style.display='none'"
+                    style="flex: 1; padding: 12px;">Cancel</button>
+                <button class="btn-primary" id="finalRepairBtn" onclick="executeFinalRepair()"
+                    style="flex: 2; padding: 12px; background: #2E7D32;" disabled>
+                    ✅ Confirm and Link to Selected Scheme
+                </button>
             </div>
         </div>
     </div>
@@ -2937,6 +3252,7 @@
             const filteredTransactions = processedTransactions.filter(transaction => {
                 const matchesSearch = !searchTerm ||
                     transaction.transaction_id.toLowerCase().includes(searchTerm) ||
+                    (transaction.gateway_transaction_id && transaction.gateway_transaction_id.toLowerCase().includes(searchTerm)) ||
                     transaction.customer_name.toLowerCase().includes(searchTerm) ||
                     transaction.customer_phone.includes(searchTerm);
 
@@ -3032,11 +3348,13 @@
             const successfulTransactions = allTransactions.filter(t => t.status === 'SUCCESS');
             const totalRevenue = successfulTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
             const totalGoldRevenue = successfulTransactions.reduce((sum, t) => {
-                const isGold = t.metal_type === 'GOLD' || (!t.metal_type && t.gold_grams > 0);
+                const mType = (t.metal_type || '').trim().toUpperCase();
+                const isGold = mType === 'GOLD' || (mType === '' && t.gold_grams > 0);
                 return isGold ? sum + (parseFloat(t.amount) || 0) : sum;
             }, 0);
             const totalSilverRevenue = successfulTransactions.reduce((sum, t) => {
-                const isSilver = t.metal_type === 'SILVER' || (!t.metal_type && t.silver_grams > 0);
+                const mType = (t.metal_type || '').trim().toUpperCase();
+                const isSilver = mType === 'SILVER' || (mType === '' && t.silver_grams > 0);
                 return isSilver ? sum + (parseFloat(t.amount) || 0) : sum;
             }, 0);
             const totalGoldSold = successfulTransactions.reduce((sum, t) => sum + (parseFloat(t.gold_grams) || 0), 0);
@@ -3760,6 +4078,8 @@
             // Auto-load dashboard analytics when tab is opened
             if (tabName === 'dashboard-analytics') {
                 loadDashboardAnalytics();
+            } else if (tabName === 'settlement') {
+                loadSettlementBatches();
             }
 
             // Initialize default dates for settlement report if empty
@@ -5267,54 +5587,37 @@
             if (btn) btn.disabled = true;
 
             try {
-                // Use the standard apiFetch helper to handle auth tokens and headers correctly
-                const data = await apiFetch(`/payment/verify/${orderId}`, {
-                    method: 'POST'
+                const metalType = (orderId.includes('_SILVER_') || orderId.includes('_S_')) ? 'SILVER' : 'GOLD';
+
+                // Use the new repair logic that triggers the scheme selection modal
+                const data = await apiFetch(`/omniware/check-payment-status`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId: orderId,
+                        metalType: metalType,
+                        dryRun: true
+                    })
                 });
 
-                if (data.success) {
-                    const statusClass = data.status === 'SUCCESS' ? 'sync-success' : (data.status === 'FAILED' ? 'sync-failed' : 'sync-pending');
+                if (data.success && data.data.status === 'success') {
+                    // Success! Show selection modal
+                    currentRepairData = {
+                        orderId: orderId,
+                        metalType: metalType,
+                        paymentInfo: data.data
+                    };
+                    showSchemeSelectionModal(data.data);
 
-                    let html = `
-                        <div class="reconcile-header">
-                            <h4 style="margin: 0;">Reconciliation Result</h4>
-                            <span class="sync-badge ${statusClass}">${data.status}</span>
-                        </div>
-                        <div class="reconcile-details">
-                            <div class="reconcile-item">
-                                <span class="reconcile-label">Order ID</span>
-                                <span class="reconcile-value">${data.transaction_id}</span>
-                            </div>
-                            <div class="reconcile-item">
-                                <span class="reconcile-label">Live Gateway Status</span>
-                                <span class="reconcile-value" style="color: ${data.status === 'SUCCESS' ? '#2E7D32' : '#C62828'}; font-weight: bold;">
-                                    ${data.status}
-                                </span>
-                            </div>
-                            <div class="reconcile-item">
-                                <span class="reconcile-label">Sync Result</span>
-                                <span class="reconcile-value">
-                                    ${data.needs_update ? '🔄 Database was outdated - Automatically Syncing...' : '✅ Database is already up to date.'}
-                                </span>
-                            </div>
-                            <div class="reconcile-item">
-                                <span class="reconcile-label">Minutes since attempt</span>
-                                <span class="reconcile-value">${data.minutes_pending ? Math.floor(data.minutes_pending) : 'N/A'} mins</span>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 25px; padding: 15px; background: #f1f8e9; border-radius: 8px; border-left: 5px solid #4caf50;">
-                            <p style="font-size: 13px; color: #33691e;">
-                                <strong>💡 Action Taken:</strong> The system has verified this with Omniware API. 
-                                ${data.status === 'SUCCESS' ? 'Gold/Silver grams have been credited to the customer\'s wallet.' : 'This session is marked as failed/abandoned and no credit was given.'}
-                            </p>
+                    // Also show the info in the main result div for context
+                    resultDiv.innerHTML = `
+                        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; border: 1px solid #c8e6c9;">
+                            <h4 style="margin-top: 0; color: #2e7d32;">✅ Verification Successful</h4>
+                            <p style="margin: 5px 0;">Please use the popup modal to select the correct scheme for <strong>${data.data.customer_name}</strong>.</p>
                         </div>
                     `;
-
-                    resultDiv.innerHTML = html;
                     resultDiv.style.display = 'block';
                 } else {
-                    alert('Error: ' + (data.message || 'Verification failed'));
+                    alert('Error: ' + (data.error || 'Payment not successful at bank gateway.'));
                 }
             } catch (error) {
                 console.error('Reconciliation error:', error);
@@ -5322,6 +5625,582 @@
             } finally {
                 loader.style.display = 'none';
                 if (btn) btn.disabled = false;
+            }
+        }
+
+        // Cleanup Abandoned PENDING Transactions
+        async function cleanupAbandonedPayments() {
+            const cleanupStatus = document.getElementById('cleanupStatus');
+            const cleanupSummary = document.getElementById('cleanupSummary');
+            const cleanupDetails = document.getElementById('cleanupDetails');
+
+            // Confirm action
+            if (!confirm('🧹 This will check all PENDING transactions older than 1 hour with the payment gateway.\n\nTransactions not found in the gateway will be marked as FAILED (abandoned).\n\nContinue?')) {
+                return;
+            }
+
+            // Show loading
+            cleanupStatus.style.display = 'block';
+            cleanupSummary.innerHTML = '<div class="loading-spinner">Checking PENDING transactions with gateway...</div>';
+            cleanupDetails.innerHTML = '';
+
+            try {
+                const data = await apiFetch('/omniware/cleanup-abandoned', {
+                    method: 'POST',
+                    body: JSON.stringify({ hoursOld: 1 })
+                });
+
+                if (data.success) {
+                    const summary = data.summary;
+
+                    // Show summary
+                    cleanupSummary.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div style="background: white; padding: 10px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #666;">${summary.total}</div>
+                                <div style="font-size: 11px; color: #888;">Total Checked</div>
+                            </div>
+                            <div style="background: white; padding: 10px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #FF6B6B;">${summary.failed}</div>
+                                <div style="font-size: 11px; color: #888;">Marked FAILED</div>
+                            </div>
+                            <div style="background: white; padding: 10px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #FFA500;">${summary.stillPending}</div>
+                                <div style="font-size: 11px; color: #888;">Still PENDING</div>
+                            </div>
+                            <div style="background: white; padding: 10px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #4CAF50;">${summary.needsReconciliation}</div>
+                                <div style="font-size: 11px; color: #888;">Needs Reconciliation</div>
+                            </div>
+                        </div>
+                        <p style="margin: 0; color: #666; font-size: 14px;">${data.message}</p>
+                    `;
+
+                    // Show details if any
+                    if (data.details && data.details.length > 0) {
+                        let detailsHTML = '<div class="report-table-container"><table class="report-table"><thead><tr><th>Transaction ID</th><th>Customer</th><th>Amount</th><th>Action</th><th>Reason</th></tr></thead><tbody>';
+
+                        data.details.forEach(detail => {
+                            let actionColor = '#666';
+                            let actionIcon = '•';
+
+                            if (detail.action === 'FAILED') {
+                                actionColor = '#FF6B6B';
+                                actionIcon = '❌';
+                            } else if (detail.action === 'NEEDS_RECONCILIATION') {
+                                actionColor = '#4CAF50';
+                                actionIcon = '🔔';
+                            } else if (detail.action === 'STILL_PENDING') {
+                                actionColor = '#FFA500';
+                                actionIcon = '⏳';
+                            }
+
+                            detailsHTML += `
+                                <tr>
+                                    <td><strong>${detail.transaction_id}</strong></td>
+                                    <td>${detail.customer_name}</td>
+                                    <td>₹${parseFloat(detail.amount).toLocaleString('en-IN')}</td>
+                                    <td style="color: ${actionColor}; font-weight: bold;">${actionIcon} ${detail.action.replace(/_/g, ' ')}</td>
+                                    <td style="font-size: 12px; color: #666;">${detail.reason}</td>
+                                </tr>
+                            `;
+                        });
+
+                        detailsHTML += '</tbody></table></div>';
+                        cleanupDetails.innerHTML = detailsHTML;
+                    }
+
+                    // Refresh transactions list if on transactions page
+                    if (typeof loadTransactionsFromFirebase === 'function') {
+                        setTimeout(() => loadTransactionsFromFirebase(), 1000);
+                    }
+
+                } else {
+                    cleanupSummary.innerHTML = `<div style="color: #FF6B6B;">❌ Error: ${data.error || 'Cleanup failed'}</div>`;
+                }
+
+            } catch (error) {
+                console.error('Cleanup error:', error);
+                cleanupSummary.innerHTML = `<div style="color: #FF6B6B;">❌ Connection Error: ${error.message}</div>`;
+            }
+        }
+        // ============================================
+        // BANK RECONCILIATION DASHBOARD FUNCTIONS
+        // ============================================
+
+        let windowAllSettlementBatches = [];
+        let windowUnsettledTransactions = [];
+        let currentReconFilter = 'ALL';
+
+        async function loadSettlementBatches() {
+            const contentDiv = document.getElementById('settlementReportContent');
+            if (contentDiv) contentDiv.innerHTML = '<div class="loading-spinner">Loading settlement batches...</div>';
+
+            try {
+                // Fetch settlement batches
+                const data = await apiFetch('/admin/reconcile/batches');
+                if (data.success) {
+                    windowAllSettlementBatches = data.data || [];
+                }
+
+                // Also fetch transactions waiting for settlement
+                const unsettledData = await apiFetch('/admin/reconcile/unsettled');
+                if (unsettledData.success) {
+                    windowUnsettledTransactions = unsettledData.data || [];
+                    if (document.getElementById('unsettledCount')) {
+                        document.getElementById('unsettledCount').innerText = windowUnsettledTransactions.length;
+                    }
+                }
+
+                renderSettlementBatches();
+            } catch (error) {
+                console.error('❌ Error loading batches:', error);
+                if (contentDiv) contentDiv.innerHTML = '<div class="no-data" style="color: red;">Error loading batches. Check API connection.</div>';
+            }
+        }
+
+        function filterReconBatches(type, el) {
+            currentReconFilter = type;
+            // Update active tab UI
+            document.querySelectorAll('.recon-filter-tab').forEach(tab => tab.classList.remove('active'));
+
+            // If el is null, find the tab by type
+            if (!el) {
+                document.querySelectorAll('.recon-filter-tab').forEach(tab => {
+                    if (tab.innerText.includes(type) || (type === 'PENDING' && tab.innerText.includes('Waiting'))) {
+                        tab.classList.add('active');
+                    }
+                });
+            } else {
+                el.classList.add('active');
+            }
+
+            renderSettlementBatches();
+        }
+
+        function renderSettlementBatches() {
+            const contentDiv = document.getElementById('settlementReportContent');
+            if (!contentDiv) return;
+
+            // Calculate Aggregates (Settled batches + Unsettled transactions = Total Revenue till date)
+            const settledTotal = windowAllSettlementBatches.reduce((acc, b) => acc + (parseFloat(b.sale_amount || b.payout_amount) || 0), 0);
+            const settledGold = windowAllSettlementBatches.filter(b => (b.metal_type || '').trim().toUpperCase() === 'GOLD').reduce((acc, b) => acc + (parseFloat(b.sale_amount || b.payout_amount) || 0), 0);
+            const settledSilver = windowAllSettlementBatches.filter(b => (b.metal_type || '').trim().toUpperCase() === 'SILVER').reduce((acc, b) => acc + (parseFloat(b.sale_amount || b.payout_amount) || 0), 0);
+
+            const waitingTotal = windowUnsettledTransactions.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+            const waitingGold = windowUnsettledTransactions.filter(t => (t.metal_type || '').trim().toUpperCase() === 'GOLD').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+            const waitingSilver = windowUnsettledTransactions.filter(t => (t.metal_type || '').trim().toUpperCase() === 'SILVER').reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+
+            const grandTotal = settledTotal + waitingTotal;
+            const grandGold = settledGold + waitingGold;
+            const grandSilver = settledSilver + waitingSilver;
+
+            // Update Summary Cards
+            if (document.getElementById('reconTotalAmt')) document.getElementById('reconTotalAmt').innerText = '₹' + grandTotal.toLocaleString('en-IN');
+            if (document.getElementById('reconGoldAmt')) document.getElementById('reconGoldAmt').innerText = '₹' + grandGold.toLocaleString('en-IN');
+            if (document.getElementById('reconSilverAmt')) document.getElementById('reconSilverAmt').innerText = '₹' + grandSilver.toLocaleString('en-IN');
+            if (document.getElementById('unsettledCount')) document.getElementById('unsettledCount').innerText = windowUnsettledTransactions.length;
+
+            // Special Case: Show PENDING (Waiting for Settlement) transactions
+            if (currentReconFilter === 'PENDING') {
+                if (windowUnsettledTransactions.length === 0) {
+                    contentDiv.innerHTML = '<div class="no-data">✅ All successful transactions have been settled in the bank!</div>';
+                    return;
+                }
+
+                let html = `
+                    <div style="background: #FFF3E0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #FF9800;">
+                        <h4 style="margin: 0; color: #E65100;">⏳ Transactions Waiting for Bank Settlement (${windowUnsettledTransactions.length})</h4>
+                        <p style="margin: 5px 0; font-size: 13px; color: #666;">These payments were successful in your app but the bank hasn't grouped them into a settlement batch yet (usually takes 1-2 days).</p>
+                    </div>
+                `;
+
+                html += '<div class="report-table-container"><table class="report-table">';
+                html += '<thead><tr><th>Transaction Date</th><th>Order ID</th><th>Customer</th><th>Metal</th><th>Amount</th><th>Method</th></tr></thead><tbody>';
+
+                windowUnsettledTransactions.forEach(tx => {
+                    const date = new Date(tx.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+                    html += `
+                        <tr>
+                            <td>${date}</td>
+                            <td><strong>${tx.transaction_id}</strong><br><small style="color:#888">${tx.gateway_transaction_id || 'No Bank Ref'}</small></td>
+                            <td>${tx.customer_name}<br><small>${tx.customer_phone}</small></td>
+                            <td><span class="metal-badge ${tx.metal_type.toLowerCase()}">${tx.metal_type}</span></td>
+                            <td style="font-weight: bold; color: #2E7D32;">₹${parseFloat(tx.amount).toLocaleString('en-IN')}</td>
+                            <td>${tx.payment_method}</td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table></div>';
+                contentDiv.innerHTML = html;
+                return;
+            }
+
+            // Normal Case: Show Settlement Batches
+            const filtered = currentReconFilter === 'ALL'
+                ? windowAllSettlementBatches
+                : windowAllSettlementBatches.filter(b => (b.metal_type || '').toUpperCase() === currentReconFilter);
+
+            if (filtered.length === 0) {
+                contentDiv.innerHTML = `<div class="no-data">No ${currentReconFilter !== 'ALL' ? currentReconFilter : ''} batches found.</div>`;
+                return;
+            }
+
+            let html = '<div class="batch-list">';
+            filtered.forEach(batch => {
+                const date = new Date(batch.settlement_datetime).toLocaleDateString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric'
+                });
+
+                html += `
+                    <div class="reconciliation-batch-card">
+                        <div class="batch-info">
+                            <span class="metal-badge ${batch.metal_type?.toLowerCase()}">${batch.metal_type}</span>
+                            <h4>₹${batch.payout_amount.toLocaleString('en-IN')}</h4>
+                            <p>📅 Date: <strong>${date}</strong> | Ref: ${batch.bank_reference}</p>
+                            <div class="batch-stats">
+                                <div class="batch-stat-item">ID: ${batch.settlement_id}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 20px;">
+                            <span class="reconciled-status ${batch.status === 'RECONCILED' ? 'success' : 'warning'}">
+                                ${batch.status || 'PENDING'}
+                            </span>
+                            <button class="btn-info" onclick="loadBatchReconciliation('${batch.settlement_id}', '${batch.payout_amount}')">
+                                🔍 Verify Transactions
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            contentDiv.innerHTML = html;
+        }
+
+        async function loadBatchReconciliation(settlementId, amount) {
+            window.currentReconBatchId = settlementId;
+            window.currentReconBatchAmount = amount;
+
+            const modalId = 'reconBatchModal';
+            let modal = document.getElementById(modalId);
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content" style="width: 95%; max-width: 1300px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 id="reconBatchTitle">Batch Reconciliation Details</h3>
+                            <button class="close-btn" onclick="document.getElementById('${modalId}').style.display='none'">&times;</button>
+                        </div>
+                        <div id="reconBatchContent" style="max-height: 80vh; overflow-y: auto;">
+                            <div class="loading-spinner">Reconciling internal records with bank statement...</div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+
+            modal.style.display = 'block';
+            document.getElementById('reconBatchTitle').innerText = `Batch Reconciliation: ₹${parseFloat(amount).toLocaleString('en-IN')} (ID: ${settlementId})`;
+            const contentDiv = document.getElementById('reconBatchContent');
+            contentDiv.innerHTML = '<div class="loading-spinner">Comparing bank statement with internal records...</div>';
+
+            try {
+                const data = await apiFetch(`/admin/reconcile/batch/${settlementId}`);
+                if (data.success && data.data.length > 0) {
+                    const totalTx = data.data.length;
+                    const matchCount = data.data.filter(tx => tx.internal_id && tx.internal_status === 'SUCCESS').length;
+                    const discrepancyCount = totalTx - matchCount;
+
+                    let html = `
+                        <div style="display: flex; gap: 20px; margin-bottom: 15px; background: #f5f5f5; padding: 10px; border-radius: 8px;">
+                            <div style="flex: 1; text-align: center; border-right: 1px solid #ddd;">
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #2E7D32;">${matchCount}</div>
+                                <div style="font-size: 0.8rem; color: #666;">Matched</div>
+                            </div>
+                            <div style="flex: 1; text-align: center;">
+                                <div style="font-size: 1.2rem; font-weight: bold; color: ${discrepancyCount > 0 ? 'red' : '#2E7D32'};">${discrepancyCount}</div>
+                                <div style="font-size: 0.8rem; color: #666;">Discrepancies</div>
+                            </div>
+                        </div>
+                    `;
+
+                    html += '<div class="report-table-container"><table class="report-table recon-table">';
+                    html += `<thead><tr>
+                        <th>Order ID / Gateway ID</th>
+                        <th>Customer Details</th>
+                        <th>Settled Amount</th>
+                        <th>Gateway Status</th>
+                        <th>Internal DB Status</th>
+                        <th>Verify</th>
+                        <th>Action</th>
+                    </tr></thead><tbody>`;
+
+                    data.data.forEach(tx => {
+                        const isMatch = tx.internal_id && tx.internal_status === 'SUCCESS';
+                        const rowClass = isMatch ? 'match-row' : 'discrepancy-row';
+                        const matchStatus = isMatch ? '✅ MATCH' : '❌ DISCREPANCY';
+
+                        html += `<tr class="${rowClass}">
+                            <td><strong>${tx.order_id}</strong><br><small style="color:#888">${tx.gateway_transaction_id}</small></td>
+                            <td>${tx.customer_name}<br><small>${tx.customer_phone}</small></td>
+                            <td>₹${tx.gross_amount}</td>
+                            <td><span style="color: green; font-weight: bold;">SETTLED</span></td>
+                            <td>${tx.internal_status ? `<span style="color: #2E7D32; font-weight: bold;">${tx.internal_status}</span>` : '<span style="color: red; font-weight: bold;">MISSING</span>'}</td>
+                            <td style="font-weight: bold; color: ${isMatch ? 'green' : 'red'};">${matchStatus}</td>
+                            <td>
+                                ${!isMatch ? `<button class="btn-warning" onclick="repairMissingTransaction('${tx.order_id}', '${tx.metal_type}')">🔧 Repair & Credit</button>` : '---'}
+                            </td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    html += `
+                        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 15px;">
+                            ${discrepancyCount === 0 ?
+                            `<button class="btn-success" style="padding: 10px 25px;" onclick="updateBatchStatus('${settlementId}', 'RECONCILED')">✅ Mark Whole Batch as Reconciled</button>` :
+                            `<button class="btn-info" style="padding: 10px 25px; background: #666;" onclick="if(confirm('Still showing discrepancies. Mark as Reconciled anyway?')){ updateBatchStatus('${settlementId}', 'RECONCILED') }">⚠️ Mark as Reconciled Anyway</button>`
+                        }
+                        </div>
+                    `;
+                    contentDiv.innerHTML = html;
+                } else {
+                    contentDiv.innerHTML = '<div class="no-data">No transactions found for this batch.</div>';
+                }
+            } catch (error) {
+                contentDiv.innerHTML = '<div class="no-data" style="color: red;">Error loading reconciliation Details.</div>';
+            }
+        }
+
+        async function updateBatchStatus(settlementId, status) {
+            try {
+                const data = await apiFetch(`/admin/reconcile/batch/${settlementId}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status: status })
+                });
+
+                if (data.success) {
+                    alert(`✅ Batch marked as ${status}`);
+                    document.getElementById('reconBatchModal').style.display = 'none';
+                    loadSettlementBatches();
+                } else {
+                    alert("❌ Failed to update status: " + data.error);
+                }
+            } catch (error) {
+                alert("❌ Error connecting to API.");
+            }
+        }
+
+        // --- Fetch Modal Logic ---
+        let selectedFetchMetalType = 'GOLD';
+
+        function selectFetchMetal(type) {
+            selectedFetchMetalType = type;
+            document.getElementById('fetchCardGold').classList.toggle('selected', type === 'GOLD');
+            document.getElementById('fetchCardSilver').classList.toggle('selected', type === 'SILVER');
+        }
+
+        function showFetchSettlementsModal() {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - 30);
+
+            document.getElementById('fetchStartDate').value = start.toISOString().split('T')[0];
+            document.getElementById('fetchEndDate').value = end.toISOString().split('T')[0];
+
+            selectFetchMetal('GOLD');
+            document.getElementById('fetchSettlementsModal').style.display = 'block';
+        }
+
+        async function executeSettlementFetch() {
+            const startDateRaw = document.getElementById('fetchStartDate').value;
+            const endDateRaw = document.getElementById('fetchEndDate').value;
+
+            if (!startDateRaw || !endDateRaw) {
+                alert("Please select both start and end dates.");
+                return;
+            }
+
+            const formatDate = (dateStr) => {
+                const parts = dateStr.split('-');
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            };
+
+            const startDate = formatDate(startDateRaw);
+            const endDate = formatDate(endDateRaw);
+
+            const btn = document.getElementById('startFetchBtn');
+            const originalText = btn.innerText;
+
+            try {
+                btn.innerText = "⏳ Syncing with Gateway...";
+                btn.disabled = true;
+
+                const data = await apiFetch('/admin/reconcile/fetch', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        date_from: startDate,
+                        date_to: endDate,
+                        metal_type: selectedFetchMetalType
+                    })
+                });
+
+                if (data.success) {
+                    alert("✅ Gateway Sync Successful!\n" + data.message);
+                    document.getElementById('fetchSettlementsModal').style.display = 'none';
+                    loadSettlementBatches();
+                } else {
+                    alert("❌ Fetch failed: " + data.error);
+                }
+            } catch (error) {
+                alert("❌ Connection Error: Ensure backend is running.");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // ==================== REPAIR & RECONCILIATION ====================
+        let currentRepairData = null;
+        let selectedRepairScheme = null;
+
+        async function repairMissingTransaction(orderId, metalType) {
+            // Visual Feedback
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking Gateway...';
+
+            try {
+                console.log(`🔧 Verifying payment for ${orderId}...`);
+
+                // First call: Verify payment and get schemes (Dry Run)
+                const data = await apiFetch(`/omniware/check-payment-status`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId: orderId,
+                        metalType: metalType,
+                        dryRun: true // We added this to just get info without committing
+                    })
+                });
+
+                if (!data.success || data.data.status !== 'success') {
+                    throw new Error(data.error || "Payment not successful at gateway.");
+                }
+
+                currentRepairData = {
+                    orderId: orderId,
+                    metalType: metalType,
+                    paymentInfo: data.data
+                };
+
+                showSchemeSelectionModal(data.data);
+
+            } catch (error) {
+                console.error('Repair Error:', error);
+                alert("❌ Verification failed: " + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function showSchemeSelectionModal(data) {
+            const modal = document.getElementById('repairSchemeModal');
+            const infoDiv = document.getElementById('repairCustomerInfo');
+            const listDiv = document.getElementById('repairSchemeList');
+            const confirmBtn = document.getElementById('finalRepairBtn');
+
+            infoDiv.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                    <div><strong>Customer:</strong> ${data.customer_name || 'N/A'}</div>
+                    <div><strong>Phone:</strong> ${data.customer_phone || 'N/A'}</div>
+                    <div><strong>Amount:</strong> ₹${formatCurrency(data.amount)}</div>
+                    <div><strong>Paid on:</strong> ${data.payment_datetime || 'N/A'}</div>
+                </div>
+            `;
+
+            if (!data.active_schemes || data.active_schemes.length === 0) {
+                listDiv.innerHTML = `
+                    <div style="background: #fff3e0; padding: 15px; border-radius: 8px; border: 1px solid #ff9800; text-align: center;">
+                        <p style="color: #e65100; margin: 0;">⚠️ No active schemes found for this customer.</p>
+                        <p style="font-size: 12px; margin-top: 5px;">Transaction will be credited to wallet only.</p>
+                        <button class="btn-primary" style="margin-top: 10px; background: #ff9800; border: none;" onclick="selectRepairScheme(null)">Proceed Without Scheme</button>
+                    </div>
+                `;
+            } else {
+                listDiv.innerHTML = data.active_schemes.map(scheme => `
+                    <div class="scheme-option-card" id="repair_scheme_${scheme.scheme_id}" onclick="selectRepairScheme('${scheme.scheme_id}')">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: #2E7D32;">${scheme.scheme_id}</strong>
+                                <div style="font-size: 12px; color: #666;">${scheme.scheme_type} | ${scheme.metal_type}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-weight: bold;">₹${formatCurrency(scheme.monthly_amount)}/mo</div>
+                                <div style="font-size: 11px;">Paid: ${scheme.completed_installments} months</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            modal.style.display = 'block';
+            selectedRepairScheme = null;
+            confirmBtn.disabled = true;
+        }
+
+        function selectRepairScheme(schemeId) {
+            selectedRepairScheme = schemeId;
+
+            // UI Feedback
+            document.querySelectorAll('.scheme-option-card').forEach(card => card.classList.remove('selected'));
+            if (schemeId) {
+                document.getElementById(`repair_scheme_${schemeId}`).classList.add('selected');
+            }
+
+            document.getElementById('finalRepairBtn').disabled = false;
+        }
+
+        async function executeFinalRepair() {
+            if (!currentRepairData) return;
+
+            const btn = document.getElementById('finalRepairBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizing Credit...';
+
+            try {
+                const data = await apiFetch(`/omniware/check-payment-status`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orderId: currentRepairData.orderId,
+                        metalType: currentRepairData.metalType,
+                        schemeId: selectedRepairScheme, // Passes our selection
+                        dryRun: false // Commits now
+                    })
+                });
+
+                if (data.success) {
+                    alert("✅ Successfully repaired, credited, and linked!");
+                    document.getElementById('repairSchemeModal').style.display = 'none';
+                    if (window.currentReconBatchId) {
+                        loadBatchReconciliation(window.currentReconBatchId, window.currentReconBatchAmount);
+                    }
+                    loadSettlementBatches();
+                } else {
+                    alert("❌ Repair failed: " + (data.error || "Unknown error"));
+                }
+            } catch (error) {
+                console.error('Final Repair Error:', error);
+                alert("❌ Execution failed: " + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
     </script>
