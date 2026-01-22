@@ -664,6 +664,18 @@ router.post('/payment-page-url', async (req, res) => {
       udf5: ''
     };
 
+    // --- SANITIZE PARAMETERS ---
+    // Specifically remove newlines and extra spaces from all parameters
+    // This prevents "Expected Hash String" (1023) errors for customers with multi-line addresses
+    Object.keys(params).forEach(key => {
+      if (typeof params[key] === 'string') {
+        params[key] = params[key]
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    });
+
     // Generate hash
     const hash = generateHash(params, merchant.salt);
     params.hash = hash;

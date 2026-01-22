@@ -1875,15 +1875,15 @@ app.get('/api/app-config', (req, res) => {
   res.json({
     success: true,
     android: {
-      min_version: '1.4.0',
-      latest_version: '1.4.0',
+      min_version: '1.4.4',
+      latest_version: '1.4.4',
       update_url: 'https://play.google.com/store/apps/details?id=com.vmurugan.digi_gold',
       is_force_update: true,
       message: 'A critical update is available. Please update to continue using the app.'
     },
     ios: {
-      min_version: '1.4.0',
-      latest_version: '1.4.0',
+      min_version: '1.4.4',
+      latest_version: '1.4.4',
       update_url: 'https://apps.apple.com/app/id6755655102',
       is_force_update: true,
       message: 'A critical update is available. Please update to continue using the app.'
