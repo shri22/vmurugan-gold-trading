@@ -1319,20 +1319,13 @@
                                 Show Inactive
                             </label>
 
-                            <label style="font-size: 14px; color: #666; display: flex; align-items: center;">
-                                <input type="checkbox" id="showTestData" onchange="applyCustomerFilters()"
-                                    style="margin-right: 5px;">
-                                Show Test Data
-                            </label>
+
 
                             <button onclick="refreshCustomers()"
                                 style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 500;">
                                 🔄 Refresh
                             </button>
-                            <button onclick="forceLoadData()"
-                                style="padding: 8px 16px; background: #FF9800; color: white; border: none; border-radius: 20px; cursor: pointer; font-weight: 500;">
-                                🔧 Force Load
-                            </button>
+
                         </div>
                     </div>
                     <div class="table-container">
@@ -2873,9 +2866,7 @@
             const searchName = document.getElementById('customerSearch')?.value.toLowerCase() || '';
             const showNotJoined = document.getElementById('showNotJoined')?.checked || false;
             const showInactive = document.getElementById('showInactiveCustomers')?.checked ?? true;
-            const showTestData = document.getElementById('showTestData')?.checked || false;
-
-            console.log('📋 Filter State:', { searchName, showNotJoined, showInactive, showTestData });
+            console.log('📋 Filter State:', { searchName, showNotJoined, showInactive });
 
             const filtered = customers.filter(customer => {
                 // 1. Search Filter (by Name or Phone)
@@ -2885,10 +2876,10 @@
                     return false;
                 }
 
-                // 2. Test Data Filter
+                // 2. Test Data Filter - Always hide test data
                 const email = (customer.email || '').toLowerCase();
                 const isTestData = phone.includes('test') || name.includes('test') || email.includes('test');
-                if (!showTestData && isTestData) return false;
+                if (isTestData) return false;
 
                 // 3. Inactive Filter
                 const isActive = customer.is_active === undefined || customer.is_active === true || customer.is_active === 1;
@@ -3159,15 +3150,7 @@
             `);
         }
 
-        function forceLoadData() {
-            console.log('🔧 Force loading data...');
-            loadCustomersFromFirebase();
-        }
 
-        function toggleTestData() {
-            // Updated to use applyCustomerFilters
-            applyCustomerFilters();
-        }
 
         // Load real transaction data from SQL Server (HTTPS-only)
         async function loadTransactionsFromFirebase() {
