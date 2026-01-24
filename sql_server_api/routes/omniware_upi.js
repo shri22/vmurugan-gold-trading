@@ -146,8 +146,6 @@ router.post('/check-payment-status', async (req, res) => {
 
       if (transaction.response_code === 0) {
         status = 'success';
-      } else if (transaction.response_code === 1030 && hasValidPaymentTime && amountMatches) {
-        status = 'success';
       } else if (transaction.response_code === 1006 || transaction.response_code === 1030) {
         status = 'pending';
       } else {

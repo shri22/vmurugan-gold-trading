@@ -72,8 +72,15 @@ async function saveTransactionToDatabase(webhookData) {
     const customerEmail = webhookData.email;
     const customerName = webhookData.name;
 
-    // Determine status
-    const status = responseCode === 0 ? 'SUCCESS' : 'FAILED';
+    // Determine status (TIGHTENED)
+    let status;
+    if (responseCode === 0) {
+      status = 'SUCCESS';
+    } else if (responseCode === 1030 || responseCode === 1006) {
+      status = 'PENDING';
+    } else {
+      status = 'FAILED';
+    }
 
     console.log('💾 Saving transaction to database via webhook:');
     console.log('   Transaction ID:', transactionId);

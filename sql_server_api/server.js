@@ -3364,11 +3364,12 @@ async function syncTransactionWithOmniware(orderId) {
       paymentData.payment_datetime !== '' &&
       paymentData.payment_datetime !== '0000-00-00 00:00:00';
 
-    // SUCCESS criteria (Same as in omniware_upi.js)
-    const isSuccess = responseCode === 0 || (responseCode === 1030 && hasValidTime);
-    const finalStatus = isSuccess ? 'SUCCESS' : (responseCode === 1030 ? 'PENDING' : 'FAILED');
+    // SUCCESS criteria (TIGHTENED: Only 0 is absolute success)
+    const isSuccess = responseCode === 0;
+    const isPending = responseCode === 1030 || responseCode === 1006;
+    const finalStatus = isSuccess ? 'SUCCESS' : (isPending ? 'PENDING' : 'FAILED');
 
-    console.log(`✅ [OMNIWARE-SYNC] Gateway status for ${orderId}: ${finalStatus}`);
+    console.log(`✅ [OMNIWARE-SYNC] Gateway status for ${orderId}: ${finalStatus} (Code: ${responseCode})`);
 
     // 4. Update local database if successful and not already success
     if (isSuccess) {
