@@ -806,7 +806,7 @@ router.post('/cleanup-abandoned', async (req, res) => {
         } else if (response.data && response.data.data) {
           const transaction = Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
 
-          if (transaction.response_code === 0 || (transaction.payment_datetime && transaction.payment_datetime !== '0000-00-00 00:00:00')) {
+          if (transaction.response_code === 0) {
             console.log(`   ✅ SUCCESS - Found in gateway (needs manual reconciliation)`);
             successCount++;
             details.push({
@@ -816,7 +816,7 @@ router.post('/cleanup-abandoned', async (req, res) => {
               action: 'NEEDS_RECONCILIATION',
               reason: 'Successful in gateway but PENDING in database'
             });
-          } else {
+          } else if (transaction.response_code === 1006 || transaction.response_code === 1030) {
             console.log(`   ⏳ Still PENDING in gateway`);
             stillPendingCount++;
             details.push({
@@ -825,6 +825,28 @@ router.post('/cleanup-abandoned', async (req, res) => {
               amount: txn.amount,
               action: 'STILL_PENDING',
               reason: 'Still processing in gateway'
+            });
+          } else {
+            // Transaction explicitly FAILED in gateway
+            await pool.request()
+              .input('txn_id', require('mssql').VarChar(100), txn.transaction_id)
+              .input('raw', require('mssql').NVarChar(require('mssql').MAX), JSON.stringify(transaction))
+              .query(`
+                UPDATE transactions
+                SET status = 'FAILED',
+                    gateway_response = @raw,
+                    updated_at = GETDATE()
+                WHERE transaction_id = @txn_id
+              `);
+
+            console.log(`   ❌ FAILED - Gateway returned error code: ${transaction.response_code}`);
+            failedCount++;
+            details.push({
+              transaction_id: txn.transaction_id,
+              customer_name: txn.customer_name,
+              amount: txn.amount,
+              action: 'FAILED',
+              reason: `Failed in gateway (Code: ${transaction.response_code})`
             });
           }
         }
