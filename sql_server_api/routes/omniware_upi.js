@@ -125,24 +125,11 @@ router.post('/check-payment-status', async (req, res) => {
       // Determine payment status based on response code and payment_datetime
       let status;
 
-      // IMPORTANT: Omniware UPI Intent payments have a known issue where response_code
-      // stays at 1030 (TRANSACTION-INCOMPLETE) even after payment is successful at bank level.
-      //
-      // According to Omniware documentation and real-world behavior:
-      // - response_code 0 = SUCCESS (explicit success)
-      // - response_code 1030 = TRANSACTION-INCOMPLETE (could be pending OR successful)
-      // - payment_datetime is populated ONLY when payment is actually processed by bank
-      //
-      // Therefore, if payment_datetime exists and is valid, the payment IS successful,
-      // regardless of response_code being 1030.
-
+      // Check if payment_datetime exists and is valid
       const hasValidPaymentTime = transaction.payment_datetime &&
         transaction.payment_datetime !== '' &&
         transaction.payment_datetime !== null &&
         transaction.payment_datetime !== '0000-00-00 00:00:00';
-
-      // Check if amount matches (additional validation)
-      const amountMatches = transaction.amount && parseFloat(transaction.amount) > 0;
 
       if (transaction.response_code === 0) {
         status = 'success';

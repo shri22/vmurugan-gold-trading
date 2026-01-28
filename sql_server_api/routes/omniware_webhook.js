@@ -74,6 +74,13 @@ async function saveTransactionToDatabase(webhookData) {
 
     // Determine status (TIGHTENED)
     let status;
+
+    // Check if payment_datetime exists and is valid
+    const hasValidPaymentTime = webhookData.payment_datetime &&
+      webhookData.payment_datetime !== '' &&
+      webhookData.payment_datetime !== null &&
+      webhookData.payment_datetime !== '0000-00-00 00:00:00';
+
     if (responseCode === 0) {
       status = 'SUCCESS';
     } else if (responseCode === 1030 || responseCode === 1006) {

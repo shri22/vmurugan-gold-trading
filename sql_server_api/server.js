@@ -3888,11 +3888,12 @@ app.post('/api/schemes', [
     // Get the last scheme_id for this scheme_type
     const lastSchemeRequest = pool.request();
     lastSchemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    lastSchemeRequest.input('prefix_match', sql.NVarChar(10), schemePrefix + '_P%');
     const lastSchemeResult = await lastSchemeRequest.query(`
       SELECT TOP 1 scheme_id
       FROM schemes
-      WHERE scheme_type = @scheme_type
-      ORDER BY id DESC
+      WHERE scheme_type = @scheme_type AND scheme_id LIKE @prefix_match
+      ORDER BY LEN(scheme_id) DESC, scheme_id DESC
     `);
 
     let nextSchemeNumber = 1; // Default to 1 if no schemes exist
@@ -4191,11 +4192,13 @@ app.post('/api/schemes/create-after-payment', flexibleAuth, auditLog('CREATE_SCH
 
     const lastSchemeRequest = pool.request();
     lastSchemeRequest.input('scheme_type', sql.NVarChar(20), scheme_type);
+    lastSchemeRequest.input('prefix_match', sql.NVarChar(10), schemePrefix + '_P%');
+
     const lastSchemeResult = await lastSchemeRequest.query(`
       SELECT TOP 1 scheme_id
       FROM schemes
-      WHERE scheme_type = @scheme_type
-      ORDER BY id DESC
+      WHERE scheme_type = @scheme_type AND scheme_id LIKE @prefix_match
+      ORDER BY LEN(scheme_id) DESC, scheme_id DESC
     `);
 
     let nextSchemeNumber = 1;
