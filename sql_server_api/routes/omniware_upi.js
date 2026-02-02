@@ -222,6 +222,61 @@ router.post('/check-payment-status', async (req, res) => {
 
                 if (schemeDiscovery.recordset.length === 1) {
                   schemeId = schemeDiscovery.recordset[0].scheme_id;
+                } else if (schemeDiscovery.recordset.length === 0 && txn.scheme_type) {
+                  // --- AUTO-CREATION FALLBACK ---
+                  const requestedType = txn.scheme_type;
+                  console.log(`✨ [STATUS] No active scheme found, but transaction requested ${requestedType}. Auto-creating...`);
+
+                  try {
+                    const custInfo = await pool.request()
+                      .input('p', require('mssql').NVarChar(15), txn.customer_phone)
+                      .query("SELECT id, name FROM customers WHERE phone = @p");
+
+                    if (custInfo.recordset.length > 0) {
+                      const cid = custInfo.recordset[0].id;
+                      const cname = custInfo.recordset[0].name;
+                      const schemeTypeMap = { 'GOLDPLUS': 'GP', 'GOLDFLEXI': 'GF', 'SILVERPLUS': 'SP', 'SILVERFLEXI': 'SF' };
+                      const prefix = schemeTypeMap[requestedType];
+
+                      const lastIdRes = await pool.request()
+                        .input('ptype', require('mssql').NVarChar(20), requestedType)
+                        .input('pmatch', require('mssql').NVarChar(10), prefix + '_P%')
+                        .query(`SELECT TOP 1 scheme_id FROM schemes WHERE scheme_type = @ptype AND scheme_id LIKE @pmatch ORDER BY LEN(scheme_id) DESC, scheme_id DESC`);
+
+                      let nextNum = 1;
+                      if (lastIdRes.recordset.length > 0) {
+                        const match = lastIdRes.recordset[0].scheme_id.match(/_P(\d+)$/);
+                        if (match) nextNum = parseInt(match[1]) + 1;
+                      }
+
+                      const newSchemeId = `${prefix}_P${nextNum}`;
+                      const duration = requestedType.includes('PLUS') ? 12 : null;
+                      const endDate = duration ? new Date(Date.now() + (duration * 30 * 24 * 60 * 60 * 1000)) : null;
+
+                      await pool.request()
+                        .input('sid', require('mssql').NVarChar(100), newSchemeId)
+                        .input('cid', require('mssql').Int, cid)
+                        .input('phone', require('mssql').NVarChar(15), txn.customer_phone)
+                        .input('name', require('mssql').NVarChar(100), cname)
+                        .input('type', require('mssql').NVarChar(20), requestedType)
+                        .input('metal', require('mssql').NVarChar(10), metalTypeCurrent)
+                        .input('amount', require('mssql').Decimal(12, 2), txn.amount)
+                        .input('duration', require('mssql').Int, duration)
+                        .input('end_date', require('mssql').DateTime, endDate)
+                        .input('tid', require('mssql').NVarChar(100), transaction.order_id)
+                        .input('gold_grams', require('mssql').Decimal(10, 4), txn.gold_grams || 0)
+                        .input('silver_grams', require('mssql').Decimal(10, 4), txn.silver_grams || 0)
+                        .query(`
+                                    INSERT INTO schemes (scheme_id, customer_id, customer_phone, customer_name, scheme_type, metal_type, monthly_amount, duration_months, end_date, total_invested, total_amount_paid, total_metal_accumulated, completed_installments, terms_accepted, terms_accepted_at, status, business_id, transaction_id, created_at, updated_at)
+                                    VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, @amount, @amount, (@gold_grams + @silver_grams), 1, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
+                                `);
+
+                      schemeId = newSchemeId;
+                      console.log(`✅ [STATUS] Auto-created scheme ${schemeId} for user.`);
+                    }
+                  } catch (autoErr) {
+                    console.error('❌ [STATUS] Auto-creation failed:', autoErr.message);
+                  }
                 }
               }
 

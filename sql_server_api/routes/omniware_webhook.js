@@ -191,7 +191,77 @@ async function saveTransactionToDatabase(webhookData) {
           } else if (schemeDiscovery.recordset.length > 1) {
             console.log(`⚠️ [WEBHOOK] Multiple active ${metalTypeCurrent} schemes found. Cannot auto-link.`);
           } else {
-            console.log(`ℹ [WEBHOOK] No active ${metalTypeCurrent} schemes found. Treating as wallet purchase.`);
+            // --- AUTO-CREATION FALLBACK ---
+            // If no active scheme but transaction has a scheme_type, create it!
+            if (txnWithScheme.recordset[0].scheme_type) {
+              const requestedType = txnWithScheme.recordset[0].scheme_type;
+              console.log(`✨ [WEBHOOK] No active scheme found, but transaction requested ${requestedType}. Auto-creating...`);
+
+              try {
+                // Fetch customer details
+                const custInfo = await pool.request()
+                  .input('p', sql.NVarChar(15), customerPhone)
+                  .query("SELECT id, name FROM customers WHERE phone = @p");
+
+                if (custInfo.recordset.length > 0) {
+                  const cid = custInfo.recordset[0].id;
+                  const cname = custInfo.recordset[0].name;
+
+                  // Generate next Scheme ID (Logic from server.js)
+                  const schemeTypeMap = { 'GOLDPLUS': 'GP', 'GOLDFLEXI': 'GF', 'SILVERPLUS': 'SP', 'SILVERFLEXI': 'SF' };
+                  const prefix = schemeTypeMap[requestedType];
+
+                  const lastIdRes = await pool.request()
+                    .input('ptype', sql.NVarChar(20), requestedType)
+                    .input('pmatch', sql.NVarChar(10), prefix + '_P%')
+                    .query(`SELECT TOP 1 scheme_id FROM schemes WHERE scheme_type = @ptype AND scheme_id LIKE @pmatch ORDER BY LEN(scheme_id) DESC, scheme_id DESC`);
+
+                  let nextNum = 1;
+                  if (lastIdRes.recordset.length > 0) {
+                    const match = lastIdRes.recordset[0].scheme_id.match(/_P(\d+)$/);
+                    if (match) nextNum = parseInt(match[1]) + 1;
+                  }
+
+                  const newSchemeId = `${prefix}_P${nextNum}`;
+                  const duration = requestedType.includes('PLUS') ? 12 : null;
+                  const endDate = duration ? new Date(Date.now() + (duration * 30 * 24 * 60 * 60 * 1000)) : null;
+
+                  // Create the scheme
+                  await pool.request()
+                    .input('sid', sql.NVarChar(100), newSchemeId)
+                    .input('cid', sql.Int, cid)
+                    .input('phone', sql.NVarChar(15), customerPhone)
+                    .input('name', sql.NVarChar(100), cname)
+                    .input('type', sql.NVarChar(20), requestedType)
+                    .input('metal', sql.NVarChar(10), metalTypeCurrent)
+                    .input('amount', sql.Decimal(12, 2), amount)
+                    .input('duration', sql.Int, duration)
+                    .input('end_date', sql.DateTime, endDate)
+                    .input('tid', sql.NVarChar(100), orderId)
+                    .input('gold_grams', sql.Decimal(10, 4), goldGrams)
+                    .input('silver_grams', sql.Decimal(10, 4), silverGrams)
+                    .query(`
+                                INSERT INTO schemes (scheme_id, customer_id, customer_phone, customer_name, scheme_type, metal_type, monthly_amount, duration_months, end_date, total_invested, total_amount_paid, total_metal_accumulated, completed_installments, terms_accepted, terms_accepted_at, status, business_id, transaction_id, created_at, updated_at)
+                                VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, @amount, @amount, (@gold_grams + @silver_grams), 1, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
+                            `);
+
+                  schemeId = newSchemeId;
+                  schemeType = requestedType;
+                  console.log(`✅ [WEBHOOK] Auto-created scheme ${schemeId} for user.`);
+
+                  // Update transaction record with the created scheme details
+                  await pool.request()
+                    .input('order_id', sql.NVarChar, orderId)
+                    .input('sid', sql.NVarChar(100), schemeId)
+                    .input('stype', sql.NVarChar(20), schemeType)
+                    .query("UPDATE transactions SET scheme_id = @sid, scheme_type = @stype WHERE transaction_id = @order_id");
+                }
+              } catch (autoErr) {
+                console.error('❌ [WEBHOOK] Auto-creation failed:', autoErr.message);
+              }
+            } else {
+              console.log(`ℹ [WEBHOOK] No active ${metalTypeCurrent} schemes found. Treating as wallet purchase.`);
+            }
           }
         }
 
