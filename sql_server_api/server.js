@@ -1105,11 +1105,11 @@ const adminLoginLimiter = rateLimit({
 
 // SQL Server 2019 configuration
 const sqlConfig = {
-  server: process.env.SQL_SERVER || 'DESKTOP-3QPE6QQ',
+  server: process.env.SQL_SERVER || 'localhost',
   port: parseInt(process.env.SQL_PORT) || 1433,
   database: process.env.SQL_DATABASE || 'VMuruganGoldTrading',
   user: process.env.SQL_USERNAME || 'sa',
-  password: process.env.SQL_PASSWORD || 'git@#12345',
+  password: process.env.SQL_PASSWORD || 'VMurugan@2025#SQL',
   options: {
     encrypt: process.env.SQL_ENCRYPT === 'true', // Use true for Azure SQL
     trustServerCertificate: process.env.SQL_TRUST_SERVER_CERTIFICATE === 'true' || true, // Use true for self-signed certificates
@@ -2607,7 +2607,7 @@ app.post('/api/auth/verify-otp', otpLimiter, [
     request.input('phone', sql.NVarChar(15), phone);
 
     const result = await request.query(`
-      SELECT id, customer_id, phone, name, email, business_id
+      SELECT id, customer_id, phone, name, email, business_id, mpin
       FROM customers
       WHERE phone = @phone
     `);
@@ -2641,13 +2641,15 @@ app.post('/api/auth/verify-otp', otpLimiter, [
       message: 'Authentication successful',
       token: customerToken,
       expiresIn: '30d',
+      is_mpin_set: !!customer.mpin, // Flag for frontend to check MPIN status
       customer: {
         id: parseInt(customer.id),
         customer_id: customer.customer_id,
         phone: customer.phone,
         name: customer.name,
         email: customer.email,
-        business_id: customer.business_id
+        business_id: customer.business_id,
+        mpin_set: !!customer.mpin // Alternate flag name just in case
       }
     });
 
