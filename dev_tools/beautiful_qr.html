@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VMurugan App QR Code</title>
+    <script type="text/javascript" src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background: #f8f9fa; 
+            padding: 40px 20px; 
+            margin: 0;
+        }
+        .card { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            max-width: 500px; 
+            margin: 0 auto; 
+        }
+        h1 { 
+            color: #1a1a1a; 
+            margin-bottom: 10px; 
+            font-size: 28px;
+        }
+        h1 span {
+            color: #d4af37; /* Gold color */
+        }
+        p { 
+            color: #666; 
+            margin-bottom: 30px; 
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        #canvas { 
+            margin: 30px auto; 
+            display: flex; 
+            justify-content: center; 
+            background: #fff;
+            padding: 10px;
+            border-radius: 16px;
+        }
+        button { 
+            background: #d4af37; 
+            color: white; 
+            border: none; 
+            padding: 14px 28px; 
+            font-size: 16px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+            width: 100%;
+        }
+        button:hover { 
+            background: #c5a030; 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(212, 175, 55, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Download <span>VMurugan Gold</span></h1>
+        <p>Scan the QR code below to download the app for Android and iOS directly from the stores.</p>
+        
+        <div id="canvas"></div>
+        
+        <button id="downloadBtn">⬇️ Download High-Quality QR Image</button>
+    </div>
+    
+    <script>
+        // Use the qr-code-styling library to generate a gorgeous modern QR code
+        const qrCode = new QRCodeStyling({
+            width: 350,
+            height: 350,
+            type: "svg",
+            data: "https://prodapi.vmuruganjewellery.co.in/download.html",
+            image: "VM-LOGO1.png", // Uses your local logo file!
+            dotsOptions: {
+                color: "#1a1a1a",
+                type: "rounded"
+            },
+            backgroundOptions: {
+                color: "#ffffff",
+            },
+            imageOptions: {
+                crossOrigin: "anonymous",
+                margin: 8,
+                imageSize: 0.4
+            },
+            cornersSquareOptions: {
+                color: "#d4af37", // Gold corners!
+                type: "extra-rounded"
+            },
+            cornersDotOptions: {
+                color: "#d4af37",
+                type: "dot"
+            }
+        });
+
+        // Render the QR code in the browser
+        qrCode.append(document.getElementById("canvas"));
+
+        // Allow user to download a high-res PNG
+        document.getElementById("downloadBtn").addEventListener("click", () => {
+            qrCode.download({ 
+                name: "VMurugan-App-QR", 
+                extension: "png" 
+            });
+        });
+    </script>
+</body>
+</html>

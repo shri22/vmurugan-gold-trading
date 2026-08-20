@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Mockup</title>
+    <!-- Google Fonts: Montserrat for body, Playfair Display for elegant headings -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Fixed A4 Page Size for printing ratio */
+        .a4-container {
+            width: 790px;
+            height: 1115px;
+            background-color: #ffffff;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            position: relative;
+            padding: 45px 50px;
+            font-family: 'Montserrat', sans-serif;
+            color: #333333;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            
+            /* Corporate Top Border instead of overlapping curves */
+            border-top: 10px solid #1E4620;
+        }
+
+        /* Sub-border gold line for double corporate stripe */
+        .top-gold-bar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 30%;
+            height: 10px;
+            background-color: #C5A880;
+            z-index: 20;
+        }
+
+        /* Header Layout */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo-area {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-img {
+            width: 170px;
+            height: auto;
+            margin-bottom: 2px;
+        }
+
+        .logo-tagline {
+            font-size: 8px;
+            font-weight: 500;
+            color: #B3925B;
+            letter-spacing: 3.5px;
+            margin-top: 4px;
+            text-transform: uppercase;
+        }
+
+        /* Metadata Column */
+        .meta-area {
+            display: flex;
+            flex-direction: column;
+            width: 260px;
+            font-size: 10.5px;
+            color: #444444;
+            background-color: #FAF8F5;
+            border: 1px solid #E5DCC6;
+            border-radius: 4px;
+            padding: 10px 14px;
+        }
+
+        .meta-row {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #E5DCC6;
+        }
+
+        .meta-row:last-child {
+            border-bottom: none;
+        }
+
+        .meta-icon {
+            width: 14px;
+            height: 14px;
+            margin-right: 8px;
+            fill: #B3925B;
+        }
+
+        .meta-label {
+            font-weight: 500;
+            flex: 1;
+            color: #666666;
+        }
+
+        .meta-val {
+            font-weight: 700;
+            color: #111111;
+            text-align: right;
+        }
+
+        /* Divider */
+        .divider-container {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .divider-line {
+            width: 100%;
+            height: 1px;
+            background-color: #C5A880;
+        }
+
+        .divider-badge {
+            position: absolute;
+            background: #ffffff;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .divider-badge svg {
+            width: 12px;
+            height: 12px;
+            fill: #C5A880;
+        }
+
+        /* Main Section Header */
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1E4620;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 10px;
+        }
+
+        /* Ribbon Banner */
+        .ribbon-banner {
+            background-color: #1E4620;
+            padding: 6px 30px;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-align: center;
+            margin: 0 auto 12px auto;
+            border-radius: 2px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(30, 70, 32, 0.15);
+        }
+
+        .subtext {
+            font-size: 10px;
+            color: #777777;
+            text-align: center;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+
+        /* Two Column Layout */
+        .summary-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        /* Left Card - Settlement Summary */
+        .summary-card {
+            border: 1px solid #E5DCC6;
+            background-color: #FCFBF8;
+            border-radius: 4px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            color: #1E4620;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-title::before {
+            content: "";
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            background-color: #B3925B;
+            margin-right: 8px;
+            transform: rotate(45deg);
+        }
+
+        .calc-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 10px;
+        }
+
+        .calc-row:last-child {
+            margin-bottom: 0;
+            margin-top: 5px;
+            padding-top: 10px;
+            border-top: 1px solid #E5DCC6;
+        }
+
+        .calc-icon {
+            width: 14px;
+            height: 14px;
+            margin-right: 8px;
+            fill: #B3925B;
+        }
+
+        .calc-label {
+            color: #555555;
+            flex: 1;
+        }
+
+        .calc-val {
+            font-weight: 700;
+            color: #111111;
+        }
+
+        .calc-row.total .calc-label {
+            font-weight: 700;
+            color: #1E4620;
+            font-size: 11px;
+        }
+
+        .calc-row.total .calc-val {
+            font-size: 13px;
+            color: #1E4620;
+        }
+
+        /* Right Card - Total Accumulated Gold */
+        .gold-balance-card {
+            border: 1px solid #C5A880;
+            background-color: #FFFFFF;
+            border-radius: 4px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .gold-display-area {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        /* Circular Gold Frame logo */
+        .gold-circle-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid #C5A880;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 15px;
+            background-color: #FCFBF8;
+        }
+
+        .gold-circle-badge svg {
+            width: 24px;
+            height: 24px;
+            fill: #B3925B;
+        }
+
+        .gold-text-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gold-lbl {
+            font-size: 9px;
+            font-weight: 700;
+            color: #B3925B;
+            letter-spacing: 0.8px;
+        }
+
+        .gold-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: #B3925B;
+            margin-top: 2px;
+        }
+
+        .gold-text-info span {
+            font-size: 9px;
+            color: #666666;
+            font-weight: 400;
+        }
+
+        .card-note {
+            font-size: 8px;
+            color: #888888;
+            line-height: 1.4;
+            padding-top: 10px;
+            border-top: 1px solid #F0ECE3;
+            margin-top: 10px;
+        }
+
+        /* Table Title Banner */
+        .table-title-banner {
+            background-color: #1E4620;
+            color: #ffffff;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-align: center;
+            padding: 6px;
+            text-transform: uppercase;
+            border-radius: 2px 2px 0 0;
+        }
+
+        /* Side by Side Payment Table */
+        .payment-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.5px;
+            margin-bottom: 30px;
+        }
+
+        .payment-table th {
+            background-color: #1E4620;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 8px 6px;
+            text-align: center;
+            border: 1px solid #143016;
+            text-transform: uppercase;
+            font-size: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .payment-table td {
+            padding: 8px 6px;
+            text-align: center;
+            border: 1px solid #E5DCC6;
+            color: #444444;
+        }
+
+        .payment-table tr:nth-child(even) {
+            background-color: #FCFBF8;
+        }
+
+        .payment-table td.bold-col {
+            font-weight: 600;
+            color: #111111;
+        }
+
+        /* Signature Box Container */
+        .signature-container {
+            border: 1px solid #C5A880;
+            padding: 1px;
+            border-radius: 4px;
+            margin-top: auto;
+            margin-bottom: 10px;
+        }
+
+        .signature-inner {
+            border: 1px solid #C5A880;
+            border-radius: 3px;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #FFFFFF;
+            position: relative;
+        }
+
+        .sig-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 150px;
+        }
+
+        .sig-line {
+            width: 100%;
+            height: 1px;
+            background-color: #CCCCCC;
+            margin-bottom: 8px;
+        }
+
+        .sig-label {
+            font-size: 8px;
+            font-weight: 700;
+            color: #777777;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* Corporate Wreath Seal in Center of Signature Container */
+        .corporate-seal {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid #C5A880;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #FFFFFF;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(197, 168, 128, 0.15);
+        }
+
+        .seal-wreath {
+            position: relative;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 1px dashed #C5A880;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .seal-monogram {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #B3925B;
+        }
+
+        /* Footer Info */
+        .footer-note {
+            font-size: 8px;
+            color: #888888;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        .footer-note .bold {
+            font-weight: 600;
+            color: #555555;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="a4-container">
+        
+        <!-- Corporate double stripe indicator instead of shapes -->
+        <div class="top-gold-bar"></div>
+
+        <div>
+            <!-- Header section with 100% visible texts -->
+            <div class="header">
+                <div class="logo-area">
+                    <img class="logo-img" src="file:///Users/admin/Documents/Win-Projects/AntiGravity/vmurugan-gold-trading/VM-LOGO1.png" alt="V Murugan Jewellery Logo">
+                    <span class="logo-tagline">Trusted Since Generations</span>
+                </div>
+
+                <!-- Boxed Metadata with 100% clear contrast -->
+                <div class="meta-area">
+                    <div class="meta-row">
+                        <!-- Calendar Icon SVG -->
+                        <svg class="meta-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
+                        <span class="meta-label">Closure Date</span>
+                        <span class="meta-val">27/06/2026</span>
+                    </div>
+                    <div class="meta-row">
+                        <!-- User Icon SVG -->
+                        <svg class="meta-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        <span class="meta-label">Customer Name</span>
+                        <span class="meta-val">nageshwari</span>
+                    </div>
+                    <div class="meta-row">
+                        <!-- Document Icon SVG -->
+                        <svg class="meta-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                        <span class="meta-label">Scheme ID</span>
+                        <span class="meta-val">GF_P45</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Separator Line with Centered Flower Icon -->
+            <div class="divider-container">
+                <div class="divider-line"></div>
+                <div class="divider-badge">
+                    <!-- Elegant diamond flower icon svg -->
+                    <svg viewBox="0 0 24 24"><path d="M12 2L9 9l-7 3 7 3 3 7 3-7 7-3-7-3z"/></svg>
+                </div>
+            </div>
+
+            <!-- Title -->
+            <h1 class="section-title">GOLD SCHEME CLOSURE</h1>
+            
+            <!-- Ribbon Banner -->
+            <div class="ribbon-banner">
+                8 Months Gold Savings Scheme
+            </div>
+
+            <!-- Subtext description -->
+            <p class="subtext">
+                Thank you for being a valued member of V Murugan Jewellery Gold Savings Scheme.<br>
+                Here are your settlement details upon successful completion of 8 months.
+            </p>
+
+            <!-- Two column summary cards -->
+            <div class="summary-cols">
+                <!-- Left Card: Settlement Summary -->
+                <div class="summary-card">
+                    <h3 class="card-title">SETTLEMENT SUMMARY</h3>
+                    
+                    <div class="calc-row">
+                        <!-- Coins Icon SVG -->
+                        <svg class="calc-icon" viewBox="0 0 24 24"><path d="M2 17c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 21.21 2 19v-2zm0-5c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 17.21 2 15v-2zm0-5c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 13.21 2 11V9zm10-7C6.48 2 2 3.79 2 6s4.48 4 10 4 10-1.79 10-4-4.48-4-10-4z"/></svg>
+                        <span class="calc-label">Total Scheme Amount (8 Months)</span>
+                        <span class="calc-val">₹ 11,800</span>
+                    </div>
+
+                    <div class="calc-row">
+                        <!-- Percentage/Tax Icon SVG -->
+                        <svg class="calc-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-5c-.83 0-1.5-.67-1.5-1.5S11.17 6 12 6s1.5.67 1.5 1.5S12.83 7.5 12 7.5z"/></svg>
+                        <span class="calc-label">GST Appreciated Benefit (3%)</span>
+                        <span class="calc-val">₹ 354</span>
+                    </div>
+
+                    <div class="calc-row total">
+                        <!-- Wallet/Bag Icon SVG -->
+                        <svg class="calc-icon" style="fill: #1E4620;" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                        <span class="calc-label">Total Settlement Value</span>
+                        <span class="calc-val">₹ 12,154</span>
+                    </div>
+                </div>
+
+                <!-- Right Card: Total Gold Accumulated -->
+                <div class="gold-balance-card">
+                    <h3 class="card-title" style="color: #B3925B;">TOTAL GOLD ACCUMULATED</h3>
+                    
+                    <div class="gold-display-area">
+                        <div class="gold-circle-badge">
+                            <!-- Custom Gold Bars Vector SVG -->
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2 22l3-6h14l3 6H2zm8-8l1.5-3h4.5l1.5 3h-7.5zm4.5-5.5L16 5h3l1.5 3.5h-6zM3 5h3L7.5 8.5H4.5L3 5z"/>
+                            </svg>
+                        </div>
+                        <div class="gold-text-info">
+                            <span class="gold-lbl">Total Weight Saved</span>
+                            <span class="gold-val">0.891 g</span>
+                        </div>
+                    </div>
+
+                    <p class="card-note">
+                        Calculation: Sum of [Installment Amount ÷ Gold Rate on Payment Day] for each of the completed installments. This weight is redeemed for showroom ornaments on scheme closure.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Table Section Header -->
+            <div class="table-title-banner">
+                8 Months Payment Details
+            </div>
+
+            <!-- 15 Months Payment Table (Split Side-by-Side) -->
+            <table class="payment-table">
+                <thead>
+                    <tr>
+                        <th style="width: 7%;">Month</th>
+                        <th style="width: 18%;">Date</th>
+                        <th style="width: 25%;">Amount Paid</th>
+                        <th style="width: 7%;">Month</th>
+                        <th style="width: 18%;">Date</th>
+                        <th style="width: 25%;">Amount Paid</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>04/06/2026</td>
+                        <td class="bold-col">₹ 400</td>
+                        <td>5</td>
+                        <td>06/06/2026</td>
+                        <td class="bold-col">₹ 1,200</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>04/06/2026</td>
+                        <td class="bold-col">₹ 5,000</td>
+                        <td>6</td>
+                        <td>07/06/2026</td>
+                        <td class="bold-col">₹ 1,200</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>04/06/2026</td>
+                        <td class="bold-col">₹ 1,000</td>
+                        <td>7</td>
+                        <td>09/06/2026</td>
+                        <td class="bold-col">₹ 1,000</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>05/06/2026</td>
+                        <td class="bold-col">₹ 1,000</td>
+                        <td>8</td>
+                        <td>27/06/2026</td>
+                        <td class="bold-col">₹ 1,000</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Bounded Signature Area -->
+        <div class="signature-container">
+            <div class="signature-inner">
+                <div class="sig-col">
+                    <div class="sig-line"></div>
+                    <span class="sig-label">Customer Signature</span>
+                </div>
+                
+                <!-- Circular Gold Wreath Seal -->
+                <div class="corporate-seal">
+                    <div class="seal-wreath">
+                        <span class="seal-monogram">VM</span>
+                    </div>
+                </div>
+
+                <div class="sig-col">
+                    <div class="sig-line"></div>
+                    <span class="sig-label">Authorised Signatory</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer terms -->
+        <div class="footer-note">
+            <p>This is a system generated statement and does not require a physical signature.</p>
+            <p class="bold">Thank you for choosing V Murugan Jewellery.</p>
+        </div>
+
+    </div>
+
+</body>
+</html>
