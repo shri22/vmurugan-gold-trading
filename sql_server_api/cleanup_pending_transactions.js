@@ -104,9 +104,9 @@ async function cleanupPendingTransactions() {
         const pool = await sql.connect(dbConfig);
         console.log('✅ Connected to database\n');
 
-        // Find PENDING transactions older than 24 hours
+        // Find PENDING transactions older than 4 hours
         const cutoffTime = new Date();
-        cutoffTime.setHours(cutoffTime.getHours() - 24);
+        cutoffTime.setHours(cutoffTime.getHours() - 4);
 
         const result = await pool.request()
             .input('cutoff', sql.DateTime, cutoffTime)
@@ -156,8 +156,17 @@ async function cleanupPendingTransactions() {
                 console.log(`   ✅ SUCCESS - Found in gateway (needs manual reconciliation)`);
                 successCount++;
             } else {
-                console.log(`   ⏳ Still PENDING in gateway`);
-                stillPendingCount++;
+                // Transaction exists in gateway but is not successful, and is older than 24 hours -> mark as FAILED
+                await pool.request()
+                    .input('txn_id', sql.VarChar(100), txn.transaction_id)
+                    .query(`
+                        UPDATE transactions
+                        SET status = 'FAILED',
+                            updated_at = GETDATE()
+                        WHERE transaction_id = @txn_id
+                    `);
+                console.log(`   ❌ FAILED - Gateway status is ${gatewayStatus.status} (expired)`);
+                expiredCount++;
             }
 
             // Small delay to avoid rate limiting

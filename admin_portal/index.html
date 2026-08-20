@@ -410,6 +410,20 @@
             background: #138496;
         }
 
+        .btn-success {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -1713,6 +1727,7 @@
                                 <button class="btn-secondary" onclick="clearCustomerFilters()">Clear</button>
                                 <button class="btn-primary" onclick="loadCustomerWiseReport()">Generate Report</button>
                                 <button class="btn-export" onclick="exportCustomerReport()">📥 Export CSV</button>
+                                <button class="btn-export" onclick="printCustomerReport()" style="background: #e65100;">📄 Print to PDF</button>
                             </div>
                         </div>
 
@@ -2189,8 +2204,27 @@
                 <br>
                 <div class="form-group">
                     <label for="closureRemarks">Closure Remarks:</label>
-                    <textarea id="closureRemarks" rows="4"
+                    <textarea id="closureRemarks" rows="2"
                         style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit;"></textarea>
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="closureOrnamentsValue">Actual Jewelry Purchase Value (₹):</label>
+                    <input type="number" id="closureOrnamentsValue" step="0.01" placeholder="Enter purchase value (Optional)"
+                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; margin-top: 5px;">
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="closureOrnamentsWeight">Total Ornament Weight Purchased (g):</label>
+                    <input type="number" id="closureOrnamentsWeight" step="0.001" placeholder="Enter ornament weight in grams (Optional)"
+                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; margin-top: 5px;">
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="closureRemainingAction">Leftover Balance Action:</label>
+                    <select id="closureRemainingAction" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; margin-top: 5px;">
+                        <option value="none">N/A / Balance offsets exactly</option>
+                        <option value="digigold">Transferred to DigiGold wallet</option>
+                        <option value="credit">Issued as Store Credit Note</option>
+                        <option value="cash">Cash Refunded in Showroom</option>
+                    </select>
                 </div>
                 <br>
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -2201,6 +2235,54 @@
                     <button onclick="confirmSchemeClose()"
                         style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
                         Close Scheme
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Balance Adjustment Modal -->
+    <div id="schemeAdjustmentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeSchemeAdjustmentModal()">&times;</span>
+            <h2 style="color: #2E7D32; margin-bottom: 20px;">Adjust Scheme Balance</h2>
+            <div id="schemeAdjustmentContent">
+                <p><strong>Scheme ID:</strong> <span id="adjSchemeIdDisplay"></span></p>
+                <p><strong>Scheme Type:</strong> <span id="adjSchemeTypeDisplay"></span></p>
+                <p><strong>Metal Type:</strong> <span id="adjMetalTypeDisplay"></span></p>
+                <p><strong>Current Weight Accumulated:</strong> <span id="adjCurrentMetalDisplay"></span> g</p>
+                <p><strong>Current Invested Capital:</strong> ₹<span id="adjCurrentInvestedDisplay"></span></p>
+                <br>
+                
+                <input type="hidden" id="adjSchemeId">
+                <input type="hidden" id="adjMetalType">
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="adjGrams" style="font-weight: 500; display: block; margin-bottom: 5px;">Add Gold/Silver Grams:</label>
+                    <input type="number" id="adjGrams" step="0.001" placeholder="Enter weight in grams (e.g. 0.050)"
+                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; margin-top: 5px;">
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="adjAmount" style="font-weight: 500; display: block; margin-bottom: 5px;">Add Equivalent Cash Value (₹) (Optional):</label>
+                    <input type="number" id="adjAmount" step="0.01" placeholder="Enter cash amount (Optional)"
+                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; margin-top: 5px;">
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="adjRemarks" style="font-weight: 500; display: block; margin-bottom: 5px;">Adjustment Remarks:</label>
+                    <textarea id="adjRemarks" rows="2" placeholder="Explain the reason for this manual credit"
+                        style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-family: inherit; resize: vertical; margin-top: 5px;"></textarea>
+                </div>
+                <br>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeSchemeAdjustmentModal()"
+                        style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button onclick="confirmSchemeAdjustment()"
+                        style="padding: 10px 20px; background: #2E7D32; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        Apply Adjustment
                     </button>
                 </div>
             </div>
@@ -3711,8 +3793,10 @@
 
         // Customer Details Functions
         let currentSchemeForClosure = null;
+        let currentActiveCustomerData = null;
 
         async function viewCustomerDetails(phone) {
+            window.lastCustomerPhoneRequested = phone;
             console.log('👤 Loading details for customer:', phone);
             const modal = document.getElementById('customerDetailsModal');
             const content = document.getElementById('customerDetailsContent');
@@ -3806,6 +3890,7 @@
 
 
         function displayCustomerDetails(data) {
+            currentActiveCustomerData = data;
             const { customer, schemes, transactions, summary } = data;
 
             const formatDate = (dateStr) => {
@@ -3916,9 +4001,22 @@
                             </div>
                             ${scheme.closure_remarks ? `<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px;"><strong>Closure Remarks:</strong> ${scheme.closure_remarks}</div>` : ''}
                             ${canClose ? `
-                                <div style="margin-top: 10px;">
+                                <div style="margin-top: 10px; display: flex; gap: 10px;">
                                     <button class="btn-danger" onclick='openSchemeClosureModal(${JSON.stringify(scheme)})'>
                                         🔒 Close Scheme
+                                    </button>
+                                    <button class="btn-info" onclick='openSchemeAdjustmentModal(${JSON.stringify(scheme)})' style="background: #1B5E20; color: white;">
+                                        ⚖️ Adjust Balance
+                                    </button>
+                                </div>
+                            ` : ''}
+                            ${scheme.status === 'COMPLETED' ? `
+                                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                                    <button class="btn-success" onclick="downloadClosureReceipt('${scheme.scheme_id}')">
+                                        📄 Download Receipt
+                                    </button>
+                                    <button class="btn-info" onclick="downloadClosureBill('${scheme.scheme_id}')">
+                                        🧾 Download Bill
                                     </button>
                                 </div>
                             ` : ''}
@@ -3984,6 +4082,9 @@
             document.getElementById('closureMetalAccumulated').textContent = (Math.round(scheme.total_metal_accumulated * 1000) / 1000).toFixed(3);
             document.getElementById('closureInstallments').textContent = scheme.completed_installments + (scheme.duration_months ? '/' + scheme.duration_months : '');
             document.getElementById('closureRemarks').value = '';
+            document.getElementById('closureOrnamentsValue').value = '';
+            document.getElementById('closureOrnamentsWeight').value = '';
+            document.getElementById('closureRemainingAction').value = 'none';
 
             document.getElementById('schemeClosureModal').style.display = 'block';
         }
@@ -3997,6 +4098,9 @@
             if (!currentSchemeForClosure) return;
 
             const remarks = document.getElementById('closureRemarks').value.trim();
+            const ornamentsValue = document.getElementById('closureOrnamentsValue').value.trim();
+            const ornamentsWeight = document.getElementById('closureOrnamentsWeight').value.trim();
+            const remainingAction = document.getElementById('closureRemainingAction').value;
 
             if (!confirm(`Are you sure you want to close scheme ${currentSchemeForClosure.scheme_id}?`)) {
                 return;
@@ -4006,7 +4110,10 @@
                 const data = await apiFetch('/schemes/' + currentSchemeForClosure.scheme_id + '/close', {
                     method: 'POST',
                     body: JSON.stringify({
-                        closure_remarks: remarks || 'Scheme closed by admin'
+                        closure_remarks: remarks || 'Scheme closed by admin',
+                        closure_ornaments_value: ornamentsValue ? parseFloat(ornamentsValue) : null,
+                        closure_ornaments_weight: ornamentsWeight ? parseFloat(ornamentsWeight) : null,
+                        closure_remaining_action: remainingAction
                     })
                 });
 
@@ -4025,16 +4132,1444 @@
             }
         }
 
+        // Scheme Manual Adjustment Functions
+        let currentSchemeForAdjustment = null;
+        
+        function openSchemeAdjustmentModal(scheme) {
+            currentSchemeForAdjustment = scheme;
+
+            document.getElementById('adjSchemeIdDisplay').textContent = scheme.scheme_id;
+            document.getElementById('adjSchemeTypeDisplay').textContent = scheme.scheme_type;
+            document.getElementById('adjMetalTypeDisplay').textContent = scheme.metal_type;
+            document.getElementById('adjCurrentMetalDisplay').textContent = (Math.round(scheme.total_metal_accumulated * 1000) / 1000).toFixed(3);
+            document.getElementById('adjCurrentInvestedDisplay').textContent = scheme.total_invested.toFixed(2);
+            
+            document.getElementById('adjSchemeId').value = scheme.scheme_id;
+            document.getElementById('adjMetalType').value = scheme.metal_type;
+            
+            // Reset input values
+            document.getElementById('adjGrams').value = '';
+            document.getElementById('adjAmount').value = '';
+            document.getElementById('adjRemarks').value = '';
+
+            document.getElementById('schemeAdjustmentModal').style.display = 'block';
+        }
+
+        function closeSchemeAdjustmentModal() {
+            document.getElementById('schemeAdjustmentModal').style.display = 'none';
+            currentSchemeForAdjustment = null;
+        }
+
+        async function confirmSchemeAdjustment() {
+            if (!currentSchemeForAdjustment) return;
+
+            const schemeId = document.getElementById('adjSchemeId').value;
+            const grams = document.getElementById('adjGrams').value.trim();
+            const amount = document.getElementById('adjAmount').value.trim();
+            const remarks = document.getElementById('adjRemarks').value.trim();
+
+            const finalGrams = parseFloat(grams) || 0;
+            const finalAmount = parseFloat(amount) || 0;
+
+            if (finalGrams === 0 && finalAmount === 0) {
+                alert('❌ Please specify a valid non-zero grams weight or cash value adjustment.');
+                return;
+            }
+
+            if (!remarks) {
+                alert('❌ Adjustment remarks are required to document the change.');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to apply this adjustment to scheme ${schemeId}?`)) {
+                return;
+            }
+
+            try {
+                const data = await apiFetch('/admin/schemes/adjust-balance', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        scheme_id: schemeId,
+                        grams: finalGrams,
+                        amount: finalAmount,
+                        remarks: remarks
+                    })
+                });
+
+                if (data.success) {
+                    alert('✅ Balance adjusted successfully!');
+                    closeSchemeAdjustmentModal();
+                    
+                    // Reload customer details to show updated balance
+                    if (window.lastCustomerPhoneRequested) {
+                        viewCustomerDetails(window.lastCustomerPhoneRequested);
+                    } else {
+                        closeCustomerDetails();
+                        loadCustomersFromFirebase();
+                    }
+                } else {
+                    alert('❌ Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('❌ Error adjusting scheme balance:', error);
+                alert('❌ Error adjusting scheme balance: ' + error.message);
+            }
+        }
+
+        function getBase64ImageFromUrl(imageUrl) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.setAttribute('crossOrigin', 'anonymous');
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    const dataURL = canvas.toDataURL('image/png');
+                    resolve(dataURL);
+                };
+                img.onerror = (error) => {
+                    reject(error);
+                };
+                img.src = imageUrl;
+            });
+        }
+
+        function downloadClosureReceipt(schemeId) {
+            printClosureDocument(schemeId, 'RECEIPT');
+        }
+
+        function downloadClosureBill(schemeId) {
+            printClosureDocument(schemeId, 'BILL');
+        }
+
+        function printClosureDocument(schemeId, docType) {
+            if (!currentActiveCustomerData) return;
+            const scheme = currentActiveCustomerData.schemes.find(s => s.scheme_id === schemeId);
+            const customer = currentActiveCustomerData.customer;
+            const isGold = (scheme.metal_type || "GOLD").toUpperCase() === "GOLD";
+
+            const invested = scheme.total_invested;
+            const schemeGst = Math.round(invested * 0.03);
+            const totalSettlementValue = invested + schemeGst;
+            
+            const ornamentsValue = scheme.closure_ornaments_value ? parseFloat(scheme.closure_ornaments_value) : invested;
+            const ornamentsWeight = scheme.closure_ornaments_weight ? parseFloat(scheme.closure_ornaments_weight) : scheme.total_metal_accumulated;
+            
+            const cgst = Math.round(ornamentsValue * 0.015 * 100) / 100;
+            const sgst = Math.round(ornamentsValue * 0.015 * 100) / 100;
+            const totalGst = cgst + sgst;
+            const totalInvoiceValue = ornamentsValue + totalGst;
+
+            let netPayable = 0;
+            let leftoverCredit = 0;
+            if (totalInvoiceValue >= totalSettlementValue) {
+                netPayable = totalInvoiceValue - totalSettlementValue;
+            } else {
+                leftoverCredit = totalSettlementValue - totalInvoiceValue;
+            }
+
+            const ratePerGram = ornamentsWeight > 0 ? (ornamentsValue / ornamentsWeight) : (isGold ? 7000 : 90);
+
+            // Build payment table rows
+            const payments = currentActiveCustomerData.transactions
+                .filter(t => t.scheme_id === scheme.scheme_id && t.status === 'SUCCESS')
+                .sort((a, b) => new Date(a.created_at || a.time) - new Date(b.created_at || b.time));
+
+            const halfCount = Math.ceil(payments.length / 2);
+            let tableRowsHtml = '';
+            for (let i = 0; i < halfCount; i++) {
+                const leftPay = payments[i];
+                const rightPay = payments[i + halfCount];
+                tableRowsHtml += `
+                    <tr>
+                        <td>${i + 1}</td>
+                        <td>${leftPay ? new Date(leftPay.created_at || leftPay.time).toLocaleDateString('en-IN') : "-"}</td>
+                        <td class="bold-col">${leftPay ? `₹ ${formatCurrency(leftPay.amount)}` : "-"}</td>
+                        <td>${rightPay ? (i + 1 + halfCount) : "-"}</td>
+                        <td>${rightPay ? new Date(rightPay.created_at || rightPay.time).toLocaleDateString('en-IN') : "-"}</td>
+                        <td class="bold-col">${rightPay ? `₹ ${formatCurrency(rightPay.amount)}` : "-"}</td>
+                    </tr>
+                `;
+            }
+
+            // Customize based on document type
+            let docTitle = "";
+            let ribbonText = "";
+            let descriptionText = "";
+            let leftCardHtml = "";
+            let rightCardHtml = "";
+            let tableHeaderTitle = "";
+
+            if (docType === 'RECEIPT') {
+                docTitle = `${scheme.metal_type || 'GOLD'} SCHEME CLOSURE`;
+                ribbonText = `${scheme.completed_installments} Months ${scheme.metal_type || 'GOLD'} Savings Scheme`;
+                descriptionText = `Thank you for being a valued member of V Murugan Jewellery Gold Savings Scheme.<br>Here are your settlement details upon successful completion of your savings plan.`;
+                
+                leftCardHtml = `
+                    <h3 class="card-title">SETTLEMENT SUMMARY</h3>
+                    <div class="calc-row">
+                        <svg class="calc-icon" viewBox="0 0 24 24"><path d="M2 17c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 21.21 2 19v-2zm0-5c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 17.21 2 15v-2zm0-5c0-2.21 4.48-4 10-4s10 1.79 10 4v2c0 2.21-4.48 4-10 4S2 13.21 2 11V9zm10-7C6.48 2 2 3.79 2 6s4.48 4 10 4 10-1.79 10-4-4.48-4-10-4z"/></svg>
+                        <span class="calc-label">Total Scheme Amount (${scheme.completed_installments} Months)</span>
+                        <span class="calc-val">₹ ${formatCurrency(invested)}</span>
+                    </div>
+                    <div class="calc-row">
+                        <svg class="calc-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm0-5c-.83 0-1.5-.67-1.5-1.5S11.17 6 12 6s1.5.67 1.5 1.5S12.83 7.5 12 7.5z"/></svg>
+                        <span class="calc-label">GST Appreciated Benefit (3%)</span>
+                        <span class="calc-val">₹ ${formatCurrency(schemeGst)}</span>
+                    </div>
+                    <div class="calc-row total">
+                        <svg class="calc-icon" style="fill: #1E4620;" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                        <span class="calc-label">Total Settlement Value</span>
+                        <span class="calc-val">₹ ${formatCurrency(totalSettlementValue)}</span>
+                    </div>
+                `;
+
+                rightCardHtml = `
+                    <h3 class="card-title" style="color: #B3925B;">TOTAL ${scheme.metal_type || 'GOLD'} ACCUMULATED</h3>
+                    <div class="gold-display-area">
+                        <div class="gold-circle-badge">
+                            <svg viewBox="0 0 24 24"><path d="M2 22l3-6h14l3 6H2zm8-8l1.5-3h4.5l1.5 3h-7.5zm4.5-5.5L16 5h3l1.5 3.5h-6zM3 5h3L7.5 8.5H4.5L3 5z"/></svg>
+                        </div>
+                        <div class="gold-text-info">
+                            <span class="gold-lbl">Total Weight Saved</span>
+                            <span class="gold-val">${ornamentsWeight.toFixed(3)} g</span>
+                        </div>
+                    </div>
+                    <p class="card-note">
+                        Calculation: Sum of [Installment Amount ÷ Gold Rate on Payment Day] for each of the completed installments. This weight is redeemed for showroom ornaments on scheme closure.
+                    </p>
+                `;
+                tableHeaderTitle = `${scheme.completed_installments} Months Payment Details`;
+            } else {
+                docTitle = "TAX INVOICE & REDEMPTION BILL";
+                ribbonText = "JEWELLERY SAVINGS SCHEME REDEMPTION RETAIL INVOICE";
+                descriptionText = "Tax retail invoice showing jewelry purchase itemization and savings scheme credit offset.";
+
+                let balanceHtml = '';
+                if (leftoverCredit > 0) {
+                    let actionText = "Leftover Credit";
+                    if (scheme.closure_remaining_action === 'digigold') actionText += " (DigiGold)";
+                    else if (scheme.closure_remaining_action === 'credit') actionText += " (Credit Note)";
+                    else if (scheme.closure_remaining_action === 'cash') actionText += " (Refunded)";
+                    
+                    balanceHtml = `
+                        <div class="calc-row total">
+                            <span class="calc-label">NET PAYABLE</span>
+                            <span class="calc-val">₹ 0.00</span>
+                        </div>
+                        <div class="calc-row" style="margin-top: 5px; font-size: 8.5px;">
+                            <span class="calc-label" style="font-weight: 500; color: #666;">${actionText}</span>
+                            <span class="calc-val" style="color: #1E4620;">₹ ${formatCurrency(leftoverCredit)}</span>
+                        </div>
+                    `;
+                } else {
+                    balanceHtml = `
+                        <div class="calc-row total">
+                            <span class="calc-label">${netPayable > 0 ? 'NET BALANCE PAYABLE' : 'NET PAYABLE (BALANCED)'}</span>
+                            <span class="calc-val">₹ ${formatCurrency(netPayable)}</span>
+                        </div>
+                    `;
+                }
+
+                leftCardHtml = `
+                    <h3 class="card-title">INVOICE SUMMARY</h3>
+                    <div class="calc-row">
+                        <span class="calc-label">Gross Ornament/Taxable Value</span>
+                        <span class="calc-val">₹ ${formatCurrency(ornamentsValue)}</span>
+                    </div>
+                    <div class="calc-row">
+                        <span class="calc-label">GST Tax (3.0% combined)</span>
+                        <span class="calc-val">₹ ${formatCurrency(totalGst)}</span>
+                    </div>
+                    <div class="calc-row">
+                        <span class="calc-label">Total Retail Invoice Value</span>
+                        <span class="calc-val">₹ ${formatCurrency(totalInvoiceValue)}</span>
+                    </div>
+                    <div class="calc-row" style="color: #c62828;">
+                        <span class="calc-label">Less: Matured Capital</span>
+                        <span class="calc-val">-₹ ${formatCurrency(invested)}</span>
+                    </div>
+                    <div class="calc-row" style="color: #c62828; margin-bottom: 5px;">
+                        <span class="calc-label">Less: Savings GST Offset</span>
+                        <span class="calc-val">-₹ ${formatCurrency(schemeGst)}</span>
+                    </div>
+                    ${balanceHtml}
+                `;
+
+                rightCardHtml = `
+                    <h3 class="card-title" style="color: #B3925B;">REDEEMED PRODUCT DETAILS</h3>
+                    <div class="calc-row" style="margin-top: 2px;">
+                        <span class="calc-label">Redeemed Weight</span>
+                        <span class="calc-val">${ornamentsWeight.toFixed(3)} grams</span>
+                    </div>
+                    <div class="calc-row">
+                        <span class="calc-label">Rate Per Gram</span>
+                        <span class="calc-val">₹ ${ratePerGram.toFixed(2)}/g</span>
+                    </div>
+                    <div class="calc-row">
+                        <span class="calc-label">HSN Code</span>
+                        <span class="calc-val">${isGold ? '7113' : '7114'}</span>
+                    </div>
+                    <div class="calc-row">
+                        <span class="calc-label">GSTIN</span>
+                        <span class="calc-val">33AAAAAVMJ1234Z5</span>
+                    </div>
+                    <p class="card-note" style="margin-top: 8px; padding-top: 6px;">
+                        BIS Hallmarked 22k Showroom Ornaments. Checked and certified for standard purity.
+                    </p>
+                `;
+                tableHeaderTitle = "INVOICE ADJUSTMENT DETAILS - SCHEME INSTALLMENTS";
+            }
+
+            const printWindow = window.open('', '_blank', 'width=850,height=1150');
+            
+            const htmlContent = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>${docTitle}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap" rel="stylesheet">
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        background-color: #ffffff;
+                        padding: 20px;
+                        display: flex;
+                        justify-content: center;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .a4-container {
+                        width: 790px;
+                        height: 1115px;
+                        background-color: #ffffff;
+                        position: relative;
+                        padding: 45px 50px;
+                        font-family: 'Montserrat', sans-serif;
+                        color: #333333;
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        border-top: 10px solid #1E4620;
+                    }
+                    .top-gold-bar {
+                        position: absolute;
+                        top: 0;
+                        right: 0;
+                        width: 30%;
+                        height: 10px;
+                        background-color: #C5A880;
+                        z-index: 20;
+                    }
+                    .header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        margin-bottom: 25px;
+                        position: relative;
+                        z-index: 10;
+                    }
+                    .logo-area {
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .logo-img {
+                        width: 170px;
+                        height: auto;
+                        margin-bottom: 2px;
+                    }
+                    .logo-tagline {
+                        font-size: 8px;
+                        font-weight: 500;
+                        color: #B3925B;
+                        letter-spacing: 3.5px;
+                        margin-top: 4px;
+                        text-transform: uppercase;
+                    }
+                    .meta-area {
+                        display: flex;
+                        flex-direction: column;
+                        width: 260px;
+                        font-size: 10.5px;
+                        color: #444444;
+                        background-color: #FAF8F5;
+                        border: 1px solid #E5DCC6;
+                        border-radius: 4px;
+                        padding: 10px 14px;
+                    }
+                    .meta-row {
+                        display: flex;
+                        align-items: center;
+                        padding: 5px 0;
+                        border-bottom: 1px solid #E5DCC6;
+                    }
+                    .meta-row:last-child {
+                        border-bottom: none;
+                    }
+                    .meta-icon {
+                        width: 14px;
+                        height: 14px;
+                        margin-right: 8px;
+                        fill: #B3925B;
+                    }
+                    .meta-label {
+                        font-weight: 500;
+                        flex: 1;
+                        color: #666666;
+                    }
+                    .meta-val {
+                        font-weight: 700;
+                        color: #111111;
+                        text-align: right;
+                    }
+                    .divider-container {
+                        position: relative;
+                        width: 100%;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        margin-bottom: 20px;
+                    }
+                    .divider-line {
+                        width: 100%;
+                        height: 1px;
+                        background-color: #C5A880;
+                    }
+                    .divider-badge {
+                        position: absolute;
+                        background: #ffffff;
+                        padding: 0 10px;
+                        display: flex;
+                        align-items: center;
+                    }
+                    .divider-badge svg {
+                        width: 12px;
+                        height: 12px;
+                        fill: #C5A880;
+                    }
+                    .section-title {
+                        font-family: 'Playfair Display', serif;
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: #1E4620;
+                        text-align: center;
+                        text-transform: uppercase;
+                        letter-spacing: 1.5px;
+                        margin-bottom: 10px;
+                    }
+                    .ribbon-banner {
+                        background-color: #1E4620;
+                        padding: 6px 30px;
+                        color: #ffffff;
+                        font-size: 10px;
+                        font-weight: 700;
+                        letter-spacing: 2px;
+                        text-transform: uppercase;
+                        text-align: center;
+                        margin: 0 auto 12px auto;
+                        border-radius: 2px;
+                        position: relative;
+                        box-shadow: 0 4px 10px rgba(30, 70, 32, 0.15);
+                    }
+                    .subtext {
+                        font-size: 10px;
+                        color: #777777;
+                        text-align: center;
+                        line-height: 1.5;
+                        margin-bottom: 25px;
+                    }
+                    .summary-cols {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 20px;
+                        margin-bottom: 30px;
+                    }
+                    .summary-card {
+                        border: 1px solid #E5DCC6;
+                        background-color: #FCFBF8;
+                        border-radius: 4px;
+                        padding: 18px 20px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                    }
+                    .card-title {
+                        font-family: 'Montserrat', sans-serif;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #1E4620;
+                        letter-spacing: 1px;
+                        margin-bottom: 15px;
+                        display: flex;
+                        align-items: center;
+                    }
+                    .card-title::before {
+                        content: "";
+                        display: inline-block;
+                        width: 5px;
+                        height: 5px;
+                        background-color: #B3925B;
+                        margin-right: 8px;
+                        transform: rotate(45deg);
+                    }
+                    .calc-row {
+                        display: flex;
+                        align-items: center;
+                        margin-bottom: 10px;
+                        font-size: 10px;
+                    }
+                    .calc-row:last-child {
+                        margin-bottom: 0;
+                        margin-top: 5px;
+                        padding-top: 10px;
+                        border-top: 1px solid #E5DCC6;
+                    }
+                    .calc-icon {
+                        width: 14px;
+                        height: 14px;
+                        margin-right: 8px;
+                        fill: #B3925B;
+                    }
+                    .calc-label {
+                        color: #555555;
+                        flex: 1;
+                    }
+                    .calc-val {
+                        font-weight: 700;
+                        color: #111111;
+                    }
+                    .calc-row.total .calc-label {
+                        font-weight: 700;
+                        color: #1E4620;
+                        font-size: 11px;
+                    }
+                    .calc-row.total .calc-val {
+                        font-size: 13px;
+                        color: #1E4620;
+                    }
+                    .gold-balance-card {
+                        border: 1px solid #C5A880;
+                        background-color: #FFFFFF;
+                        border-radius: 4px;
+                        padding: 18px 20px;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        position: relative;
+                    }
+                    .gold-display-area {
+                        display: flex;
+                        align-items: center;
+                        margin-top: 5px;
+                    }
+                    .gold-circle-badge {
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 50%;
+                        border: 1px solid #C5A880;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        margin-right: 15px;
+                        background-color: #FCFBF8;
+                    }
+                    .gold-circle-badge svg {
+                        width: 24px;
+                        height: 24px;
+                        fill: #B3925B;
+                    }
+                    .gold-text-info {
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    .gold-lbl {
+                        font-size: 9px;
+                        font-weight: 700;
+                        color: #B3925B;
+                        letter-spacing: 0.8px;
+                    }
+                    .gold-val {
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #B3925B;
+                        margin-top: 2px;
+                    }
+                    .card-note {
+                        font-size: 8px;
+                        color: #888888;
+                        line-height: 1.4;
+                        padding-top: 10px;
+                        border-top: 1px solid #F0ECE3;
+                        margin-top: 10px;
+                    }
+                    .table-title-banner {
+                        background-color: #1E4620;
+                        color: #ffffff;
+                        font-size: 9px;
+                        font-weight: 700;
+                        letter-spacing: 1.5px;
+                        text-align: center;
+                        padding: 6px;
+                        text-transform: uppercase;
+                        border-radius: 2px 2px 0 0;
+                    }
+                    .payment-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 9.5px;
+                        margin-bottom: 30px;
+                    }
+                    .payment-table th {
+                        background-color: #1E4620;
+                        color: #ffffff;
+                        font-weight: 600;
+                        padding: 8px 6px;
+                        text-align: center;
+                        border: 1px solid #143016;
+                        text-transform: uppercase;
+                        font-size: 8px;
+                        letter-spacing: 0.5px;
+                    }
+                    .payment-table td {
+                        padding: 8px 6px;
+                        text-align: center;
+                        border: 1px solid #E5DCC6;
+                        color: #444444;
+                    }
+                    .payment-table tr:nth-child(even) {
+                        background-color: #FCFBF8;
+                    }
+                    .payment-table td.bold-col {
+                        font-weight: 600;
+                        color: #111111;
+                    }
+                    .signature-container {
+                        border: 1px solid #C5A880;
+                        padding: 1px;
+                        border-radius: 4px;
+                        margin-top: auto;
+                        margin-bottom: 10px;
+                    }
+                    .signature-inner {
+                        border: 1px solid #C5A880;
+                        border-radius: 3px;
+                        padding: 15px 30px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        background-color: #FFFFFF;
+                        position: relative;
+                    }
+                    .sig-col {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        width: 150px;
+                    }
+                    .sig-line {
+                        width: 100%;
+                        height: 1px;
+                        background-color: #CCCCCC;
+                        margin-bottom: 8px;
+                    }
+                    .sig-label {
+                        font-size: 8px;
+                        font-weight: 700;
+                        color: #777777;
+                        letter-spacing: 1px;
+                        text-transform: uppercase;
+                    }
+                    .corporate-seal {
+                        width: 48px;
+                        height: 48px;
+                        border-radius: 50%;
+                        border: 1px solid #C5A880;
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        transform: translate(-50%, -50%);
+                        background-color: #FFFFFF;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        box-shadow: 0 2px 8px rgba(197, 168, 128, 0.15);
+                    }
+                    .seal-wreath {
+                        position: relative;
+                        width: 42px;
+                        height: 42px;
+                        border-radius: 50%;
+                        border: 1px dashed #C5A880;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .seal-monogram {
+                        font-family: 'Playfair Display', serif;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: #B3925B;
+                    }
+                    .footer-note {
+                        font-size: 8px;
+                        color: #888888;
+                        text-align: center;
+                        line-height: 1.6;
+                    }
+                    .footer-note .bold {
+                        font-weight: 600;
+                        color: #555555;
+                        margin-top: 3px;
+                    }
+                    @page {
+                        size: A4;
+                        margin: 0;
+                    }
+                    @media print {
+                        body {
+                            background: #ffffff;
+                            margin: 0;
+                            padding: 0;
+                        }
+                        .a4-container {
+                            box-shadow: none !important;
+                            border-top: 10px solid #1E4620 !important;
+                            margin: 0 !important;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="a4-container">
+                    <div class="top-gold-bar"></div>
+                    <div>
+                        <div class="header">
+                            <div class="logo-area">
+                                <img class="logo-img" src="${window.location.origin}/logo.png" alt="Logo">
+                                <span class="logo-tagline">Trusted Since Generations</span>
+                            </div>
+                            <div class="meta-area">
+                                <div class="meta-row">
+                                    <svg class="meta-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
+                                    <span class="meta-label">${docType === 'BILL' ? 'Invoice Date' : 'Closure Date'}</span>
+                                    <span class="meta-val">${new Date(scheme.closure_date || new Date()).toLocaleDateString('en-IN')}</span>
+                                </div>
+                                <div class="meta-row">
+                                    <svg class="meta-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                    <span class="meta-label">${docType === 'BILL' ? 'Billed To' : 'Customer Name'}</span>
+                                    <span class="meta-val">${customer.name || 'N/A'}</span>
+                                </div>
+                                <div class="meta-row">
+                                    <svg class="meta-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                                    <span class="meta-label">${docType === 'BILL' ? 'Invoice No' : 'Scheme ID'}</span>
+                                    <span class="meta-val">${docType === 'BILL' ? `INV-${scheme.scheme_id.replace('ORD_', '')}` : scheme.scheme_id}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="divider-container">
+                            <div class="divider-line"></div>
+                            <div class="divider-badge">
+                                <svg viewBox="0 0 24 24"><path d="M12 2L9 9l-7 3 7 3 3 7 3-7 7-3-7-3z"/></svg>
+                            </div>
+                        </div>
+
+                        <h1 class="section-title">${docTitle}</h1>
+                        <div class="ribbon-banner">${ribbonText}</div>
+                        <p class="subtext">${descriptionText}</p>
+
+                        <div class="summary-cols">
+                            <div class="summary-card">${leftCardHtml}</div>
+                            <div class="gold-balance-card">${rightCardHtml}</div>
+                        </div>
+
+                        <div class="table-title-banner">${tableHeaderTitle}</div>
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 7%;">Month</th>
+                                    <th style="width: 18%;">Date</th>
+                                    <th style="width: 25%;">Amount Paid</th>
+                                    <th style="width: 7%;">Month</th>
+                                    <th style="width: 18%;">Date</th>
+                                    <th style="width: 25%;">Amount Paid</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="signature-container">
+                        <div class="signature-inner">
+                            <div class="sig-col">
+                                <div class="sig-line"></div>
+                                <span class="sig-label">Customer Signature</span>
+                            </div>
+                            <div class="corporate-seal">
+                                <div class="seal-wreath">
+                                    <span class="seal-monogram">VM</span>
+                                </div>
+                            </div>
+                            <div class="sig-col">
+                                <div class="sig-line"></div>
+                                <span class="sig-label">Authorised Signatory</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="footer-note">
+                        <p>This is a system generated statement and does not require a physical signature.</p>
+                        <p class="bold">Thank you for choosing V Murugan Jewellery.</p>
+                    </div>
+                </div>
+
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                        }, 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+            `;
+
+            printWindow.document.open();
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+        }
+
+        function generateReceiptPDF(scheme, customer, logoBase64) {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                const isGold = (scheme.metal_type || "GOLD").toUpperCase() === "GOLD";
+                const primaryGreen = [46, 125, 50]; // Corporate green
+                const accentGold = [179, 139, 64];  // Accent gold
+                const lightBgColor = [252, 250, 246]; // Warm light cream background
+
+                // 1. Top Border stripes
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(0, 0, 210, 3.5, 'F');
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.rect(147, 0, 63, 3.5, 'F');
+
+                // 2. Brand Header (Logo on Left)
+                if (logoBase64) {
+                    doc.addImage(logoBase64, 'PNG', 14, 15, 52, 16);
+                } else {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(18);
+                    doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                    doc.text("V MURUGAN JEWELLERY", 14, 23);
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                    doc.text("TRUSTED SINCE GENERATIONS", 14, 28);
+                }
+
+                // 3. Boxed Metadata Frame on Right
+                const infoX = 135;
+                const infoY = 11;
+                
+                doc.setDrawColor(229, 220, 198); // #E5DCC6
+                doc.setFillColor(250, 248, 245); // #FAF8F5
+                doc.setLineWidth(0.3);
+                doc.roundedRect(infoX, infoY, 61, 23, 1, 1, "FD");
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(120);
+                doc.setFont("helvetica", "normal");
+
+                // Row 1: Closure Date
+                doc.text("Closure Date", infoX + 4, infoY + 6);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(new Date(scheme.closure_date || new Date()).toLocaleDateString('en-IN'), infoX + 57, infoY + 6, { align: "right" });
+
+                // Row 2: Customer Name
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(120);
+                doc.text("Customer", infoX + 4, infoY + 13);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(customer.name || 'N/A', infoX + 57, infoY + 13, { align: "right" });
+
+                // Row 3: Scheme ID
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(120);
+                doc.text("Scheme ID", infoX + 4, infoY + 20);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(scheme.scheme_id, infoX + 57, infoY + 20, { align: "right" });
+
+                // Horizontal Separator under Header
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.5);
+                doc.line(14, 39, 196, 39);
+
+                // Center leaf graphic (vector diamond/circles representation)
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(105, 39, 0.8, 'F');
+                doc.circle(102, 39, 0.5, 'F');
+                doc.circle(108, 39, 0.5, 'F');
+
+                // 4. Main Section Title
+                doc.setFont("times", "bold");
+                doc.setFontSize(20);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text(`${scheme.metal_type || 'GOLD'} SCHEME CLOSURE`, 105, 49, { align: "center" });
+
+                // 5. Centered Ribbon Badge
+                const ribbonW = 90;
+                const ribbonH = 6;
+                const ribbonX = 105 - (ribbonW / 2);
+                const ribbonY = 53;
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(ribbonX, ribbonY, ribbonW, ribbonH, 'F');
+                // Ribbon left/right tails pointing inward
+                doc.triangle(ribbonX, ribbonY, ribbonX - 2.5, ribbonY + (ribbonH / 2), ribbonX, ribbonY + ribbonH, 'F');
+                doc.triangle(ribbonX + ribbonW, ribbonY, ribbonX + ribbonW + 2.5, ribbonY + (ribbonH / 2), ribbonX + ribbonW, ribbonY + ribbonH, 'F');
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(255, 255, 255);
+                const durationText = scheme.duration_months ? `${scheme.duration_months} MONTHS ` : '';
+                doc.text(`${durationText}${scheme.metal_type || 'GOLD'} SAVINGS SCHEME`, 105, ribbonY + 4.2, { align: "center" });
+
+                // Subtitle
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8.5);
+                doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.text("✦ SETTLEMENT SUMMARY", 20, colY + 6);
+
+                const invested = scheme.total_invested;
+                const gst = Math.round(invested * 0.03); // Legal 3% GST on Gold redemptions
+                const totalSettlementValue = invested + gst;
+                const weight = scheme.total_metal_accumulated;
+
+                // Coins Icon (Vector ellipse stack)
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.ellipse(23, colY + 14, 2.5, 0.7, 'F');
+                doc.ellipse(23, colY + 16, 2.5, 0.7, 'F');
+                doc.ellipse(23, colY + 18, 2.5, 0.7, 'F');
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(80);
+                doc.text(`Total Scheme Amount (${scheme.completed_installments} Months)`, 28, colY + 16);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(`Rs. ${formatCurrency(invested)}`, 102, colY + 16, { align: "right" });
+
+                // Tax Icon (Vector sheet lines)
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(21.5, colY + 21, 3, 4, 'FD');
+                doc.line(22.5, colY + 22.5, 23.5, colY + 22.5);
+                doc.line(22.5, colY + 23.5, 23.5, colY + 23.5);
+
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(80);
+                doc.text("GST Appreciated Benefit (3%)", 28, colY + 24);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(`Rs. ${formatCurrency(gst)}`, 102, colY + 24, { align: "right" });
+
+                // Bag Icon (Vector money bag shape)
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(23, colY + 32, 1.8, 'F');
+                doc.triangle(21.5, colY + 30.5, 24.5, colY + 30.5, 23, 29, 'F');
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.text("Total Settlement Value (Scheme + GST)", 28, colY + 32);
+                doc.text(`Rs. ${formatCurrency(totalSettlementValue)}`, 102, colY + 32, { align: "right" });
+
+                // Right Container (Total Gold Accumulated Box)
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setFillColor(255, 255, 255);
+                doc.roundedRect(112, colY, 84, colH, 1.5, 1.5, "FD");
+
+                // Gold Wreath/Bars Circular Frame
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.4);
+                doc.circle(126, colY + 20, 10, 'D');
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                // Gold bar 1
+                doc.triangle(121, colY + 23, 125, colY + 23, 123, colY + 18, 'F');
+                // Gold bar 2
+                doc.triangle(127, colY + 23, 131, colY + 23, 129, colY + 18, 'F');
+                // Gold bar 3 (top center)
+                doc.triangle(124, colY + 19, 128, colY + 19, 126, colY + 14, 'F');
+
+                // Balance text elements
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text(`TOTAL ${scheme.metal_type || 'GOLD'} ACCUMULATED`, 140, colY + 14);
+
+                doc.setFontSize(16);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text(`${weight.toFixed(3)} g`, 140, colY + 25);
+
+                // Redemption note text inside right box with calculation formula
+                doc.setDrawColor(240);
+                doc.line(116, colY + 33, 192, colY + 33);
+                doc.setFontSize(6.5);
+                doc.setTextColor(100);
+                doc.text("Formula: Sum of [Installment / Gold Rate on Payment Day]", 118, colY + 37);
+
+                // Association line
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.line(14, 118, 40, 118);
+                doc.line(170, 118, 196, 118);
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(7.5);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("Thank you for your trust and continued association with V Murugan Jewellery.", 105, 119, { align: "center" });
+
+                // 7. Split Installments Table Layout (Split into left and right halves)
+                const payments = currentActiveCustomerData.transactions
+                    .filter(t => t.scheme_id === scheme.scheme_id && t.status === 'SUCCESS')
+                    .sort((a, b) => new Date(a.created_at || a.time) - new Date(b.created_at || b.time));
+
+                const halfCount = Math.ceil(payments.length / 2);
+                const tableBody = [];
+                for (let i = 0; i < halfCount; i++) {
+                    const leftPay = payments[i];
+                    const rightPay = payments[i + halfCount];
+                    
+                    const row = [
+                        (i + 1).toString(),
+                        leftPay ? new Date(leftPay.created_at || leftPay.time).toLocaleDateString('en-IN') : "-",
+                        leftPay ? `Rs. ${formatCurrency(leftPay.amount)}` : "-",
+                        rightPay ? (i + 1 + halfCount).toString() : "-",
+                        rightPay ? new Date(rightPay.created_at || rightPay.time).toLocaleDateString('en-IN') : "-",
+                        rightPay ? `Rs. ${formatCurrency(rightPay.amount)}` : "-"
+                    ];
+                    tableBody.push(row);
+                }
+
+                // Table Title Header Band
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(14, 124, 182, 6, "F");
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(255, 255, 255);
+                doc.text(`${scheme.completed_installments} MONTHS PAYMENT DETAILS`, 105, 128.2, { align: "center" });
+
+                doc.autoTable({
+                    startY: 130,
+                    head: [['Month', 'Date', 'Amount (Rs)', 'Month', 'Date', 'Amount (Rs)']],
+                    body: tableBody,
+                    theme: 'grid',
+                    headStyles: { fillColor: [46, 125, 50], halign: 'center', fontSize: 8.5 },
+                    bodyStyles: { fontSize: 8, halign: 'center' },
+                    styles: { cellPadding: 3.5 },
+                    columnStyles: {
+                        0: { width: 15 },
+                        1: { width: 40 },
+                        2: { width: 36 },
+                        3: { width: 15 },
+                        4: { width: 40 },
+                        5: { width: 36 }
+                    }
+                });
+
+                const finalY = doc.lastAutoTable.finalY + 12;
+
+                // 8. Signatures Bounded Box with double borders
+                const sigBoxY = finalY;
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.4);
+                // Double border boxes
+                doc.roundedRect(14, sigBoxY, 182, 22, 1, 1, "D");
+                doc.roundedRect(14.8, sigBoxY + 0.8, 180.4, 20.4, 0.8, 0.8, "D");
+
+                // Customer signature side
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7.5);
+                doc.setTextColor(100);
+                doc.text("CUSTOMER SIGNATURE", 50, sigBoxY + 17.5, { align: "center" });
+
+                // Divider line inside signature box
+                doc.setDrawColor(220);
+                doc.line(105, sigBoxY + 1, 105, sigBoxY + 21);
+
+                // Authorised signature side
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(100);
+                doc.text("AUTHORISED SIGNATORY", 160, sigBoxY + 17.5, { align: "center" });
+
+                // Gold Seal in the middle
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(105, sigBoxY + 11, 7, 'F');
+                doc.setFillColor(255, 255, 255);
+                doc.circle(105, sigBoxY + 11, 6.4, 'F');
+                doc.setFont("times", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("M", 105, sigBoxY + 14.5, { align: "center" });
+
+                // Footer statement
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.setTextColor(120);
+                doc.text("This is a system generated statement and does not require a physical signature.", 105, sigBoxY + 28, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text("Thank you for choosing V Murugan Jewellery.", 105, sigBoxY + 32, { align: "center" });
+
+                doc.save(`closure-receipt-${scheme.scheme_id}.pdf`);
+            } catch (error) {
+                console.error("PDF Receipt generation failed:", error);
+                alert("Failed to generate PDF Receipt");
+            }
+        }
+
+        function generateBillPDF(scheme, customer, logoBase64) {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                const isGold = (scheme.metal_type || "GOLD").toUpperCase() === "GOLD";
+                const primaryGreen = [46, 125, 50]; // Corporate green
+                const accentGold = [179, 139, 64];  // Accent gold
+                const lightBgColor = [252, 250, 246];
+
+                // 1. Top Border stripes
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(0, 0, 210, 3.5, 'F');
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.rect(147, 0, 63, 3.5, 'F');
+
+                // 2. Brand Header (Logo on Left)
+                if (logoBase64) {
+                    doc.addImage(logoBase64, 'PNG', 14, 15, 52, 16);
+                } else {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(18);
+                    doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                    doc.text("V MURUGAN JEWELLERY", 14, 23);
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(8.5);
+                    doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                    doc.text("TRUSTED SINCE GENERATIONS", 14, 28);
+                }
+
+                // 3. Boxed Metadata Frame on Right
+                const infoX = 135;
+                const infoY = 11;
+                
+                doc.setDrawColor(229, 220, 198); // #E5DCC6
+                doc.setFillColor(250, 248, 245); // #FAF8F5
+                doc.setLineWidth(0.3);
+                doc.roundedRect(infoX, infoY, 61, 23, 1, 1, "FD");
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(120);
+                doc.setFont("helvetica", "normal");
+
+                // Row 1: Invoice Date
+                doc.text("Invoice Date", infoX + 4, infoY + 6);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(new Date(scheme.closure_date || new Date()).toLocaleDateString('en-IN'), infoX + 57, infoY + 6, { align: "right" });
+
+                // Row 2: Customer Name (Billed To)
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(120);
+                doc.text("Billed To", infoX + 4, infoY + 13);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(customer.name || 'N/A', infoX + 57, infoY + 13, { align: "right" });
+
+                // Row 3: Invoice No
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(120);
+                doc.text("Invoice No", infoX + 4, infoY + 20);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(`INV-${scheme.scheme_id.replace('ORD_', '')}`, infoX + 57, infoY + 20, { align: "right" });
+
+                // Horizontal Separator
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.5);
+                doc.line(14, 39, 196, 39);
+
+                // Center leaf graphic
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(105, 39, 0.8, 'F');
+                doc.circle(102, 39, 0.5, 'F');
+                doc.circle(108, 39, 0.5, 'F');
+
+                // 4. Main Section Title
+                doc.setFont("times", "bold");
+                doc.setFontSize(20);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("TAX INVOICE & REDEMPTION BILL", 105, 49, { align: "center" });
+
+                // Subtitle Ribbon
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(50, 53, 110, 6, 'F');
+                doc.triangle(50, 53, 47.5, 56, 50, 59, 'F');
+                doc.triangle(160, 53, 162.5, 56, 160, 59, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(255, 255, 255);
+                doc.text("JEWELLERY SAVINGS SCHEME REDEMPTION RETAIL INVOICE", 105, 57.2, { align: "center" });
+
+                // Description
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.setTextColor(100);
+                doc.text("Tax retail invoice showing jewelry purchase itemization and savings scheme credit offset.", 105, 67, { align: "center" });
+
+                // 5. Two-Column Detailed Info & Calculations Layout
+                const colY = 72;
+                const colH = 40;
+
+                // Left Container (Invoice Summary / GST adjustments)
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.4);
+                doc.setFillColor(lightBgColor[0], lightBgColor[1], lightBgColor[2]);
+                doc.roundedRect(14, colY, 94, colH, 1.5, 1.5, "FD");
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9);
+                doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.text("✦ INVOICE SUMMARY", 20, colY + 6);
+
+                const invested = scheme.total_invested;
+                const schemeGst = Math.round(invested * 0.03); // Matured 3% GST savings benefit
+                const schemeCreditApplied = invested + schemeGst; // Matured scheme credit offset value
+
+                // Gross metal ornaments value (either actual inputted value or defaults to scheme value)
+                const ornamentsValue = scheme.closure_ornaments_value ? parseFloat(scheme.closure_ornaments_value) : invested;
+                const ornamentsWeight = scheme.closure_ornaments_weight ? parseFloat(scheme.closure_ornaments_weight) : scheme.total_metal_accumulated;
+
+                const cgst = Math.round(ornamentsValue * 0.015 * 100) / 100;
+                const sgst = Math.round(ornamentsValue * 0.015 * 100) / 100;
+                const totalGst = cgst + sgst;
+                const totalInvoiceValue = ornamentsValue + totalGst;
+
+                let netPayable = 0;
+                let leftoverCredit = 0;
+
+                if (totalInvoiceValue >= schemeCreditApplied) {
+                    netPayable = totalInvoiceValue - schemeCreditApplied;
+                    leftoverCredit = 0;
+                } else {
+                    netPayable = 0;
+                    leftoverCredit = schemeCreditApplied - totalInvoiceValue;
+                }
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(80);
+                doc.setFont("helvetica", "normal");
+                doc.text("Gross Ornament/Taxable Value:", 20, colY + 11);
+                doc.text("GST Tax (3.0% combined):", 20, colY + 16);
+                doc.text("Total Retail Invoice Value:", 20, colY + 21);
+                doc.text("Less: Scheme Matured Capital:", 20, colY + 26);
+                doc.text("Less: Savings GST Offset:", 20, colY + 31);
+
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(0);
+                doc.text(`Rs. ${formatCurrency(ornamentsValue)}`, 102, colY + 11, { align: "right" });
+                doc.text(`Rs. ${formatCurrency(totalGst)}`, 102, colY + 16, { align: "right" });
+                doc.text(`Rs. ${formatCurrency(totalInvoiceValue)}`, 102, colY + 21, { align: "right" });
+                doc.text(`Rs. -${formatCurrency(invested)}`, 102, colY + 26, { align: "right" });
+                doc.text(`Rs. -${formatCurrency(schemeGst)}`, 102, colY + 31, { align: "right" });
+
+                doc.setDrawColor(210);
+                doc.line(18, colY + 33, 102, colY + 33);
+
+                doc.setFontSize(8.5);
+                if (leftoverCredit > 0) {
+                    doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                    doc.text("NET PAYABLE:", 20, colY + 36);
+                    doc.text("Rs. 0.00", 102, colY + 36, { align: "right" });
+                    
+                    let actionText = "Leftover Credit";
+                    if (scheme.closure_remaining_action === 'digigold') actionText += " (DigiGold)";
+                    else if (scheme.closure_remaining_action === 'credit') actionText += " (Credit Note)";
+                    else if (scheme.closure_remaining_action === 'cash') actionText += " (Refunded)";
+                    
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(6.5);
+                    doc.text(actionText + ":", 20, colY + 40);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(`Rs. ${formatCurrency(leftoverCredit)}`, 102, colY + 40, { align: "right" });
+                } else {
+                    doc.setTextColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                    doc.text(netPayable > 0 ? "NET BALANCE PAYABLE:" : "NET PAYABLE (BALANCED):", 20, colY + 36);
+                    doc.text(`Rs. ${formatCurrency(netPayable)}`, 102, colY + 36, { align: "right" });
+                }
+
+                // Right Container (Product & Rate Details)
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setFillColor(255, 255, 255);
+                doc.roundedRect(112, colY, 84, colH, 1.5, 1.5, "FD");
+
+                // Circular gold seal frame
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(126, colY + 20, 10, 'D');
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.triangle(121, colY + 23, 125, colY + 23, 123, colY + 18, 'F');
+                doc.triangle(127, colY + 23, 131, colY + 23, 129, colY + 18, 'F');
+                doc.triangle(124, colY + 19, 128, colY + 19, 126, colY + 14, 'F');
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("REDEEMED PRODUCT DETAILS", 140, colY + 12);
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(0);
+                doc.text(`Weight: ${ornamentsWeight.toFixed(3)} grams`, 140, colY + 18);
+                const ratePerGram = ornamentsWeight > 0 ? (ornamentsValue / ornamentsWeight) : (isGold ? 7000 : 90);
+                doc.text(`Rate: Rs. ${ratePerGram.toFixed(2)}/gram`, 140, colY + 22);
+                doc.text(`HSN Code: ${isGold ? "7113" : "7114"}`, 140, colY + 26);
+                doc.text(`GSTIN: 33AAAAAVMJ1234Z5`, 140, colY + 30);
+
+                doc.setDrawColor(240);
+                doc.line(116, colY + 33, 192, colY + 33);
+                doc.setFontSize(7);
+                doc.setTextColor(100);
+                doc.text("BIS Hallmarked 22k Showroom Ornaments.", 118, colY + 37);
+
+                // Association line
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.line(14, 118, 40, 118);
+                doc.line(170, 118, 196, 118);
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(7.5);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("Thank you for your trust and continued association with V Murugan Jewellery.", 105, 119, { align: "center" });
+
+                // 6. Split Payment Details Table
+                const payments = currentActiveCustomerData.transactions
+                    .filter(t => t.scheme_id === scheme.scheme_id && t.status === 'SUCCESS')
+                    .sort((a, b) => new Date(a.created_at || a.time) - new Date(b.created_at || b.time));
+
+                const halfCount = Math.ceil(payments.length / 2);
+                const tableBody = [];
+                for (let i = 0; i < halfCount; i++) {
+                    const leftPay = payments[i];
+                    const rightPay = payments[i + halfCount];
+                    
+                    const row = [
+                        (i + 1).toString(),
+                        leftPay ? new Date(leftPay.created_at || leftPay.time).toLocaleDateString('en-IN') : "-",
+                        leftPay ? `Rs. ${formatCurrency(leftPay.amount)}` : "-",
+                        rightPay ? (i + 1 + halfCount).toString() : "-",
+                        rightPay ? new Date(rightPay.created_at || rightPay.time).toLocaleDateString('en-IN') : "-",
+                        rightPay ? `Rs. ${formatCurrency(rightPay.amount)}` : "-"
+                    ];
+                    tableBody.push(row);
+                }
+
+                // Table Title Header Band
+                doc.setFillColor(primaryGreen[0], primaryGreen[1], primaryGreen[2]);
+                doc.rect(14, 124, 182, 6, "F");
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8.5);
+                doc.setTextColor(255, 255, 255);
+                doc.text("INVOICE ADJUSTMENT DETAILS - SCHEME INSTALLMENTS", 105, 128.2, { align: "center" });
+
+                doc.autoTable({
+                    startY: 130,
+                    head: [['Month', 'Date', 'Amount (Rs)', 'Month', 'Date', 'Amount (Rs)']],
+                    body: tableBody,
+                    theme: 'grid',
+                    headStyles: { fillColor: [46, 125, 50], halign: 'center', fontSize: 8.5 },
+                    bodyStyles: { fontSize: 8, halign: 'center' },
+                    styles: { cellPadding: 3.5 },
+                    columnStyles: {
+                        0: { width: 15 },
+                        1: { width: 40 },
+                        2: { width: 36 },
+                        3: { width: 15 },
+                        4: { width: 40 },
+                        5: { width: 36 }
+                    }
+                });
+
+                const finalY = doc.lastAutoTable.finalY + 12;
+
+                // 7. Bounded double-border signatures container
+                const sigBoxY = finalY;
+                doc.setDrawColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.setLineWidth(0.4);
+                doc.roundedRect(14, sigBoxY, 182, 22, 1, 1, "D");
+                doc.roundedRect(14.8, sigBoxY + 0.8, 180.4, 20.4, 0.8, 0.8, "D");
+
+                // Customer signature side
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(7.5);
+                doc.setTextColor(100);
+                doc.text("CUSTOMER SIGNATURE", 50, sigBoxY + 17.5, { align: "center" });
+
+                // Divider line inside signature box
+                doc.setDrawColor(220);
+                doc.line(105, sigBoxY + 1, 105, sigBoxY + 21);
+
+                // Authorised signature side
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(100);
+                doc.text("FOR V MURUGAN JEWELLERY", 160, sigBoxY + 17.5, { align: "center" });
+
+                // Gold Seal in the middle
+                doc.setFillColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.circle(105, sigBoxY + 11, 7, 'F');
+                doc.setFillColor(255, 255, 255);
+                doc.circle(105, sigBoxY + 11, 6.4, 'F');
+                doc.setFont("times", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(accentGold[0], accentGold[1], accentGold[2]);
+                doc.text("M", 105, sigBoxY + 14.5, { align: "center" });
+
+                // Footer statement
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.setTextColor(120);
+                doc.text("This is a system generated statement and does not require a physical signature.", 105, sigBoxY + 28, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text("Thank you for choosing V Murugan Jewellery.", 105, sigBoxY + 32, { align: "center" });
+
+                doc.save(`redemption-bill-${scheme.scheme_id}.pdf`);
+            } catch (error) {
+                console.error("PDF Bill generation failed:", error);
+                alert("Failed to generate PDF Bill");
+            }
+        }
+
         // Close modals when clicking outside
         window.onclick = function (event) {
             const customerModal = document.getElementById('customerDetailsModal');
             const closureModal = document.getElementById('schemeClosureModal');
+            const adjustmentModal = document.getElementById('schemeAdjustmentModal');
 
             if (event.target == customerModal) {
                 closeCustomerDetails();
             }
             if (event.target == closureModal) {
                 closeSchemeClosureModal();
+            }
+            if (event.target == adjustmentModal) {
+                closeSchemeAdjustmentModal();
             }
         }
 
@@ -4471,6 +6006,7 @@
                 const data = await apiFetch(endpoint);
 
                 if (data.success) {
+                    currentActiveCustomerData = data;
                     const { customer, schemes, transactions } = data;
 
                     let html = `
@@ -4508,7 +6044,7 @@
                             <h4>Schemes (${schemes.length})</h4>
                             <table class="report-table">
                                 <thead>
-                                    <tr><th>Scheme ID</th><th>Type</th><th>Status</th><th>Monthly</th><th>Invested</th><th>Metal</th><th>Installments</th></tr>
+                                    <tr><th>Scheme ID</th><th>Type</th><th>Status</th><th>Monthly</th><th>Invested</th><th>Metal</th><th>Installments</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
                     `;
@@ -4522,8 +6058,69 @@
                             <td>₹${formatCurrency(scheme.total_invested)}</td>
                             <td>${formatGrams(scheme.total_metal_accumulated)} g</td>
                             <td>${scheme.completed_installments}${scheme.duration_months ? '/' + scheme.duration_months : ''}</td>
+                            <td>
+                                ${scheme.status === 'COMPLETED' ? `
+                                    <button class="btn-success" style="padding: 2px 6px; font-size: 11px;" onclick="downloadClosureReceipt('${scheme.scheme_id}')" title="Download Receipt">📄 Receipt</button>
+                                    <button class="btn-info" style="padding: 2px 6px; font-size: 11px; margin-left: 5px;" onclick="downloadClosureBill('${scheme.scheme_id}')" title="Download Bill">🧾 Bill</button>
+                                ` : 'N/A'}
+                            </td>
                         </tr>`;
                     });
+
+                    html += `</tbody></table></div>`;
+
+                    // Render Transaction History (detailed)
+                    html += `
+                        <div class="report-table-container" style="margin-top: 30px;">
+                            <h4>Transaction History (${transactions.length})</h4>
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Transaction ID</th>
+                                        <th>Scheme ID</th>
+                                        <th>Amount</th>
+                                        <th>Metal</th>
+                                        <th>Grams</th>
+                                        <th>Rate</th>
+                                        <th>Status</th>
+                                        <th>Credited</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    if (transactions && transactions.length > 0) {
+                        transactions.forEach(txn => {
+                            const statusClass = txn.status === 'SUCCESS' ? 'status-verified' : 'status-pending';
+                            const grams = txn.metal_type === 'GOLD' ? (txn.gold_grams || 0) : (txn.silver_grams || 0);
+                            const rate = txn.metal_type === 'GOLD' ? (txn.gold_price_per_gram || 0) : (txn.silver_price_per_gram || 0);
+                            
+                            const isCredited = txn.is_credited === true || txn.is_credited === 1 || txn.is_credited === '1';
+                            let creditBadge = '';
+                            if (txn.status === 'SUCCESS') {
+                                creditBadge = isCredited 
+                                    ? '<span class="status-badge status-active">Yes</span>' 
+                                    : '<span class="status-badge status-cancelled">No</span>';
+                            } else {
+                                creditBadge = '<span style="color: #999;">-</span>';
+                            }
+
+                            html += `<tr>
+                                <td>${formatDate(txn.created_at)}</td>
+                                <td><code>${txn.transaction_id}</code></td>
+                                <td>${txn.scheme_id || 'None'}</td>
+                                <td>₹${formatCurrency(txn.amount)}</td>
+                                <td>${txn.metal_type}</td>
+                                <td>${formatGrams(grams)} g</td>
+                                <td>₹${formatCurrency(rate)}</td>
+                                <td><span class="status-badge ${statusClass}">${txn.status}</span></td>
+                                <td>${creditBadge}</td>
+                            </tr>`;
+                        });
+                    } else {
+                        html += `<tr><td colspan="9" style="text-align: center; padding: 15px;">No transactions found</td></tr>`;
+                    }
 
                     html += `</tbody></table></div>`;
                     contentDiv.innerHTML = html;
@@ -4588,6 +6185,163 @@
                 console.error('Export error:', error);
                 alert('Failed to export CSV');
             }
+        }
+
+        function printCustomerReport() {
+            const content = document.getElementById('customerReportContent').innerHTML;
+            if (!content || content.includes('Enter Customer ID or Phone')) {
+                alert('Please generate the report first before printing.');
+                return;
+            }
+            
+            // Create a print-friendly window
+            const printWindow = window.open('', '_blank', 'width=900,height=800');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Customer Report</title>
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                            color: #333;
+                            padding: 20px;
+                            line-height: 1.5;
+                        }
+                        h3, h4 {
+                            color: #1a237e;
+                            margin-top: 20px;
+                            margin-bottom: 10px;
+                            border-bottom: 2px solid #e0e0e0;
+                            padding-bottom: 5px;
+                        }
+                        /* Summary Cards styling for print */
+                        .summary-cards {
+                            display: flex;
+                            gap: 15px;
+                            margin-bottom: 25px;
+                            flex-wrap: wrap;
+                        }
+                        .summary-card {
+                            flex: 1;
+                            min-width: 150px;
+                            border: 1px solid #ddd;
+                            border-radius: 6px;
+                            padding: 12px;
+                            background-color: #f8f9fa;
+                        }
+                        .summary-card h4 {
+                            margin: 0 0 6px 0;
+                            font-size: 12px;
+                            color: #666;
+                            text-transform: uppercase;
+                            border-bottom: none;
+                            padding-bottom: 0;
+                        }
+                        .summary-card .value {
+                            font-size: 18px;
+                            font-weight: bold;
+                            color: #1a237e;
+                        }
+                        .summary-card .sub-value {
+                            font-size: 11px;
+                            color: #888;
+                        }
+                        /* Details section styling */
+                        .detail-section {
+                            margin-bottom: 25px;
+                            border: 1px solid #ddd;
+                            border-radius: 6px;
+                            padding: 15px;
+                        }
+                        .detail-row {
+                            display: flex;
+                            margin-bottom: 8px;
+                        }
+                        .detail-label {
+                            font-weight: bold;
+                            width: 150px;
+                            color: #555;
+                        }
+                        .detail-value {
+                            flex: 1;
+                        }
+                        /* Report Table styling */
+                        .report-table-container {
+                            margin-bottom: 30px;
+                        }
+                        .report-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 10px;
+                            font-size: 13px;
+                        }
+                        .report-table th, .report-table td {
+                            border: 1px solid #ddd;
+                            padding: 8px 10px;
+                            text-align: left;
+                        }
+                        .report-table th {
+                            background-color: #f1f3f5;
+                            font-weight: bold;
+                            color: #495057;
+                        }
+                        .report-table tr:nth-child(even) {
+                            background-color: #f8f9fa;
+                        }
+                        .status-badge {
+                            display: inline-block;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-size: 11px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                        }
+                        .status-active, .status-verified {
+                            background-color: #e8f5e9;
+                            color: #2e7d32;
+                        }
+                        .status-cancelled {
+                            background-color: #ffebee;
+                            color: #c62828;
+                        }
+                        .status-pending {
+                            background-color: #fff3e0;
+                            color: #ef6c00;
+                        }
+                        code {
+                            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+                            font-size: 11px;
+                            background-color: #f1f3f5;
+                            padding: 2px 4px;
+                            border-radius: 3px;
+                        }
+                        @media print {
+                            body {
+                                padding: 0;
+                            }
+                            button {
+                                display: none;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0; color: #1a237e;">VMURUGAN JEWELLERY - CUSTOMER REPORT</h2>
+                        <button onclick="window.print();" style="padding: 8px 15px; background-color: #1a237e; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🖨️ Print / Save as PDF</button>
+                    </div>
+                    <div>${content}</div>
+                    \<script\>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                            }, 500);
+                        };
+                    <\/script\>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
         }
 
         // Transaction-wise Report

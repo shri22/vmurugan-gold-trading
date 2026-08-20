@@ -30,6 +30,7 @@ try {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Nginx)
 const PORT = process.env.PORT || 3001;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 
@@ -357,6 +358,122 @@ async function verifySchemeOwnership(req, res, next) {
     next();
   } catch (error) {
     writeServerLog(`❌ Scheme ownership verification error: ${error.message}`, 'security');
+    return res.status(500).json({
+      success: false,
+      error: 'Verification error',
+      message: error.message
+    });
+  }
+}
+
+// Middleware: Authenticate Admin OR Customer
+function authenticateAdminOrCustomer(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    const adminToken = req.headers['admin-token'];
+
+    // 1. Try JWT authentication (can be either customer or admin)
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const decoded = verifyAdminToken(token); // Uses JWT_SECRET internally
+
+      if (decoded) {
+        if (decoded.role === 'admin') {
+          req.admin = decoded;
+          req.isAdmin = true;
+          console.log('✅ Authenticated as Admin via JWT');
+          return next();
+        } else if (decoded.role === 'customer') {
+          req.customer = decoded;
+          req.isAdmin = false;
+          console.log('✅ Authenticated as Customer via JWT:', decoded.customer_id);
+          return next();
+        }
+      }
+    }
+
+    // 2. Try static admin-token header (fallback/legacy)
+    if (adminToken === ADMIN_TOKEN) {
+      req.admin = { username: 'admin', role: 'admin', legacy: true };
+      req.isAdmin = true;
+      console.log('✅ Authenticated as Admin via static token');
+      return next();
+    }
+
+    // No valid authentication found
+    writeServerLog(`🚫 Unauthorized access attempt to close scheme from IP: ${req.ip}`, 'security');
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Invalid or missing credentials. Authentication required.'
+    });
+  } catch (error) {
+    writeServerLog(`❌ Admin/Customer authentication error: ${error.message}`, 'security');
+    return res.status(500).json({
+      success: false,
+      error: 'Authentication error',
+      message: error.message
+    });
+  }
+}
+
+// Middleware: Verify Scheme Ownership OR Admin Permission
+async function verifySchemeOwnershipOrAdmin(req, res, next) {
+  try {
+    const { scheme_id } = req.params;
+
+    // If authenticated as admin, bypass ownership checks
+    if (req.isAdmin) {
+      const request = pool.request();
+      request.input('scheme_id', sql.NVarChar, scheme_id);
+
+      const result = await request.query(`
+        SELECT * FROM schemes WHERE scheme_id = @scheme_id
+      `);
+
+      if (result.recordset.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Not Found',
+          message: 'Scheme not found'
+        });
+      }
+
+      req.scheme = result.recordset[0];
+      return next();
+    }
+
+    // Otherwise, must be a customer who owns the scheme
+    if (!req.customer || !req.customer.customer_id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      });
+    }
+
+    const request = pool.request();
+    request.input('scheme_id', sql.NVarChar, scheme_id);
+    request.input('customer_id', sql.NVarChar, req.customer.customer_id);
+
+    const result = await request.query(`
+      SELECT * FROM schemes 
+      WHERE scheme_id = @scheme_id AND customer_id = @customer_id
+    `);
+
+    if (result.recordset.length === 0) {
+      writeServerLog(`🚫 Unauthorized scheme access attempt: ${req.customer.customer_id} tried to access ${scheme_id}`, 'security');
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Scheme not found or you do not have permission to access it'
+      });
+    }
+
+    req.scheme = result.recordset[0];
+    next();
+  } catch (error) {
+    writeServerLog(`❌ Scheme ownership/admin verification error: ${error.message}`, 'security');
     return res.status(500).json({
       success: false,
       error: 'Verification error',
@@ -1487,6 +1604,33 @@ async function createTablesIfNotExist() {
       END
     `);
 
+    // Add closure_ornaments_value column to schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_ornaments_value')
+      BEGIN
+        ALTER TABLE schemes ADD closure_ornaments_value DECIMAL(18,2) NULL
+        PRINT 'Added closure_ornaments_value column to schemes table'
+      END
+    `);
+
+    // Add closure_ornaments_weight column to schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_ornaments_weight')
+      BEGIN
+        ALTER TABLE schemes ADD closure_ornaments_weight DECIMAL(18,3) NULL
+        PRINT 'Added closure_ornaments_weight column to schemes table'
+      END
+    `);
+
+    // Add closure_remaining_action column to schemes table if it doesn't exist
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('schemes') AND name = 'closure_remaining_action')
+      BEGIN
+        ALTER TABLE schemes ADD closure_remaining_action NVARCHAR(100) NULL
+        PRINT 'Added closure_remaining_action column to schemes table'
+      END
+    `);
+
     // Add payment_year column to existing transactions table if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'payment_year')
@@ -1903,6 +2047,16 @@ app.get('/api/admin/verify', authenticateAdmin, (req, res) => {
   });
 });
 
+// Serve brand logo
+app.get('/logo.png', (req, res) => {
+  const logoPath = path.join(__dirname, '..', 'VM-LOGO1.png');
+  if (require('fs').existsSync(logoPath)) {
+    res.sendFile(logoPath);
+  } else {
+    res.status(404).send('Logo not found');
+  }
+});
+
 // Serve admin portal with HTTPS-only security headers
 app.get('/admin_portal/index.html', (req, res) => {
   const adminPortalPath = path.join(__dirname, '..', 'admin_portal', 'index.html');
@@ -1923,6 +2077,27 @@ app.get('/admin_portal/index.html', (req, res) => {
       message: 'Admin portal not found',
       path: adminPortalPath,
       suggestion: 'Ensure admin_portal/index.html exists in the project root'
+    });
+  }
+});
+
+// Serve App Download Smart Redirect Page
+app.get('/download.html', (req, res) => {
+  const downloadPath = path.join(__dirname, 'download.html');
+  console.log('📱 Serving App Download Redirect from:', downloadPath);
+
+  // Set security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  if (require('fs').existsSync(downloadPath)) {
+    res.sendFile(downloadPath);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Download page not found',
+      path: downloadPath
     });
   }
 });
@@ -3246,24 +3421,65 @@ app.post('/api/payment-webhook', async (req, res) => {
       const phone = transaction.customer_phone;
       const goldGrams = transaction.gold_grams || 0;
       const silverGrams = transaction.silver_grams || 0;
+      const amountPaid = transaction.amount || 0;
+      const schemeId = transaction.scheme_id;
 
-      await pool.request()
-        .input('phone', sql.NVarChar, phone)
-        .input('gold_grams', sql.Decimal(10, 4), goldGrams)
-        .input('silver_grams', sql.Decimal(10, 4), silverGrams)
-        .input('amount', sql.Decimal(12, 2), transaction.amount)
-        .query(`
-          UPDATE customers 
-          SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
-              total_silver = ISNULL(total_silver, 0) + @silver_grams,
-              total_invested = ISNULL(total_invested, 0) + @amount,
-              transaction_count = ISNULL(transaction_count, 0) + 1,
-              last_transaction = SYSDATETIME(),
-              updated_at = SYSDATETIME()
-          WHERE phone = @phone
-        `);
+      try {
+        const creditResult = await pool.request()
+          .input('transaction_id', sql.NVarChar(100), transaction_id)
+          .input('phone', sql.NVarChar(15), phone)
+          .input('gold_grams', sql.Decimal(10, 4), goldGrams)
+          .input('silver_grams', sql.Decimal(10, 4), silverGrams)
+          .input('amount', sql.Decimal(12, 2), amountPaid)
+          .input('scheme_id', sql.NVarChar(100), schemeId || null)
+          .query(`
+            DECLARE @already_credited BIT;
+            SELECT @already_credited = ISNULL(is_credited, 0) FROM transactions WHERE transaction_id = @transaction_id;
 
-      console.log(`✅ Customer ${phone} credited via webhook: ${goldGrams}g gold, ${silverGrams}g silver`);
+            IF @already_credited = 0
+            BEGIN
+                -- 1. Update Schemes (if applicable)
+                IF @scheme_id IS NOT NULL
+                BEGIN
+                    UPDATE schemes 
+                    SET total_invested = ISNULL(total_invested, 0) + @amount,
+                        total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+                        total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + (@gold_grams + @silver_grams),
+                        completed_installments = ISNULL(completed_installments, 0) + 1,
+                        updated_at = SYSDATETIME()
+                    WHERE scheme_id = @scheme_id;
+                END
+
+                -- 2. Credit the customer
+                UPDATE customers 
+                SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+                    total_silver = ISNULL(total_silver, 0) + @silver_grams,
+                    total_invested = ISNULL(total_invested, 0) + @amount,
+                    transaction_count = ISNULL(transaction_count, 0) + 1,
+                    last_transaction = SYSDATETIME(),
+                    updated_at = SYSDATETIME()
+                WHERE phone = @phone;
+
+                -- 3. Mark as credited
+                UPDATE transactions SET is_credited = 1 WHERE transaction_id = @transaction_id;
+                
+                SELECT 1 as success_credit;
+            END
+            ELSE
+            BEGIN
+                SELECT 0 as success_credit;
+            END
+          `);
+
+        if (creditResult.recordset[0].success_credit === 1) {
+          console.log(`✅ Customer ${phone} credited via webhook: ${goldGrams}g gold, ${silverGrams}g silver. Scheme: ${schemeId || 'None'}`);
+        } else {
+          console.log(`⚠️ Transaction ${transaction_id} was already credited in database. Skipping.`);
+        }
+      } catch (creditError) {
+        console.error('❌ Failed to credit customer/scheme via webhook:', creditError.message);
+        throw creditError;
+      }
     } else if (alreadySuccess) {
       console.log(`⚠️ Transaction ${transaction_id} was already SUCCESS. Skipping double credit.`);
     }
@@ -4372,6 +4588,7 @@ app.get('/api/schemes/:customer_phone', optionalCustomerAuth, async (req, res) =
         s.status, s.start_date, s.end_date, s.total_invested,
         s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
         s.terms_accepted, s.terms_accepted_at, s.closure_remarks, s.closure_date,
+        s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
         s.business_id, s.created_at, s.updated_at,
         c.name as customer_name,
         c.email as customer_email,
@@ -4384,12 +4601,13 @@ app.get('/api/schemes/:customer_phone', optionalCustomerAuth, async (req, res) =
       LEFT JOIN transactions t ON s.scheme_id = t.scheme_id AND t.status = 'SUCCESS'
       WHERE (s.customer_phone = @customer_phone 
              OR RIGHT(s.customer_phone, 10) = @normalized_phone)
-        AND s.business_id = @business_id
+      AND s.business_id = @business_id
       GROUP BY s.id, s.scheme_id, c.customer_id, s.customer_phone,
                s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
                s.status, s.start_date, s.end_date, s.total_invested,
                s.total_metal_accumulated, s.completed_installments, s.next_payment_date,
                s.terms_accepted, s.terms_accepted_at, s.closure_remarks, s.closure_date,
+               s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
                s.business_id, s.created_at, s.updated_at,
                c.name, c.email
       ORDER BY s.created_at DESC
@@ -4547,12 +4765,15 @@ app.put('/api/schemes/:scheme_id', authenticateCustomer, verifySchemeOwnership, 
 });
 
 // Close scheme endpoint (Admin only)
-app.post('/api/schemes/:scheme_id/close', authenticateCustomer, verifySchemeOwnership, auditLog('CLOSE_SCHEME'), [
-  body('closure_remarks').optional().isString().withMessage('Closure remarks must be a string')
+app.post('/api/schemes/:scheme_id/close', authenticateAdminOrCustomer, verifySchemeOwnershipOrAdmin, auditLog('CLOSE_SCHEME'), [
+  body('closure_remarks').optional().isString().withMessage('Closure remarks must be a string'),
+  body('closure_ornaments_value').optional().isNumeric().withMessage('Ornaments value must be a number'),
+  body('closure_ornaments_weight').optional().isNumeric().withMessage('Ornaments weight must be a number'),
+  body('closure_remaining_action').optional().isString().withMessage('Remaining action must be a string')
 ], async (req, res) => {
   try {
     const { scheme_id } = req.params;
-    const { closure_remarks } = req.body;
+    const { closure_remarks, closure_ornaments_value, closure_ornaments_weight, closure_remaining_action } = req.body;
     console.log('🔒 Closing scheme:', scheme_id);
 
     const errors = validationResult(req);
@@ -4587,8 +4808,8 @@ app.post('/api/schemes/:scheme_id/close', authenticateCustomer, verifySchemeOwne
     const completedInstallments = scheme.completed_installments;
     const durationMonths = scheme.duration_months;
 
-    // For GOLDPLUS/SILVERPLUS: Must complete 12 months
-    if ((schemeType === 'GOLDPLUS' || schemeType === 'SILVERPLUS') && completedInstallments < 12) {
+    // For GOLDPLUS/SILVERPLUS: Must complete 12 months (unless admin)
+    if (!req.isAdmin && (schemeType === 'GOLDPLUS' || schemeType === 'SILVERPLUS') && completedInstallments < 12) {
       return res.status(400).json({
         success: false,
         message: `${schemeType} scheme requires 12 completed installments. Current: ${completedInstallments}/12`
@@ -4603,6 +4824,9 @@ app.post('/api/schemes/:scheme_id/close', authenticateCustomer, verifySchemeOwne
     updateRequest.input('status', sql.NVarChar(20), 'COMPLETED');
     updateRequest.input('closure_date', sql.DateTime, new Date());
     updateRequest.input('closure_remarks', sql.NVarChar(500), closure_remarks || 'Scheme closed successfully');
+    updateRequest.input('closure_ornaments_value', sql.Decimal(18, 2), closure_ornaments_value ? parseFloat(closure_ornaments_value) : null);
+    updateRequest.input('closure_ornaments_weight', sql.Decimal(18, 3), closure_ornaments_weight ? parseFloat(closure_ornaments_weight) : null);
+    updateRequest.input('closure_remaining_action', sql.NVarChar(100), closure_remaining_action || null);
     updateRequest.input('end_date', sql.DateTime, new Date());
     updateRequest.input('updated_at', sql.DateTime, new Date());
 
@@ -4611,6 +4835,9 @@ app.post('/api/schemes/:scheme_id/close', authenticateCustomer, verifySchemeOwne
       SET status = @status,
           closure_date = @closure_date,
           closure_remarks = @closure_remarks,
+          closure_ornaments_value = @closure_ornaments_value,
+          closure_ornaments_weight = @closure_ornaments_weight,
+          closure_remaining_action = @closure_remaining_action,
           end_date = @end_date,
           updated_at = @updated_at
       WHERE scheme_id = @scheme_id
@@ -4629,7 +4856,10 @@ app.post('/api/schemes/:scheme_id/close', authenticateCustomer, verifySchemeOwne
         completed_installments: scheme.completed_installments,
         start_date: scheme.start_date,
         closure_date: new Date(),
-        closure_remarks: closure_remarks || 'Scheme closed successfully'
+        closure_remarks: closure_remarks || 'Scheme closed successfully',
+        closure_ornaments_value: closure_ornaments_value || null,
+        closure_ornaments_weight: closure_ornaments_weight || null,
+        closure_remaining_action: closure_remaining_action || null
       }
     });
 
@@ -4712,24 +4942,40 @@ app.post('/api/schemes/:scheme_id/invest', flexibleAuth, auditLog('INVEST_SCHEME
       'audit'
     );
 
-    // Update scheme with new investment
+    // Update scheme and customer with new investment
     const updateSchemeRequest = pool.request();
     updateSchemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    updateSchemeRequest.input('phone', sql.NVarChar(15), scheme.customer_phone);
     updateSchemeRequest.input('amount', sql.Decimal(12, 2), amount);
     updateSchemeRequest.input('metal_grams', sql.Decimal(10, 4), metal_grams);
+    updateSchemeRequest.input('gold_grams', sql.Decimal(10, 4), scheme.metal_type === 'GOLD' ? metal_grams : 0);
+    updateSchemeRequest.input('silver_grams', sql.Decimal(10, 4), scheme.metal_type === 'SILVER' ? metal_grams : 0);
     updateSchemeRequest.input('updated_at', sql.DateTime, new Date());
 
+    // Run both updates in a single query
     await updateSchemeRequest.query(`
+      -- 1. Update Scheme progress
       UPDATE schemes
       SET
         total_invested = total_invested + @amount,
         total_metal_accumulated = total_metal_accumulated + @metal_grams,
         completed_installments = completed_installments + 1,
         updated_at = @updated_at
-      WHERE scheme_id = @scheme_id
+      WHERE scheme_id = @scheme_id;
+
+      -- 2. Update Customer profile cached totals
+      UPDATE customers
+      SET
+        total_gold = total_gold + @gold_grams,
+        total_silver = total_silver + @silver_grams,
+        total_invested = total_invested + @amount,
+        transaction_count = transaction_count + 1,
+        last_transaction = @updated_at,
+        updated_at = @updated_at
+      WHERE phone = @phone;
     `);
 
-    // Create transaction record with scheme context
+    // Create transaction record with scheme context and set is_credited = 1
     const transactionRequest = pool.request();
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -4765,13 +5011,13 @@ app.post('/api/schemes/:scheme_id/invest', flexibleAuth, auditLog('INVEST_SCHEME
         gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
         status, payment_method, gateway_transaction_id, business_id,
         scheme_type, scheme_id, installment_number, metal_type,
-        device_info, location, payment_year, payment_month
+        device_info, location, payment_year, payment_month, is_credited
       ) VALUES (
         @transaction_id, @customer_phone, @customer_name, @type, @amount,
         @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
         @status, @payment_method, @gateway_transaction_id, @business_id,
         @scheme_type, @scheme_id, @installment_number, @metal_type,
-        @device_info, @location, @payment_year, @payment_month
+        @device_info, @location, @payment_year, @payment_month, 1
       )
     `);
 
@@ -4979,6 +5225,7 @@ app.get('/api/schemes/details/:scheme_id', optionalCustomerAuth, async (req, res
         s.duration_months, s.status, s.start_date, s.end_date, c.customer_id,
         s.customer_phone, s.business_id, s.created_at, s.updated_at,
         s.terms_accepted, s.terms_accepted_at, s.closure_date, s.closure_remarks,
+        s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
         c.name as customer_name,
         c.email as customer_email
       FROM schemes s
@@ -6489,6 +6736,7 @@ app.get('/api/admin/customers/:phone', async (req, res) => {
       SELECT
         s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
         s.status, s.start_date, s.end_date, s.closure_date, s.closure_remarks,
+        s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
         s.created_at, s.updated_at,
         ISNULL(SUM(t.amount), 0) as total_invested,
         ISNULL(SUM(CASE WHEN s.metal_type = 'GOLD' THEN t.gold_grams WHEN s.metal_type = 'SILVER' THEN t.silver_grams ELSE 0 END), 0) as total_metal_accumulated,
@@ -6500,6 +6748,7 @@ app.get('/api/admin/customers/:phone', async (req, res) => {
       WHERE s.customer_phone = @phone
       GROUP BY s.scheme_id, s.scheme_type, s.metal_type, s.monthly_amount, s.duration_months,
                s.status, s.start_date, s.end_date, s.closure_date, s.closure_remarks,
+               s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
                s.created_at, s.updated_at
       ORDER BY s.created_at DESC
     `);
@@ -7233,6 +7482,10 @@ async function startServer() {
       console.log('✅ HTTPS-only production mode');
       console.log('🔒 All connections encrypted');
       console.log('========================================');
+
+      // Start automated pending transactions cleanup job on server boot, and repeat every 4 hours
+      autoCleanupPendingTransactions();
+      setInterval(autoCleanupPendingTransactions, 4 * 60 * 60 * 1000); // every 4 hours
     });
 
   } catch (httpsError) {
@@ -7255,6 +7508,7 @@ app.get('/api/admin/schemes', authenticateAdmin, async (req, res) => {
         s.duration_months, s.status, s.start_date, s.end_date, s.customer_id,
         s.customer_phone, s.business_id, s.created_at, s.updated_at,
         s.terms_accepted, s.terms_accepted_at, s.closure_date, s.closure_remarks,
+        s.closure_ornaments_value, s.closure_ornaments_weight, s.closure_remaining_action,
         c.customer_id as customer_uid, c.name as customer_name, c.phone as customer_phone
       FROM schemes s
       LEFT JOIN customers c ON s.customer_phone = c.phone
@@ -7269,6 +7523,133 @@ app.get('/api/admin/schemes', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Error getting schemes:', error.message);
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Adjust scheme balance manually (offline adjustment)
+app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUST_SCHEME_BALANCE'), async (req, res) => {
+  const transaction = new sql.Transaction(pool);
+  try {
+    const { scheme_id, grams, amount, remarks } = req.body;
+    const adminUser = req.user ? req.user.username : 'admin';
+
+    console.log(`👤 Admin: Manual balance adjustment request for scheme ${scheme_id} by ${adminUser}:`, { grams, amount, remarks });
+
+    if (!scheme_id) {
+      return res.status(400).json({ success: false, message: 'Scheme ID is required' });
+    }
+    const finalGrams = parseFloat(grams) || 0;
+    const finalAmount = parseFloat(amount) || 0;
+
+    if (finalGrams === 0 && finalAmount === 0) {
+      return res.status(400).json({ success: false, message: 'Must specify non-zero grams or cash value' });
+    }
+    if (!remarks || remarks.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Adjustment remarks are required for audit trail' });
+    }
+
+    // 1. Fetch scheme details to get customer details
+    const schemeRequest = pool.request();
+    schemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    const schemeResult = await schemeRequest.query(`
+      SELECT scheme_id, customer_phone, customer_name, metal_type, scheme_type
+      FROM schemes
+      WHERE scheme_id = @scheme_id
+    `);
+
+    if (schemeResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Scheme not found' });
+    }
+
+    const scheme = schemeResult.recordset[0];
+    const customerPhone = scheme.customer_phone;
+    const customerName = scheme.customer_name;
+    const metalType = scheme.metal_type || 'GOLD';
+
+    // Start SQL transaction
+    await transaction.begin();
+
+    // 2. Update Schemes table
+    const updateSchemeRequest = new sql.Request(transaction);
+    updateSchemeRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    updateSchemeRequest.input('grams', sql.Decimal(10, 4), finalGrams);
+    updateSchemeRequest.input('amount', sql.Decimal(12, 2), finalAmount);
+    await updateSchemeRequest.query(`
+      UPDATE schemes 
+      SET total_invested = ISNULL(total_invested, 0) + @amount,
+          total_amount_paid = ISNULL(total_amount_paid, 0) + @amount,
+          total_metal_accumulated = ISNULL(total_metal_accumulated, 0) + @grams,
+          updated_at = SYSDATETIME()
+      WHERE scheme_id = @scheme_id;
+    `);
+
+    // 3. Update Customers table (gold/silver and total invested)
+    const updateCustomerRequest = new sql.Request(transaction);
+    updateCustomerRequest.input('phone', sql.NVarChar(15), customerPhone);
+    updateCustomerRequest.input('gold_grams', sql.Decimal(10, 4), metalType === 'GOLD' ? finalGrams : 0);
+    updateCustomerRequest.input('silver_grams', sql.Decimal(10, 4), metalType === 'SILVER' ? finalGrams : 0);
+    updateCustomerRequest.input('amount', sql.Decimal(12, 2), finalAmount);
+    await updateCustomerRequest.query(`
+      UPDATE customers 
+      SET total_gold = ISNULL(total_gold, 0) + @gold_grams,
+          total_silver = ISNULL(total_silver, 0) + @silver_grams,
+          total_invested = ISNULL(total_invested, 0) + @amount,
+          transaction_count = ISNULL(transaction_count, 0) + 1,
+          last_transaction = SYSDATETIME(),
+          updated_at = SYSDATETIME()
+      WHERE phone = @phone;
+    `);
+
+    // 4. Create adjustment transaction record
+    const transactionId = `ADJ_${Date.now()}_${scheme_id.slice(-6)}`;
+    const additionalDataObj = {
+      remarks: remarks,
+      created_by_admin: adminUser,
+      type: 'MANUAL_ADJUSTMENT'
+    };
+
+    const insertTxnRequest = new sql.Request(transaction);
+    insertTxnRequest.input('transaction_id', sql.NVarChar(100), transactionId);
+    insertTxnRequest.input('customer_phone', sql.NVarChar(15), customerPhone);
+    insertTxnRequest.input('customer_name', sql.NVarChar(100), customerName);
+    insertTxnRequest.input('amount', sql.Decimal(12, 2), finalAmount);
+    insertTxnRequest.input('gold_grams', sql.Decimal(10, 4), metalType === 'GOLD' ? finalGrams : 0);
+    insertTxnRequest.input('silver_grams', sql.Decimal(10, 4), metalType === 'SILVER' ? finalGrams : 0);
+    insertTxnRequest.input('scheme_id', sql.NVarChar(100), scheme_id);
+    insertTxnRequest.input('scheme_type', sql.NVarChar(20), scheme.scheme_type);
+    insertTxnRequest.input('metal_type', sql.NVarChar(10), metalType);
+    insertTxnRequest.input('additional_data', sql.NVarChar(sql.MAX), JSON.stringify(additionalDataObj));
+
+    await insertTxnRequest.query(`
+      INSERT INTO transactions (
+        transaction_id, customer_phone, customer_name, type, amount, gold_grams,
+        gold_price_per_gram, silver_grams, silver_price_per_gram, payment_method, status, 
+        gateway_transaction_id, device_info, location, business_id, additional_data, 
+        scheme_type, scheme_id, metal_type, payment_year, payment_month, is_credited, created_at, updated_at
+      ) VALUES (
+        @transaction_id, @customer_phone, @customer_name, 'ADJUST', @amount, @gold_grams,
+        0, @silver_grams, 0, 'OFFLINE_ADJUSTMENT', 'SUCCESS', 
+        @transaction_id, 'Admin Dashboard', 'Showroom Counter', 'VMURUGAN_001', @additional_data, 
+        @scheme_type, @scheme_id, @metal_type, YEAR(GETDATE()), MONTH(GETDATE()), 1, SYSDATETIME(), SYSDATETIME()
+      )
+    `);
+
+    // Commit SQL transaction
+    await transaction.commit();
+
+    console.log(`✅ Admin: Scheme ${scheme_id} balance manual adjustment successfully committed!`);
+    res.json({
+      success: true,
+      message: 'Scheme balance manual adjustment completed successfully',
+      transaction_id: transactionId
+    });
+
+  } catch (error) {
+    if (transaction.isActive) {
+      await transaction.rollback();
+    }
+    console.error('❌ Admin: Error adjusting scheme balance:', error.message);
+    res.status(500).json({ success: false, message: 'Internal server error during balance adjustment: ' + error.message });
   }
 });
 
@@ -7559,7 +7940,8 @@ app.get('/api/admin/reports/customer-wise', authenticateAdmin, async (req, res) 
         transaction_id, amount, metal_type, 
         gold_grams, silver_grams,
         gold_price_per_gram, silver_price_per_gram,
-        payment_method, status, created_at, scheme_id
+        payment_method, status, created_at, scheme_id,
+        is_credited
       FROM transactions
       WHERE customer_phone = @customer_phone_txn ${dateFilter}
       ORDER BY created_at DESC
@@ -8814,6 +9196,99 @@ async function notifyOwnerOfPayment(paymentData) {
 
   } catch (error) {
     console.error('❌ Error notifying owner:', error);
+  }
+}
+
+// Background task to automatically expire stuck PENDING transactions older than 4 hours
+async function autoCleanupPendingTransactions() {
+  console.log('🧹 [BACKGROUND WORKER] Checking for stuck PENDING transactions...');
+  try {
+    const cutoffTime = new Date();
+    // 4 hours threshold
+    cutoffTime.setHours(cutoffTime.getHours() - 4);
+
+    const result = await pool.request()
+      .input('cutoff', sql.DateTime, cutoffTime)
+      .query(`
+        SELECT transaction_id, metal_type, amount, customer_name, customer_phone, created_at
+        FROM transactions
+        WHERE status = 'PENDING'
+          AND created_at < @cutoff
+          AND payment_method LIKE 'OMNIWARE%'
+      `);
+
+    const pendingTransactions = result.recordset;
+    if (pendingTransactions.length === 0) {
+      console.log('🧹 [BACKGROUND WORKER] No stuck PENDING transactions found.');
+      return;
+    }
+
+    console.log(`🧹 [BACKGROUND WORKER] Found ${pendingTransactions.length} pending transactions to clean up.`);
+
+    for (const txn of pendingTransactions) {
+      try {
+        console.log(`   [BACKGROUND WORKER] Checking gateway status for: ${txn.transaction_id}`);
+        
+        const metalType = txn.metal_type || 'GOLD';
+        const config = OMNIWARE_VERIFY_CONFIG[metalType.toUpperCase()];
+        
+        if (!config) {
+          console.log(`   [BACKGROUND WORKER] Unknown metal type for ${txn.transaction_id}: ${metalType}`);
+          continue;
+        }
+
+        const params = {
+          api_key: config.apiKey,
+          order_id: txn.transaction_id
+        };
+        
+        params.hash = generateOmniwareHash(params, config.salt);
+
+        const response = await axios.post(
+          'https://pgbiz.omniware.in/v2/paymentstatus',
+          new URLSearchParams(params).toString(),
+          { 
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000 
+          }
+        );
+
+        let gatewaySuccess = false;
+        let gatewayExists = false;
+
+        if (response.data && response.data.data) {
+          gatewayExists = true;
+          const data = Array.isArray(response.data.data) ? response.data.data[0] : response.data.data;
+          if (data.response_code === 0) {
+            gatewaySuccess = true;
+          }
+        } else if (response.data && response.data.error && response.data.error.code === 1028) {
+          gatewayExists = false;
+        }
+
+        if (gatewaySuccess) {
+          console.log(`   ⚠️ [BACKGROUND WORKER] Transaction ${txn.transaction_id} is SUCCESS in gateway but PENDING in DB. Leaving for manual review.`);
+        } else {
+          // If transaction does not exist in gateway, or exists but is not successful (failed/pending): mark as FAILED
+          await pool.request()
+            .input('txn_id', sql.VarChar(100), txn.transaction_id)
+            .query(`
+              UPDATE transactions
+              SET status = 'FAILED',
+                  updated_at = SYSDATETIME()
+              WHERE transaction_id = @txn_id
+            `);
+          console.log(`   ❌ [BACKGROUND WORKER] Expired transaction ${txn.transaction_id} (Status: FAILED).`);
+        }
+      } catch (txnError) {
+        console.error(`   ❌ [BACKGROUND WORKER] Error processing ${txn.transaction_id}:`, txnError.message);
+      }
+      
+      // Delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  } catch (error) {
+    console.error('🧹 [BACKGROUND WORKER] Error in autoCleanupPendingTransactions:', error.message);
   }
 }
 

@@ -144,9 +144,9 @@ async function saveTransactionToDatabase(webhookData) {
 
     // PAYMENT SAFETY: Credit gold/silver if payment succeeded
     if (status === 'SUCCESS' && customerPhone) {
-      // Check if ALREADY successful to avoid double crediting
-      if (existingTxn.recordset.length > 0 && existingTxn.recordset[0].status === 'SUCCESS') {
-        console.log('⚠️ Transaction already marked as SUCCESS. Skipping double credit.');
+      // Check if ALREADY successful and credited to avoid double crediting
+      if (existingTxn.recordset.length > 0 && existingTxn.recordset[0].status === 'SUCCESS' && existingTxn.recordset[0].is_credited) {
+        console.log('⚠️ Transaction already marked as SUCCESS and CREDITED. Skipping double credit.');
         return true;
       }
 
