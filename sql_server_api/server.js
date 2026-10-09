@@ -5162,6 +5162,7 @@ app.post('/api/schemes/:scheme_id/flexi-payment', flexibleAuth, paymentLimiter, 
           scheme_type = @scheme_type,
           scheme_id = @scheme_id,
           metal_type = @metal_type,
+          is_credited = 1,
           updated_at = GETDATE(),
           payment_year = @payment_year,
           payment_month = @payment_month
@@ -5173,13 +5174,13 @@ app.post('/api/schemes/:scheme_id/flexi-payment', flexibleAuth, paymentLimiter, 
           transaction_id, customer_phone, customer_name, type, amount,
           gold_grams, gold_price_per_gram, silver_grams, silver_price_per_gram,
           status, payment_method, gateway_transaction_id, business_id,
-          scheme_type, scheme_id, metal_type,
+          scheme_type, scheme_id, metal_type, is_credited,
           device_info, location, payment_year, payment_month, created_at, updated_at
         ) VALUES (
           @transaction_id, @customer_phone, @customer_name, @type, @amount,
           @gold_grams, @gold_price_per_gram, @silver_grams, @silver_price_per_gram,
           @status, @payment_method, @gateway_transaction_id, @business_id,
-          @scheme_type, @scheme_id, @metal_type,
+          @scheme_type, @scheme_id, @metal_type, 1,
           @device_info, @location, @payment_year, @payment_month, GETDATE(), GETDATE()
         )
       END
