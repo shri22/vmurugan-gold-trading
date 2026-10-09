@@ -242,7 +242,7 @@ async function saveTransactionToDatabase(webhookData) {
                     .input('silver_grams', sql.Decimal(10, 4), silverGrams)
                     .query(`
                                 INSERT INTO schemes (scheme_id, customer_id, customer_phone, customer_name, scheme_type, metal_type, monthly_amount, duration_months, end_date, total_invested, total_amount_paid, total_metal_accumulated, completed_installments, terms_accepted, terms_accepted_at, status, business_id, transaction_id, created_at, updated_at)
-                                VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, @amount, @amount, (@gold_grams + @silver_grams), 1, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
+                                VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, 0, 0, 0, 0, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
                             `);
 
                   schemeId = newSchemeId;
