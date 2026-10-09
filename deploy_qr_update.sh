@@ -5,7 +5,7 @@ echo "Please enter your server password when prompted."
 cd /Users/admin/Documents/Win-Projects/AntiGravity/vmurugan-gold-trading
 
 # Package the files locally
-tar -czf update.tar.gz sql_server_api/server.js sql_server_api/cleanup_pending_transactions.js download.html admin_portal/index.html VM-LOGO1.png
+tar -czf update.tar.gz sql_server_api/server.js sql_server_api/routes/omniware_webhook.js sql_server_api/cleanup_pending_transactions.js admin_portal/index.html VM-LOGO1.png
  
 # Send and execute in one SSH connection
 cat update.tar.gz | ssh root@193.203.160.3 '
@@ -31,15 +31,16 @@ cat update.tar.gz | ssh root@193.203.160.3 '
     tar -xzf update.tar.gz
     
     cp sql_server_api/server.js "$API_DIR/server.js"
+    mkdir -p "$API_DIR/routes"
+    cp sql_server_api/routes/omniware_webhook.js "$API_DIR/routes/omniware_webhook.js"
     cp sql_server_api/cleanup_pending_transactions.js "$API_DIR/cleanup_pending_transactions.js"
-    cp download.html "$API_DIR/download.html"
     
     # Ensure admin_portal directory exists on server and copy the updated report template
     mkdir -p "$API_DIR/../admin_portal"
     cp admin_portal/index.html "$API_DIR/../admin_portal/index.html"
     cp VM-LOGO1.png "$API_DIR/../VM-LOGO1.png"
     
-    rm -rf sql_server_api download.html admin_portal VM-LOGO1.png update.tar.gz
+    rm -rf sql_server_api admin_portal VM-LOGO1.png update.tar.gz
     
     echo "Restarting API server..."
     pm2 restart vmurugan-api
