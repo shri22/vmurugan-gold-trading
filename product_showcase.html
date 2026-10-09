@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraGold SaaS | Complete Digital Gold & Savings Scheme Platform for Jewellers</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --gold-primary: #D4AF37;
+            --gold-light: #F4E07B;
+            --gold-dark: #9A7B1C;
+            --emerald-dark: #0A2F1D;
+            --emerald-deep: #061B11;
+            --emerald-card: #0F3824;
+            --emerald-border: #1B5E20;
+            --accent-green: #2ECC71;
+            --silver-accent: #E0E6ED;
+            --bg-dark: #05140D;
+            --text-white: #FFFFFF;
+            --text-muted: #9EBAAA;
+            --card-glass: rgba(15, 56, 36, 0.7);
+            --card-glass-hover: rgba(23, 78, 51, 0.9);
+            --border-glass: rgba(212, 175, 55, 0.25);
+            --shadow-gold: 0 10px 30px rgba(212, 175, 55, 0.15);
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            --transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-white);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Subtle Background Glows */
+        .glow-sphere {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.08) 0%, rgba(10, 47, 29, 0) 70%);
+            filter: blur(60px);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .glow-1 { top: -100px; right: -100px; }
+        .glow-2 { top: 40%; left: -200px; width: 600px; height: 600px; background: radial-gradient(circle, rgba(46, 204, 113, 0.07) 0%, rgba(10, 47, 29, 0) 70%); }
+
+        /* Typography */
+        h1, h2, h3, h4, .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+        .text-gold {
+            background: linear-gradient(135deg, #F4E07B 0%, #D4AF37 50%, #AA8010 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Header / Navbar */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(15px);
+            background: rgba(5, 20, 13, 0.85);
+            border-bottom: 1px solid var(--border-glass);
+            padding: 16px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .logo-emblem {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--emerald-deep);
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+        }
+        .logo-text {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-white);
+        }
+        .logo-sub {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold-primary);
+            font-family: 'Montserrat', sans-serif;
+        }
+        .nav-links {
+            display: flex;
+            gap: 28px;
+            align-items: center;
+        }
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+        .nav-links a:hover {
+            color: var(--gold-light);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #F4E07B, #D4AF37);
+            color: var(--emerald-deep);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 700;
+            text-decoration: none;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(212, 175, 55, 0.35);
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(212, 175, 55, 0.5);
+            background: linear-gradient(135deg, #FFFFFF, #F4E07B);
+        }
+        .btn-outline {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-white);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 14px;
+            border: 1px solid var(--border-glass);
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-outline:hover {
+            border-color: var(--gold-primary);
+            background: rgba(212, 175, 55, 0.1);
+            color: var(--gold-light);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 80px 5% 60px;
+            max-width: 1300px;
+            margin: 0 auto;
+            text-align: center;
+            position: relative;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            padding: 8px 18px;
+            border-radius: 50px;
+            font-size: 13px;
+            color: var(--gold-light);
+            font-weight: 600;
+            margin-bottom: 24px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .hero h1 {
+            font-size: clamp(36px, 5.5vw, 64px);
+            line-height: 1.15;
+            margin-bottom: 24px;
+            font-weight: 800;
+        }
+        .hero p {
+            font-size: clamp(16px, 2vw, 20px);
+            color: var(--text-muted);
+            max-width: 840px;
+            margin: 0 auto 40px;
+        }
+        .hero-cta-group {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 50px;
+        }
+
+        /* Key Metrics Banner */
+        .metrics-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto 70px;
+            padding: 0 5%;
+        }
+        .metric-card {
+            background: var(--card-glass);
+            border: 1px solid var(--border-glass);
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: var(--transition);
+        }
+        .metric-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--gold-primary);
+            box-shadow: var(--shadow-gold);
+        }
+        .metric-num {
+            font-size: 34px;
+            font-weight: 800;
+            color: var(--gold-primary);
+            font-family: 'Montserrat', sans-serif;
+            margin-bottom: 4px;
+        }
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+        }
+
+        /* Dual Audience Switcher Section */
+        .dual-section {
+            padding: 70px 5%;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .section-header {
+            text-align: center;
+            max-width: 760px;
+            margin: 0 auto 50px;
+        }
+        .section-header h2 {
+            font-size: clamp(28px, 4vw, 42px);
+            margin-bottom: 16px;
+        }
+        .section-header p {
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        /* Toggle Tabs */
+        .toggle-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 45px;
+        }
+        .tab-box {
+            background: rgba(15, 56, 36, 0.6);
+            border: 1px solid var(--border-glass);
+            padding: 6px;
+            border-radius: 50px;
+            display: inline-flex;
+            gap: 6px;
+        }
+        .tab-btn {
+            padding: 12px 32px;
+            border-radius: 40px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, #F4E07B, #D4AF37);
+            color: var(--emerald-deep);
+            box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);
+        }
+
+        /* Feature Grids */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 28px;
+        }
+        .feature-card {
+            background: var(--card-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: 36px 30px;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+        .feature-card:hover {
+            transform: translateY(-6px);
+            background: var(--card-glass-hover);
+            border-color: rgba(212, 175, 55, 0.5);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), var(--shadow-gold);
+        }
+        .feature-icon-wrap {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(46, 204, 113, 0.1));
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 22px;
+        }
+        .feature-card h3 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            color: var(--text-white);
+        }
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 14.5px;
+            line-height: 1.65;
+            margin-bottom: 18px;
+        }
+        .feature-bullets {
+            list-style: none;
+        }
+        .feature-bullets li {
+            font-size: 13.5px;
+            color: #C1D5C9;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .feature-bullets li::before {
+            content: "✓";
+            color: var(--gold-primary);
+            font-weight: bold;
+        }
+
+        /* Interactive ROI Calculator Section */
+        .calculator-section {
+            background: linear-gradient(180deg, rgba(15, 56, 36, 0.4) 0%, rgba(5, 20, 13, 0.9) 100%);
+            border-top: 1px solid var(--border-glass);
+            border-bottom: 1px solid var(--border-glass);
+            padding: 80px 5%;
+        }
+        .calculator-wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: var(--card-glass);
+            border: 1px solid rgba(212, 175, 55, 0.35);
+            border-radius: var(--radius-xl);
+            padding: 45px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+        @media (max-width: 850px) {
+            .calculator-wrap { grid-template-columns: 1fr; padding: 25px; }
+        }
+        .calc-input-group {
+            margin-bottom: 24px;
+        }
+        .calc-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .calc-label span {
+            color: var(--gold-light);
+            font-size: 16px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+        }
+        .calc-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #19442C;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .calc-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--gold-primary);
+            cursor: pointer;
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.8);
+        }
+        .calc-result-box {
+            background: var(--emerald-deep);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }
+        .calc-result-title {
+            font-size: 14px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .calc-result-value {
+            font-size: clamp(36px, 4.5vw, 52px);
+            font-weight: 800;
+            font-family: 'Montserrat', sans-serif;
+            color: var(--gold-primary);
+            margin-bottom: 12px;
+        }
+        .calc-result-sub {
+            font-size: 14px;
+            color: #C1D5C9;
+        }
+
+        /* Invoice & Closure Document Highlight */
+        .showcase-banner {
+            padding: 80px 5%;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .showcase-card {
+            background: linear-gradient(135deg, rgba(15, 56, 36, 0.9) 0%, rgba(6, 27, 17, 0.95) 100%);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: 50px;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        @media (max-width: 900px) {
+            .showcase-card { grid-template-columns: 1fr; padding: 30px; }
+        }
+        .showcase-preview {
+            background: #FFFFFF;
+            color: #1a1a1a;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+            font-size: 12px;
+            border-top: 6px solid #D4AF37;
+            position: relative;
+        }
+        .showcase-preview-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid #D4AF37;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+        .preview-badge {
+            background: #E8F5E9;
+            color: #1B5E20;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 10px;
+            display: inline-block;
+        }
+
+        /* Security & Architecture Strip */
+        .security-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .sec-item {
+            background: rgba(15, 56, 36, 0.4);
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .sec-icon {
+            font-size: 28px;
+        }
+        .sec-item h4 {
+            font-size: 15px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin-bottom: 2px;
+        }
+        .sec-item p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* FAQ Accordion */
+        .faq-section {
+            padding: 70px 5%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .faq-item {
+            background: var(--card-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            margin-bottom: 16px;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+        .faq-question {
+            padding: 20px 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .faq-question span.icon {
+            font-size: 20px;
+            color: var(--gold-primary);
+            transition: transform 0.3s ease;
+        }
+        .faq-answer {
+            padding: 0 24px 20px;
+            font-size: 14.5px;
+            color: var(--text-muted);
+            display: none;
+            line-height: 1.6;
+        }
+        .faq-item.active {
+            border-color: var(--gold-primary);
+            background: var(--card-glass-hover);
+        }
+        .faq-item.active .faq-question span.icon {
+            transform: rotate(45deg);
+        }
+        .faq-item.active .faq-answer {
+            display: block;
+        }
+
+        /* Footer & CTA */
+        .cta-bottom {
+            text-align: center;
+            padding: 90px 5% 70px;
+            background: radial-gradient(circle at center, rgba(15, 56, 36, 0.8) 0%, var(--bg-dark) 80%);
+            border-top: 1px solid var(--border-glass);
+        }
+        .cta-bottom h2 {
+            font-size: clamp(32px, 4.5vw, 50px);
+            margin-bottom: 18px;
+        }
+        .cta-bottom p {
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 35px;
+            font-size: 17px;
+        }
+        footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 30px 5%;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Lighting -->
+    <div class="glow-sphere glow-1"></div>
+    <div class="glow-sphere glow-2"></div>
+
+    <!-- Navigation -->
+    <nav>
+        <a href="#" class="logo-box">
+            <div class="logo-emblem">👑</div>
+            <div>
+                <div class="logo-text">AuraGold <span style="font-size:12px; color:var(--gold-primary); font-weight:600;">SaaS</span></div>
+                <div class="logo-sub">Jewellery Scheme Cloud</div>
+            </div>
+        </a>
+        <div class="nav-links">
+            <a href="#features" onclick="setTab('owner')">Showroom Features</a>
+            <a href="#features" onclick="setTab('customer')">Customer App</a>
+            <a href="#calculator">Revenue Calculator</a>
+            <a href="#security">Security & Bank API</a>
+            <a href="#faq">FAQ</a>
+        </div>
+        <a href="#contact" class="btn-primary">Book a Demo ⚡</a>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-badge">✨ Complete Turnkey SaaS for Jewellery Retailers</div>
+        <h1>Turn Your Showroom Into A <br><span class="text-gold">Digital Gold & Savings Scheme Giant</span></h1>
+        <p>A ready-to-deploy, white-label cloud ecosystem with real-time UPI collections, automated gold/silver accumulation, high-fidelity A4 tax billing, and dedicated Flutter mobile apps for your customers.</p>
+        
+        <div class="hero-cta-group">
+            <a href="#calculator" class="btn-primary">Calculate Your ROI 📈</a>
+            <a href="#features" class="btn-outline">Explore Live Features 👁️</a>
+        </div>
+    </section>
+
+    <!-- Metrics Strip -->
+    <section class="metrics-strip">
+        <div class="metric-card">
+            <div class="metric-num">99.9%</div>
+            <div class="metric-label">Automated UPI Reconciliation</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-num">₹10+</div>
+            <div class="metric-label">Micro-Savings Entry Point</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-num">3X</div>
+            <div class="metric-label">Higher Showroom Footfall</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-num">100%</div>
+            <div class="metric-label">White-Label Showroom Branding</div>
+        </div>
+    </section>
+
+    <!-- Dual Audience Perspective (Owner vs Customer) -->
+    <section class="dual-section" id="features">
+        <div class="section-header">
+            <h2>Two Powerful Engines, <span class="text-gold">One Unified Platform</span></h2>
+            <p>Select a perspective below to see how our platform empowers both your showroom management and your retail gold buyers.</p>
+        </div>
+
+        <div class="toggle-container">
+            <div class="tab-box">
+                <button class="tab-btn active" id="tabOwner" onclick="setTab('owner')">
+                    🏢 For Jewellery Showroom Owners
+                </button>
+                <button class="tab-btn" id="tabCustomer" onclick="setTab('customer')">
+                    📱 For Your Customers (Mobile App)
+                </button>
+            </div>
+        </div>
+
+        <!-- OWNER FEATURES GRID -->
+        <div id="gridOwner" class="feature-grid">
+            
+            <!-- Feature 1 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">⚡</div>
+                <h3>Automated UPI & Gateway Settlements</h3>
+                <p>Zero manual ledger entries. Customers pay via GPay, PhonePe, or Paytm, and transactions instantly credit metal weight to their scheme.</p>
+                <ul class="feature-bullets">
+                    <li>Multi-Gateway Support (Omniware UPI & Worldline)</li>
+                    <li>Automated 4-hour background reconciliation worker</li>
+                    <li>Bank UTR & Reference ID tracking for all transactions</li>
+                </ul>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">📄</div>
+                <h3>High-Fidelity A4 Tax Billing & Closure Engine</h3>
+                <p>Generate professional, vector-sharp A4 Invoices and Receipts for scheme completion with exact showroom offsets.</p>
+                <ul class="feature-bullets">
+                    <li>Automatic 3% GST computation (1.5% CGST + 1.5% SGST)</li>
+                    <li>Dynamic deduction of matured scheme value vs new jewelry purchase</li>
+                    <li>Native 1-click browser printing with custom showroom seals</li>
+                </ul>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">📊</div>
+                <h3>Real-Time Reports & Executive Dashboard</h3>
+                <p>Complete financial visibility into active capital, customer ledgers, daily collections, and upcoming maturities.</p>
+                <ul class="feature-bullets">
+                    <li>Customer-wise, Scheme-wise & Date-wise breakdown</li>
+                    <li>Instant bank settlement audit logs</li>
+                    <li>1-Click Excel / CSV / PDF export capabilities</li>
+                </ul>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">⚖️</div>
+                <h3>Manual Offline Adjustments & Auditing</h3>
+                <p>Flexibility for counter staff to credit offline cash deposits or adjust metal balances with mandatory audit remarks.</p>
+                <ul class="feature-bullets">
+                    <li>Tamper-proof audit logs with staff user identification</li>
+                    <li>Direct synchronization across customer balance and scheme</li>
+                    <li>Historical audit trail on all customer statements</li>
+                </ul>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">🏷️</div>
+                <h3>Dynamic Metal Rates & Scraper Engine</h3>
+                <p>Automatic live price synchronization for 22K Gold, 24K Gold, and 999 Silver based on bullion market associations.</p>
+                <ul class="feature-bullets">
+                    <li>Customizable showroom making charges & margins</li>
+                    <li>Instant rate freeze during customer payment checkout</li>
+                    <li>Real-time gold-to-cash conversion calculations</li>
+                </ul>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">📢</div>
+                <h3>Direct Push & WhatsApp Notifications</h3>
+                <p>Boost installment retention with automated payment reminders, festival offers, and scheme milestone alerts.</p>
+                <ul class="feature-bullets">
+                    <li>Firebase Cloud Messaging for native push alerts</li>
+                    <li>WhatsApp installment receipts and closure notices</li>
+                    <li>Targeted broadcasts to customers near maturity</li>
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- CUSTOMER FEATURES GRID -->
+        <div id="gridCustomer" class="feature-grid" style="display: none;">
+            
+            <!-- Feature 1 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">💰</div>
+                <h3>Micro-Savings from Just ₹10 / Day</h3>
+                <p>Empower customers of all income brackets to buy fractional gold and silver grams seamlessly on their mobile phones.</p>
+                <ul class="feature-bullets">
+                    <li>Daily, weekly, or monthly flexible installment options</li>
+                    <li>Direct conversion of cash into accurate 3-decimal gold grams</li>
+                    <li>Zero lock-in penalties for Flexi schemes</li>
+                </ul>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">📲</div>
+                <h3>1-Click UPI Payment Experience</h3>
+                <p>Instant redirection to Google Pay, PhonePe, Paytm, or BHIM. Zero card details to type, instant confirmation receipt.</p>
+                <ul class="feature-bullets">
+                    <li>Seamless Android & iOS UPI Intent triggers</li>
+                    <li>Instant digital receipt generated upon completion</li>
+                    <li>Real-time passbook ledger update</li>
+                </ul>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">📈</div>
+                <h3>Transparent Digital Passbook & Portfolio</h3>
+                <p>Customers track their accumulated gold weight, invested value, current market valuation, and scheme maturity status.</p>
+                <ul class="feature-bullets">
+                    <li>Live market price portfolio valuation</li>
+                    <li>Complete downloadable payment history</li>
+                    <li>Clear progress bars toward scheme completion</li>
+                </ul>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">💍</div>
+                <h3>Guaranteed Showroom Redemption</h3>
+                <p>When schemes mature, customers simply walk into your showroom and redeem their gold weight for beautiful ornaments.</p>
+                <ul class="feature-bullets">
+                    <li>Redeem for 22K hallmarked jewelry, coins, or silver articles</li>
+                    <li>Transparent invoice deduction at the counter</li>
+                    <li>Option to roll leftover fractions into a new scheme</li>
+                </ul>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">🔒</div>
+                <h3>Bank-Grade Security & Nominee Safeguards</h3>
+                <p>Customers rest easy with dedicated MPIN authentication, encrypted data storage, and registered legal nominee details.</p>
+                <ul class="feature-bullets">
+                    <li>4-Digit Secure MPIN access with biometric fingerprint login</li>
+                    <li>PAN verification for high-value gold transactions</li>
+                    <li>Encrypted cloud backups on secure enterprise servers</li>
+                </ul>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="feature-card">
+                <div class="feature-icon-wrap">🎁</div>
+                <h3>Festival Schemes & Bonus Grams</h3>
+                <p>Access special Akshaya Tritiya, Diwali, and Dhanteras 11+1 schemes with bonus monthly contributions from the jeweller.</p>
+                <ul class="feature-bullets">
+                    <li>Fixed-term (11+1 months) Gold Plus Schemes</li>
+                    <li>Special discounts on showroom making charges</li>
+                    <li>Instant bonus credits on milestone completions</li>
+                </ul>
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- Interactive Showroom ROI Calculator -->
+    <section class="calculator-section" id="calculator">
+        <div class="section-header">
+            <h2>Showroom <span class="text-gold">Revenue & Capital Calculator</span></h2>
+            <p>See how much upfront working capital and customer loyalty your showroom will generate by launching this digital scheme platform.</p>
+        </div>
+
+        <div class="calculator-wrap">
+            <div>
+                <h3 style="margin-bottom: 25px; font-size: 22px;">Customize Your Customer Base</h3>
+                
+                <div class="calc-input-group">
+                    <div class="calc-label">
+                        <span>Active Enrolled Customers:</span>
+                        <span id="custVal">500 Customers</span>
+                    </div>
+                    <input type="range" min="50" max="5000" step="50" value="500" class="calc-slider" id="custRange" oninput="calculateROI()">
+                </div>
+
+                <div class="calc-input-group">
+                    <div class="calc-label">
+                        <span>Average Monthly Contribution:</span>
+                        <span id="amountVal">₹2,000 / month</span>
+                    </div>
+                    <input type="range" min="500" max="25000" step="500" value="2000" class="calc-slider" id="amountRange" oninput="calculateROI()">
+                </div>
+
+                <div class="calc-input-group">
+                    <div class="calc-label">
+                        <span>Scheme Duration:</span>
+                        <span id="durationVal">11 Months</span>
+                    </div>
+                    <input type="range" min="6" max="12" step="1" value="11" class="calc-slider" id="durationRange" oninput="calculateROI()">
+                </div>
+            </div>
+
+            <div class="calc-result-box">
+                <div class="calc-result-title">Monthly Predictable Cash Inflow</div>
+                <div class="calc-result-value" id="monthlyCash">₹10,00,000</div>
+
+                <div style="height: 1px; background: rgba(212,175,55,0.2); margin: 20px 0;"></div>
+
+                <div class="calc-result-title">Total Guaranteed Yearly Showroom Turnover</div>
+                <div class="calc-result-value" id="yearlyTurnover" style="font-size: clamp(30px, 3.8vw, 44px); color: var(--gold-light);">₹1.10 Crores</div>
+                <p class="calc-result-sub">💰 Guaranteed footfall when 500 customers walk in to redeem their accumulated gold for ornaments!</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Professional Invoicing Highlight -->
+    <section class="showcase-banner">
+        <div class="showcase-card">
+            <div>
+                <div class="preview-badge" style="margin-bottom: 15px;">A4 CORPORATE TAX BILLING</div>
+                <h2 style="margin-bottom: 18px;">Showroom Scheme Closure & <span class="text-gold">Dynamic Offset Invoices</span></h2>
+                <p style="color: var(--text-muted); font-size: 15px; margin-bottom: 20px;">
+                    When a customer comes to close their scheme, your counter staff can enter the exact jewelry ornament weight and value. The platform dynamically calculates the gross ornament price, computes 3% GST, deducts the matured scheme credits, and outputs a vector-sharp A4 Tax Invoice instantly.
+                </p>
+                <ul class="feature-bullets" style="margin-bottom: 25px;">
+                    <li>Handles excess scheme funds (transferred to DigiGold or issued as Store Credit)</li>
+                    <li>Official Monogram Stamp & Store Terms & Conditions baked in</li>
+                    <li>Instant browser vector printing without external PDF dependencies</li>
+                </ul>
+                <a href="#contact" class="btn-primary">Request a Live Sample Bill 📄</a>
+            </div>
+
+            <!-- Visual Representation of Bill -->
+            <div class="showcase-preview">
+                <div class="showcase-preview-header">
+                    <div>
+                        <strong style="color: #1B5E20; font-size: 14px;">V MURUGAN JEWELLERY</strong><br>
+                        <span style="font-size: 10px; color: #666;">GSTIN: 33AAAAA0000A1Z5</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="preview-badge">TAX INVOICE</span><br>
+                        <span style="font-size: 9px; color: #888;">INV-2026-0042</span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; margin-bottom: 10px;">
+                    <strong>Customer:</strong> Nageshwari | <strong>Scheme ID:</strong> GF_P45
+                </div>
+                <table style="width: 100%; font-size: 10.5px; border-collapse: collapse; margin-bottom: 12px;">
+                    <tr style="background: #F1F8E9; border-bottom: 1px solid #C8E6C9;">
+                        <th style="padding: 4px; text-align: left;">Item Description</th>
+                        <th style="padding: 4px; text-align: right;">Gross (₹)</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">22K Gold Bangles (14.200g)</td>
+                        <td style="padding: 4px; text-align: right;">₹98,500.00</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px; color: #1B5E20;">Less: Scheme Credit (GF_P45)</td>
+                        <td style="padding: 4px; text-align: right; color: #1B5E20;">-₹12,800.00</td>
+                    </tr>
+                    <tr style="border-top: 1px solid #333; font-weight: bold;">
+                        <td style="padding: 4px;">Net Payable at Counter</td>
+                        <td style="padding: 4px; text-align: right; color: #D32F2F;">₹85,700.00</td>
+                    </tr>
+                </table>
+                <div style="font-size: 9px; color: #777; text-align: center; border-top: 1px dashed #ccc; padding-top: 6px;">
+                    * Computer Generated Official Invoice with Hallmarking Guarantee
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical & Security Safeguards -->
+    <section class="dual-section" id="security" style="padding-top: 20px;">
+        <div class="section-header">
+            <h2>Enterprise Reliability & <span class="text-gold">Zero-Loss Safeguards</span></h2>
+            <p>Engineered for high-volume transactions, regulatory compliance, and mathematical accuracy.</p>
+        </div>
+
+        <div class="security-grid">
+            <div class="sec-item">
+                <div class="sec-icon">🔒</div>
+                <div>
+                    <h4>SHA-512 Hash Verified</h4>
+                    <p>Tamper-proof payment gateway signatures on every transaction.</p>
+                </div>
+            </div>
+            <div class="sec-item">
+                <div class="sec-icon">⚙️</div>
+                <div>
+                    <h4>ACID Atomic Transactions</h4>
+                    <p>Zero double-crediting with SQL transaction rollbacks.</p>
+                </div>
+            </div>
+            <div class="sec-item">
+                <div class="sec-icon">🔄</div>
+                <div>
+                    <h4>Automated Cron Reconciliation</h4>
+                    <p>Auto-cleans stuck or abandoned payment orders every 4 hours.</p>
+                </div>
+            </div>
+            <div class="sec-item">
+                <div class="sec-icon">📱</div>
+                <div>
+                    <h4>Cross-Platform Flutter</h4>
+                    <p>Single codebase for smooth 60fps Android & iOS mobile apps.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq-section" id="faq">
+        <div class="section-header">
+            <h2>Frequently Asked <span class="text-gold">Questions</span></h2>
+            <p>Everything you need to know about adopting our platform for your jewellery brand.</p>
+        </div>
+
+        <div class="faq-item active">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                Can we launch this with our own Jewellery Showroom name & logo?
+                <span class="icon">+</span>
+            </div>
+            <div class="faq-answer">
+                Yes, 100%! The entire system is white-labeled. Your mobile apps on Google Play Store and Apple App Store will have your brand name, logo, custom color palette, store addresses, contact phone numbers, and custom terms & conditions.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                How does money reach the jeweller's bank account?
+                <span class="icon">+</span>
+            </div>
+            <div class="faq-answer">
+                All customer UPI and online payments are routed directly into your own merchant account with Omniware, Worldline, or Razorpay. Settlements occur automatically in T+1 days directly into your registered current bank account.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                Can we create custom scheme types (e.g. 11-month Plus, Flexi Daily)?
+                <span class="icon">+</span>
+            </div>
+            <div class="faq-answer">
+                Yes! You have full control over scheme types, durations (6 months, 11 months, 12 months), bonus installments, minimum entry amounts (e.g. ₹10 or ₹500), and whether the scheme accumulates gold grams or cash values.
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question" onclick="toggleFaq(this)">
+                What if an offline customer pays cash at our showroom counter?
+                <span class="icon">+</span>
+            </div>
+            <div class="faq-answer">
+                Our Admin Dashboard includes a dedicated "Adjust Balance" feature. Your counter staff can instantly credit gold/silver grams or cash values for offline payments, with mandatory audit remarks to maintain 100% accurate books.
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom CTA -->
+    <section class="cta-bottom" id="contact">
+        <div class="hero-badge">🚀 Launch In Less Than 7 Days</div>
+        <h2>Ready to Scale Your Jewellery Showroom?</h2>
+        <p>Give your customers the power to save in gold anytime, anywhere, while securing predictable working capital for your business.</p>
+        
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <a href="mailto:sales@auragold.com" class="btn-primary" style="font-size: 16px; padding: 15px 35px;">Schedule a Personalized Demo 📲</a>
+            <a href="tel:+919999999999" class="btn-outline" style="font-size: 16px; padding: 15px 30px;">Call Our Solutions Team 📞</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>© 2026 AuraGold Platform. Enterprise Digital Gold & Jewellery Savings Scheme SaaS. All rights reserved.</p>
+    </footer>
+
+    <!-- Interactive Scripts -->
+    <script>
+        // Tab Switcher between Owner & Customer features
+        function setTab(type) {
+            const btnOwner = document.getElementById('tabOwner');
+            const btnCustomer = document.getElementById('tabCustomer');
+            const gridOwner = document.getElementById('gridOwner');
+            const gridCustomer = document.getElementById('gridCustomer');
+
+            if (type === 'owner') {
+                btnOwner.classList.add('active');
+                btnCustomer.classList.remove('active');
+                gridOwner.style.display = 'grid';
+                gridCustomer.style.display = 'none';
+            } else {
+                btnCustomer.classList.add('active');
+                btnOwner.classList.remove('active');
+                gridOwner.style.display = 'none';
+                gridCustomer.style.display = 'grid';
+            }
+        }
+
+        // ROI Calculator Logic
+        function calculateROI() {
+            const customers = parseInt(document.getElementById('custRange').value);
+            const amount = parseInt(document.getElementById('amountRange').value);
+            const duration = parseInt(document.getElementById('durationRange').value);
+
+            // Display slider labels
+            document.getElementById('custVal').textContent = customers.toLocaleString('en-IN') + ' Customers';
+            document.getElementById('amountVal').textContent = '₹' + amount.toLocaleString('en-IN') + ' / month';
+            document.getElementById('durationVal').textContent = duration + ' Months';
+
+            // Computations
+            const monthlyTotal = customers * amount;
+            const yearlyTotal = monthlyTotal * duration;
+
+            document.getElementById('monthlyCash').textContent = formatINR(monthlyTotal);
+            document.getElementById('yearlyTurnover').textContent = formatINR(yearlyTotal);
+        }
+
+        function formatINR(val) {
+            if (val >= 10000000) {
+                return '₹' + (val / 10000000).toFixed(2) + ' Crores';
+            } else if (val >= 100000) {
+                return '₹' + (val / 100000).toFixed(2) + ' Lakhs';
+            } else {
+                return '₹' + val.toLocaleString('en-IN');
+            }
+        }
+
+        // FAQ Toggle Logic
+        function toggleFaq(el) {
+            const parent = el.parentElement;
+            const isActive = parent.classList.contains('active');
+            
+            document.querySelectorAll('.faq-item').forEach(item => item.classList.remove('active'));
+            
+            if (!isActive) {
+                parent.classList.add('active');
+            }
+        }
+
+        // Initialize Calculator on load
+        calculateROI();
+    </script>
+</body>
+</html>
