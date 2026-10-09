@@ -97,30 +97,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.2"
-  cloud_firestore:
-    dependency: transitive
-    description:
-      name: cloud_firestore
-      sha256: "2d33da4465bdb81b6685c41b535895065adcb16261beb398f5f3bbc623979e9c"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.6.12"
-  cloud_firestore_platform_interface:
-    dependency: transitive
-    description:
-      name: cloud_firestore_platform_interface
-      sha256: "413c4e01895cf9cb3de36fa5c219479e06cd4722876274ace5dfc9f13ab2e39b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.6.12"
-  cloud_firestore_web:
-    dependency: transitive
-    description:
-      name: cloud_firestore_web
-      sha256: c1e30fc4a0fcedb08723fb4b1f12ee4e56d937cbf9deae1bda43cbb6367bb4cf
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.4.12"
   collection:
     dependency: transitive
     description:
@@ -487,14 +463,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.17.0"
-  omniware_payment_gateway_totalxsoftware:
-    dependency: "direct main"
-    description:
-      name: omniware_payment_gateway_totalxsoftware
-      sha256: "674a6cbbea8b105c585449cca91b6685401c6fbfafb1c1d1c009f56093aa315e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.12"
   package_info_plus:
     dependency: "direct main"
     description:
@@ -575,14 +543,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
-  payment_gateway_plugin:
-    dependency: transitive
-    description:
-      name: payment_gateway_plugin
-      sha256: eb918b0b5a8549da26ebfbe54868f47050dfef60cca4ef90f96e0f0a8fcf951a
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.6"
   pdf:
     dependency: "direct main"
     description:

@@ -13,13 +13,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Enable edge-to-edge display for Android 15+ compatibility
-        // This must be called before super.onCreate()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-        } else {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-        }
-        
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         
         // Configure window insets controller for edge-to-edge
