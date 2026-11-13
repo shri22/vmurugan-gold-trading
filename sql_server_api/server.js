@@ -3684,7 +3684,7 @@ async function syncTransactionWithOmniware(orderId) {
                         .input('silver_grams', sql.Decimal(10, 4), txn.silver_grams || 0)
                         .query(`
                           INSERT INTO schemes (scheme_id, customer_id, customer_phone, customer_name, scheme_type, metal_type, monthly_amount, duration_months, end_date, total_invested, total_amount_paid, total_metal_accumulated, completed_installments, terms_accepted, terms_accepted_at, status, business_id, transaction_id, created_at, updated_at)
-                          VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, 0, 0, 0, 0, 1, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
+                          VALUES (@sid, @cid, @phone, @name, @type, @metal, @amount, @duration, @end_date, 0, 0, 0, 0, 1, GETDATE(), 'ACTIVE', 'VMURUGAN_001', @tid, GETDATE(), GETDATE())
                         `);
 
                       effectiveSchemeId = newSchemeId;
@@ -9282,7 +9282,13 @@ async function autoCleanupPendingTransactions() {
         }
 
         if (gatewaySuccess) {
-          console.log(`   ⚠️ [BACKGROUND WORKER] Transaction ${txn.transaction_id} is SUCCESS in gateway but PENDING in DB. Leaving for manual review.`);
+          console.log(`   ✨ [BACKGROUND WORKER] Transaction ${txn.transaction_id} is SUCCESS in gateway! Reconciling & crediting customer...`);
+          try {
+            await syncTransactionWithOmniware(txn.transaction_id);
+            console.log(`   ✅ [BACKGROUND WORKER] Successfully auto-credited ${txn.transaction_id}`);
+          } catch (syncErr) {
+            console.error(`   ❌ [BACKGROUND WORKER] Error auto-syncing ${txn.transaction_id}:`, syncErr.message);
+          }
         } else {
           // If transaction does not exist in gateway, or exists but is not successful (failed/pending): mark as FAILED
           await pool.request()
@@ -9301,6 +9307,21 @@ async function autoCleanupPendingTransactions() {
       
       // Delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Clean up abandoned non-Omniware pending transactions (e.g. Worldline token checkouts) older than 4 hours
+    const nonOmniwareResult = await pool.request()
+      .input('cutoff', sql.DateTime, cutoffTime)
+      .query(`
+        UPDATE transactions
+        SET status = 'FAILED',
+            updated_at = SYSDATETIME()
+        WHERE status = 'PENDING'
+          AND created_at < @cutoff
+          AND (payment_method LIKE 'WORLDLINE%' OR payment_method IS NULL)
+      `);
+    if (nonOmniwareResult.rowsAffected[0] > 0) {
+      console.log(`🧹 [BACKGROUND WORKER] Expired ${nonOmniwareResult.rowsAffected[0]} abandoned non-Omniware checkouts to FAILED.`);
     }
   } catch (error) {
     console.error('🧹 [BACKGROUND WORKER] Error in autoCleanupPendingTransactions:', error.message);
