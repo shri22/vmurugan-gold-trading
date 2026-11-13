@@ -3197,6 +3197,37 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
       writeServerLog(`🔒 Security: Recalculated ${metal_type} for ${transaction_id}: ₹${amount} -> ${calculated_grams}g (Rate: ₹${current_rate})`, 'security');
     }
 
+    // ========================================
+    // STATUS VERIFICATION & FRAUD PROTECTION
+    // ========================================
+    let final_status = status || 'PENDING';
+
+    if (final_status === 'SUCCESS') {
+      if (req.isAdminAuth) {
+        console.log(`🛡️ [TRANSACTION-SECURITY] SUCCESS status accepted via Admin Token for ${transaction_id}`);
+      } else {
+        // Non-admin request: MUST be verified with Payment Gateway
+        let isGatewayVerified = false;
+        if (transaction_id && (transaction_id.startsWith('ORD_') || payment_method === 'OMNIWARE_UPI')) {
+          console.log(`🛡️ [TRANSACTION-SECURITY] Verifying claimed SUCCESS for ${transaction_id} with Omniware...`);
+          try {
+            const gwStatus = await syncTransactionWithOmniware(transaction_id);
+            if (gwStatus === 'SUCCESS') {
+              isGatewayVerified = true;
+              console.log(`✅ [TRANSACTION-SECURITY] Gateway confirmed SUCCESS for ${transaction_id}`);
+            }
+          } catch (verifyErr) {
+            console.error(`❌ [TRANSACTION-SECURITY] Gateway verification error:`, verifyErr.message);
+          }
+        }
+
+        if (!isGatewayVerified) {
+          console.warn(`🚨 [TRANSACTION-SECURITY] REJECTED unverified SUCCESS status for ${transaction_id} (Customer: ${customer_phone}). Forcing status to PENDING.`);
+          final_status = 'PENDING';
+        }
+      }
+    }
+
     const request = pool.request();
 
     request.input('transaction_id', sql.NVarChar(100), transaction_id);
@@ -3209,7 +3240,7 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
     request.input('silver_grams', sql.Decimal(10, 4), final_silver_grams);
     request.input('silver_price_per_gram', sql.Decimal(10, 2), final_silver_price);
     request.input('payment_method', sql.NVarChar(50), payment_method || 'GATEWAY');
-    request.input('status', sql.NVarChar(20), status || 'PENDING');
+    request.input('status', sql.NVarChar(20), final_status);
     request.input('gateway_transaction_id', sql.NVarChar(100), gateway_transaction_id);
     request.input('device_info', sql.NVarChar(sql.MAX), device_info || 'Unknown');
     request.input('location', sql.NVarChar(sql.MAX), location || 'Not provided');
@@ -3270,7 +3301,7 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
     // ========================================
     // INSTANT CREDIT SYSTEM (If Success)
     // ========================================
-    if (status === 'SUCCESS') {
+    if (final_status === 'SUCCESS') {
       try {
         // Atomic check and update to prevent double crediting
         const creditResult = await pool.request()
@@ -3334,8 +3365,9 @@ app.post('/api/transactions', flexibleAuth, auditLog('CREATE_TRANSACTION'), [
 
     res.json({
       success: true,
-      message: 'Transaction saved successfully',
+      message: final_status === 'SUCCESS' ? 'Transaction saved successfully' : 'Transaction saved as PENDING awaiting payment gateway verification',
       transaction_id: transaction_id,
+      status: final_status,
       metal_grams: (metal_type === 'GOLD' ? final_gold_grams : final_silver_grams),
       current_rate: (metal_type === 'GOLD' ? final_gold_price : final_silver_price)
     });
