@@ -1520,6 +1520,12 @@ async function createTablesIfNotExist() {
         ALTER TABLE transactions ADD gateway_response NVARCHAR(MAX)
         PRINT 'Added gateway_response column to transactions table'
       END
+
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'is_credited')
+      BEGIN
+        ALTER TABLE transactions ADD is_credited BIT DEFAULT 0
+        PRINT 'Added is_credited column to transactions table'
+      END
     `);
 
     // Update existing transactions to set metal_type based on gold_grams and silver_grams
@@ -7529,10 +7535,11 @@ app.get('/api/admin/schemes', authenticateAdmin, async (req, res) => {
 
 // Adjust scheme balance manually (offline adjustment)
 app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUST_SCHEME_BALANCE'), async (req, res) => {
-  const transaction = new sql.Transaction(pool);
+  let transaction;
+  let transactionBegan = false;
   try {
     const { scheme_id, grams, amount, remarks } = req.body;
-    const adminUser = req.user ? req.user.username : 'admin';
+    const adminUser = req.admin?.username || req.user?.username || 'admin';
 
     console.log(`👤 Admin: Manual balance adjustment request for scheme ${scheme_id} by ${adminUser}:`, { grams, amount, remarks });
 
@@ -7568,7 +7575,9 @@ app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUS
     const metalType = scheme.metal_type || 'GOLD';
 
     // Start SQL transaction
+    transaction = new sql.Transaction(pool);
     await transaction.begin();
+    transactionBegan = true;
 
     // 2. Update Schemes table
     const updateSchemeRequest = new sql.Request(transaction);
@@ -7628,7 +7637,7 @@ app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUS
         gateway_transaction_id, device_info, location, business_id, additional_data, 
         scheme_type, scheme_id, metal_type, payment_year, payment_month, is_credited, created_at, updated_at
       ) VALUES (
-        @transaction_id, @customer_phone, @customer_name, 'ADJUST', @amount, @gold_grams,
+        @transaction_id, @customer_phone, @customer_name, 'BUY', @amount, @gold_grams,
         0, @silver_grams, 0, 'OFFLINE_ADJUSTMENT', 'SUCCESS', 
         @transaction_id, 'Admin Dashboard', 'Showroom Counter', 'VMURUGAN_001', @additional_data, 
         @scheme_type, @scheme_id, @metal_type, YEAR(GETDATE()), MONTH(GETDATE()), 1, SYSDATETIME(), SYSDATETIME()
@@ -7637,6 +7646,7 @@ app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUS
 
     // Commit SQL transaction
     await transaction.commit();
+    transactionBegan = false;
 
     console.log(`✅ Admin: Scheme ${scheme_id} balance manual adjustment successfully committed!`);
     res.json({
@@ -7646,8 +7656,12 @@ app.post('/api/admin/schemes/adjust-balance', authenticateAdmin, auditLog('ADJUS
     });
 
   } catch (error) {
-    if (transaction.isActive) {
-      await transaction.rollback();
+    if (transactionBegan && transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rbErr) {
+        console.error('❌ Error rolling back transaction:', rbErr.message);
+      }
     }
     console.error('❌ Admin: Error adjusting scheme balance:', error.message);
     res.status(500).json({ success: false, message: 'Internal server error during balance adjustment: ' + error.message });

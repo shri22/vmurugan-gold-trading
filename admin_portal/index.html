@@ -2583,7 +2583,16 @@
                     return apiFetch(endpoint, options, retryCount + 1);
                 }
 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    let errMsg = `HTTP ${response.status}`;
+                    try {
+                        const errData = await response.json();
+                        if (errData && (errData.message || errData.error)) {
+                            errMsg = errData.message || errData.error;
+                        }
+                    } catch (_) {}
+                    throw new Error(errMsg);
+                }
                 return await response.json();
             } catch (error) {
                 console.error(`❌ API Fetch failed for ${endpoint}:`, error);
